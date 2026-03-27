@@ -8,20 +8,13 @@ on:
 permissions:
   contents: write
 
+env:
+  HOMEBREW_TAP_REPO: uchebnick/homebrew-tap
+
 jobs:
   build:
-    name: build-${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: darwin-amd64
-            runner: macos-13
-            asset: unch_Darwin_x86_64.tar.gz
-          - name: darwin-arm64
-            runner: macos-14
-            asset: unch_Darwin_arm64.tar.gz
+    name: build-release-assets
+    runs-on: macos-14
 
     steps:
       - name: Checkout
@@ -32,20 +25,19 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build unch
+      - name: Build unch archives
         run: |
-          mkdir -p dist
-          CGO_ENABLED=1 go build -trimpath -o dist/unch .
-
-      - name: Package archive
-        run: |
-          tar -C dist -czf "dist/${{ matrix.asset }}" unch
+          mkdir -p dist/arm64 dist/amd64
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/arm64/unch .
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CC='clang -arch x86_64' go build -trimpath -o dist/amd64/unch .
+          tar -C dist/arm64 -czf dist/unch_Darwin_arm64.tar.gz unch
+          tar -C dist/amd64 -czf dist/unch_Darwin_x86_64.tar.gz unch
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}
-          path: dist/${{ matrix.asset }}
+          name: release-assets
+          path: dist/*.tar.gz
           if-no-files-found: error
 
   release:
@@ -60,12 +52,12 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
+          name: release-assets
           path: dist
-          merge-multiple: true
 
       - name: Generate checksums
         run: |
-          shasum -a 256 dist/*.tar.gz > dist/checksums.txt
+          sha256sum dist/*.tar.gz > dist/checksums.txt
 
       - name: Prepare release notes
         run: |
@@ -89,3 +81,58 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/checksums.txt
+
+  publish-homebrew:
+    name: publish-homebrew
+    if: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Generate checksums
+        run: |
+          sha256sum dist/*.tar.gz > dist/checksums.txt
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          arm64_sha="$(awk '/unch_Darwin_arm64.tar.gz$/ {print $1}' dist/checksums.txt)"
+          amd64_sha="$(awk '/unch_Darwin_x86_64.tar.gz$/ {print $1}' dist/checksums.txt)"
+
+          if [ -z "$arm64_sha" ] || [ -z "$amd64_sha" ]; then
+            echo "missing release checksums" >&2
+            exit 1
+          fi
+
+          tap_dir="$(mktemp -d)"
+          trap 'rm -rf "$tap_dir"' EXIT
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" "$tap_dir"
+          mkdir -p "$tap_dir/Formula"
+
+          ./scripts/render_homebrew_formula.sh "$version" "$arm64_sha" "$amd64_sha" > "$tap_dir/Formula/unch.rb"
+
+          cd "$tap_dir"
+          if git diff --quiet -- Formula/unch.rb; then
+            echo "homebrew formula is already up to date"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/unch.rb
+          git commit -m "chore: update unch to v${version}"
+          git push origin HEAD:main

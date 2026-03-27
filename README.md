@@ -218,5 +218,5 @@ go build ./...
 unch --root .
 unch search "RunCLI"
 unch search --mode semantic "yzma runtime libraries"
-unch search "hui"
+unch search "pupa"
 ```

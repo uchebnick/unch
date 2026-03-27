@@ -84,7 +84,6 @@ jobs:
 
   publish-homebrew:
     name: publish-homebrew
-    if: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}
     needs: release
     runs-on: ubuntu-latest
 
@@ -107,6 +106,11 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
+          if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_GITHUB_TOKEN is not set; skipping Homebrew publish"
+            exit 0
+          fi
 
           version="${GITHUB_REF_NAME#v}"
           arm64_sha="$(awk '/unch_Darwin_arm64.tar.gz$/ {print $1}' dist/checksums.txt)"

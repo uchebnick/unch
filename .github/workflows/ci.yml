@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test-and-coverage
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests with coverage
+        run: |
+          mkdir -p coverage
+          go test -covermode=atomic -coverprofile=coverage/coverage.out ./... | tee coverage/test.log
+          go tool cover -func=coverage/coverage.out | tee coverage/coverage.txt
+
+      - name: Build coverage badge payload
+        run: |
+          total="$(awk '/^total:/ {print $3}' coverage/coverage.txt)"
+          percent="${total%%%}"
+          color="red"
+
+          if awk "BEGIN {exit !($percent >= 85)}"; then
+            color="brightgreen"
+          elif awk "BEGIN {exit !($percent >= 70)}"; then
+            color="yellow"
+          fi
+
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s","color":"%s"}\n' "$total" "$color" > coverage/coverage-badge.json
+
+          {
+            echo "## Coverage"
+            echo
+            echo "- Total coverage: \`$total\`"
+            echo
+            echo '```text'
+            cat coverage/coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: error

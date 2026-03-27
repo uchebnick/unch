@@ -1,0 +1,448 @@
+package internal
+
+// @filectx: yzma runtime library resolution and auto-install for llama shared libraries used by embeddings.
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/hybridgroup/yzma/pkg/download"
+	"github.com/jupiterrider/ffi"
+)
+
+const llamaBuilderReleasesAPI = "https://api.github.com/repos/hybridgroup/llama-cpp-builder/releases?per_page=10"
+
+// @search: if --lib is not provided, yzma libraries are resolved from YZMA_LIB, local .semsearch/yzma, or downloaded automatically from llama-cpp-builder releases.
+// @search: yzma runtime downloads go into a local managed directory under .semsearch/yzma rather than the global model cache.
+func resolveOrInstallYzmaLibPath(ctx context.Context, requestedPath string, localDir string, session *cliSession) (string, string, error) {
+	requestedPath = strings.TrimSpace(requestedPath)
+	if requestedPath != "" {
+		return resolveYzmaLibPath(requestedPath)
+	}
+
+	if envPath := strings.TrimSpace(os.Getenv("YZMA_LIB")); envPath != "" {
+		if resolved, ok := validateYzmaLibDir(envPath); ok {
+			return resolved, fmt.Sprintf("using YZMA_LIB=%s", resolved), nil
+		}
+	}
+
+	installRoot := filepath.Join(localDir, "yzma")
+
+	if resolved, ok := detectedYzmaLibDir(installRoot); ok {
+		return resolved, fmt.Sprintf("using local yzma libs from %s", resolved), nil
+	}
+
+	if err := downloadYzmaLibraries(ctx, installRoot, session); err != nil {
+		for _, candidate := range commonYzmaLibDirs() {
+			if resolved, ok := validateYzmaLibDir(candidate); ok {
+				return resolved, fmt.Sprintf("warning: automatic yzma install failed (%v); using %s", err, resolved), nil
+			}
+		}
+		return "", "", fmt.Errorf("auto-install yzma libs: %w", err)
+	}
+
+	if resolved, ok := detectedYzmaLibDir(installRoot); ok {
+		return resolved, fmt.Sprintf("downloaded yzma libs to %s", resolved), nil
+	}
+
+	return "", "", fmt.Errorf(
+		"downloaded yzma libraries to %s, but required files are missing: %s",
+		installRoot,
+		strings.Join(requiredYzmaLibFiles(), ", "),
+	)
+}
+
+func resolveYzmaLibPath(input string) (string, string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", "", fmt.Errorf("empty yzma lib path")
+	}
+
+	if resolved, ok := validateYzmaLibDir(input); ok {
+		return resolved, "", nil
+	}
+
+	if looksLikeDynamicLibraryPath(input) {
+		if resolved, ok := validateYzmaLibDir(filepath.Dir(input)); ok {
+			return resolved, "", nil
+		}
+	}
+
+	if envPath := strings.TrimSpace(os.Getenv("YZMA_LIB")); envPath != "" && envPath != input {
+		if resolved, ok := validateYzmaLibDir(envPath); ok {
+			return resolved, fmt.Sprintf("warning: --lib=%s is not a valid yzma library location; using YZMA_LIB=%s", input, resolved), nil
+		}
+	}
+
+	for _, candidate := range commonYzmaLibDirs() {
+		if resolved, ok := validateYzmaLibDir(candidate); ok {
+			return resolved, fmt.Sprintf("warning: --lib=%s is not a valid yzma library location; using %s", input, resolved), nil
+		}
+	}
+
+	return "", "", fmt.Errorf(
+		"--lib=%s is not a valid yzma library location; expected a directory containing %s or a path to one of those files",
+		input,
+		strings.Join(requiredYzmaLibFiles(), ", "),
+	)
+}
+
+func downloadYzmaLibraries(ctx context.Context, installRoot string, session *cliSession) error {
+	parentDir := filepath.Dir(installRoot)
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		return fmt.Errorf("create yzma install parent dir: %w", err)
+	}
+
+	versions, err := candidateLlamaVersions(ctx)
+	if err != nil {
+		return fmt.Errorf("detect candidate llama.cpp versions: %w", err)
+	}
+
+	processor := defaultYzmaProcessor()
+	var lastErr error
+	for _, version := range versions {
+		stageRoot, err := os.MkdirTemp(parentDir, filepath.Base(installRoot)+".tmp-*")
+		if err != nil {
+			return fmt.Errorf("create yzma staging dir: %w", err)
+		}
+
+		if session != nil {
+			session.Logf("downloading yzma libs: dst=%s os=%s arch=%s processor=%s version=%s", stageRoot, runtime.GOOS, runtime.GOARCH, processor, version)
+		}
+
+		progress := download.ProgressTracker
+		if session != nil {
+			progress = session.ProgressTracker("Downloading runtime")
+		}
+
+		err = download.GetWithContext(ctx, runtime.GOARCH, runtime.GOOS, processor, version, stageRoot, progress)
+		if err == nil {
+			if _, ok := detectedYzmaLibDir(stageRoot); !ok {
+				os.RemoveAll(stageRoot)
+				lastErr = fmt.Errorf("downloaded files for %s, but required libraries were not found", version)
+				continue
+			}
+
+			if err := replaceManagedDir(stageRoot, installRoot); err != nil {
+				os.RemoveAll(stageRoot)
+				return fmt.Errorf("activate yzma install: %w", err)
+			}
+			return nil
+		}
+
+		os.RemoveAll(stageRoot)
+		if errors.Is(err, download.ErrFileNotFound) {
+			lastErr = err
+			continue
+		}
+		return fmt.Errorf("download yzma libs: %w", err)
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("download yzma libs: %w", lastErr)
+	}
+
+	return fmt.Errorf("download yzma libs: no candidate versions available")
+}
+
+func defaultYzmaProcessor() string {
+	switch runtime.GOOS {
+	case "darwin":
+		if runtime.GOARCH == "arm64" {
+			return download.Metal.String()
+		}
+		return download.CPU.String()
+	case "linux":
+		if ok, _ := download.HasCUDA(); ok {
+			return download.CUDA.String()
+		}
+		if ok, _ := download.HasROCm(); ok {
+			return download.ROCm.String()
+		}
+		return download.CPU.String()
+	default:
+		return download.CPU.String()
+	}
+}
+
+// @search: validateYzmaLibDir checks for the platform-specific required libggml, libggml-base, and libllama shared libraries.
+func validateYzmaLibDir(path string) (string, bool) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", false
+	}
+
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	resolved = filepath.Clean(resolved)
+
+	info, err := os.Stat(resolved)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+
+	for _, filename := range requiredYzmaLibFiles() {
+		if _, err := os.Stat(filepath.Join(resolved, filename)); err != nil {
+			return "", false
+		}
+	}
+
+	return resolved, true
+}
+
+func detectedYzmaLibDir(installRoot string) (string, bool) {
+	candidates := []string{
+		installRoot,
+		filepath.Join(installRoot, "lib"),
+	}
+
+	for _, candidate := range candidates {
+		if resolved, ok := validateYzmaLibDir(candidate); ok {
+			return resolved, true
+		}
+	}
+
+	return "", false
+}
+
+func requiredYzmaLibFiles() []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{"ggml.dll", "ggml-base.dll", "llama.dll"}
+	case "linux", "freebsd":
+		return []string{"libggml.so", "libggml-base.so", "libllama.so"}
+	default:
+		return []string{"libggml.dylib", "libggml-base.dylib", "libllama.dylib"}
+	}
+}
+
+func looksLikeDynamicLibraryPath(path string) bool {
+	path = strings.ToLower(strings.TrimSpace(path))
+	switch runtime.GOOS {
+	case "windows":
+		return strings.HasSuffix(path, ".dll")
+	case "linux", "freebsd":
+		return strings.HasSuffix(path, ".so")
+	default:
+		return strings.HasSuffix(path, ".dylib")
+	}
+}
+
+func commonYzmaLibDirs() []string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+
+	return []string{
+		filepath.Join(home, ".docker", "bin", "lib"),
+	}
+}
+
+func ensureDynamicLibraryLookupPath(libDir string) error {
+	libDir = strings.TrimSpace(libDir)
+	if libDir == "" {
+		return nil
+	}
+
+	envVar := dynamicLibraryLookupEnvVar()
+	if envVar == "" {
+		return nil
+	}
+
+	current := os.Getenv(envVar)
+	for _, entry := range filepath.SplitList(current) {
+		if filepath.Clean(entry) == filepath.Clean(libDir) {
+			return nil
+		}
+	}
+
+	if current == "" {
+		return os.Setenv(envVar, libDir)
+	}
+
+	return os.Setenv(envVar, libDir+string(os.PathListSeparator)+current)
+}
+
+func dynamicLibraryLookupEnvVar() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "DYLD_LIBRARY_PATH"
+	case "linux", "freebsd":
+		return "LD_LIBRARY_PATH"
+	case "windows":
+		return "PATH"
+	default:
+		return ""
+	}
+}
+
+func replaceManagedDir(src string, dst string) error {
+	backup := dst + ".bak"
+	_ = os.RemoveAll(backup)
+
+	if _, err := os.Stat(dst); err == nil {
+		if err := os.Rename(dst, backup); err != nil {
+			return fmt.Errorf("move current dir to backup: %w", err)
+		}
+	}
+
+	if err := os.Rename(src, dst); err != nil {
+		if _, backupErr := os.Stat(backup); backupErr == nil {
+			_ = os.Rename(backup, dst)
+		}
+		return fmt.Errorf("move staged dir into place: %w", err)
+	}
+
+	_ = os.RemoveAll(backup)
+	return nil
+}
+
+func candidateLlamaVersions(ctx context.Context) ([]string, error) {
+	var versions []string
+	seen := make(map[string]struct{})
+
+	add := func(version string) {
+		version = strings.TrimSpace(version)
+		if version == "" {
+			return
+		}
+		if _, exists := seen[version]; exists {
+			return
+		}
+		seen[version] = struct{}{}
+		versions = append(versions, version)
+	}
+
+	latest, err := download.LlamaLatestVersion()
+	if err == nil {
+		add(latest)
+	}
+
+	recent, recentErr := recentLlamaVersions(ctx)
+	for _, version := range recent {
+		add(version)
+	}
+
+	if len(versions) == 0 {
+		if err != nil {
+			return nil, err
+		}
+		if recentErr != nil {
+			return nil, recentErr
+		}
+		return nil, fmt.Errorf("no llama.cpp versions found")
+	}
+
+	return versions, nil
+}
+
+func recentLlamaVersions(ctx context.Context) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, llamaBuilderReleasesAPI, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, fmt.Errorf("github releases api returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var releases []struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, err
+	}
+
+	versions := make([]string, 0, len(releases))
+	for _, release := range releases {
+		if release.TagName != "" {
+			versions = append(versions, release.TagName)
+		}
+	}
+
+	return versions, nil
+}
+
+var preloadedYzmaLibs []ffi.Lib
+
+func preloadYzmaSharedLibraries(libDir string) error {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+
+	filenames, err := darwinPreloadLibraryNames(libDir)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range filenames {
+		lib, err := ffi.Load(filepath.Join(libDir, name))
+		if err != nil {
+			return fmt.Errorf("preload %s: %w", name, err)
+		}
+		preloadedYzmaLibs = append(preloadedYzmaLibs, lib)
+	}
+
+	return nil
+}
+
+func darwinPreloadLibraryNames(libDir string) ([]string, error) {
+	entries, err := os.ReadDir(libDir)
+	if err != nil {
+		return nil, fmt.Errorf("read yzma lib dir: %w", err)
+	}
+
+	var names []string
+	add := func(name string) {
+		if _, err := os.Stat(filepath.Join(libDir, name)); err == nil {
+			names = append(names, name)
+		}
+	}
+
+	add("libggml-base.dylib")
+
+	var optional []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasPrefix(name, "libggml-") || !strings.HasSuffix(name, ".dylib") {
+			continue
+		}
+		if name == "libggml-base.dylib" {
+			continue
+		}
+		optional = append(optional, name)
+	}
+	sort.Strings(optional)
+	names = append(names, optional...)
+
+	add("libggml.dylib")
+	add("libllama.dylib")
+
+	return names, nil
+}

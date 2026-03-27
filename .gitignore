@@ -30,3 +30,12 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local project state
+.semsearch/
+
+# Release artifacts
+dist/
+
+# OS files
+.DS_Store

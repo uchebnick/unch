@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"unch_code_searcher/internal"
+	"github.com/uchebnick/unch-searcher/internal"
 )
 
 func main() {

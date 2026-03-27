@@ -1,4 +1,4 @@
-module unch_code_searcher
+module github.com/uchebnick/unch-searcher
 
 go 1.25.3
 

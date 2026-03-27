@@ -14,7 +14,7 @@ func globalSemsearchDir() (string, error) {
 
 	cacheDir, err := os.UserCacheDir()
 	if err == nil && strings.TrimSpace(cacheDir) != "" {
-		return filepath.Join(cacheDir, "unch_code_searcher"), nil
+		return filepath.Join(cacheDir, "unch"), nil
 	}
 
 	homeDir, err := os.UserHomeDir()

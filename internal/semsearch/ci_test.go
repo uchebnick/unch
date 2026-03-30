@@ -31,8 +31,14 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	if !strings.Contains(content, "GITHUB_STEP_SUMMARY") {
 		t.Fatalf("workflow missing GitHub summary step")
 	}
+	if !strings.Contains(content, "export PATH=\"$bin_dir:$PATH\"") {
+		t.Fatalf("workflow missing immediate PATH export")
+	}
 	if !strings.Contains(content, ".semsearch/logs/searcher-index.log") {
 		t.Fatalf("workflow missing explicit searcher log output")
+	}
+	if !strings.Contains(content, "if-no-files-found: warn") {
+		t.Fatalf("workflow missing artifact warning mode")
 	}
 	if !strings.Contains(content, ".github/workflows") && !strings.HasSuffix(path, "searcher.yml") {
 		t.Fatalf("unexpected workflow path: %s", path)

@@ -38,11 +38,17 @@ func TestRunCreateCI(t *testing.T) {
 	if !strings.Contains(content, "git clone --depth 1 https://github.com/uchebnick/unch.git") {
 		t.Fatalf("generated workflow missing unch source clone step: %s", content)
 	}
+	if !strings.Contains(content, "export PATH=\"$bin_dir:$PATH\"") {
+		t.Fatalf("generated workflow missing immediate PATH export: %s", content)
+	}
 	if !strings.Contains(content, "unch index --root .") {
 		t.Fatalf("generated workflow missing index step: %s", content)
 	}
 	if !strings.Contains(content, "unch create ci --root \"$probe_dir\" >/dev/null") {
 		t.Fatalf("generated workflow missing tooling probe step: %s", content)
+	}
+	if !strings.Contains(content, "if-no-files-found: warn") {
+		t.Fatalf("generated workflow missing artifact warning mode: %s", content)
 	}
 	if !strings.Contains(content, "GITHUB_STEP_SUMMARY") {
 		t.Fatalf("generated workflow missing GitHub summary step: %s", content)

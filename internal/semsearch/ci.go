@@ -45,6 +45,7 @@ jobs:
             cd "$tool_dir"
             go build -trimpath -o "$bin_dir/unch" .
           )
+          export PATH="$bin_dir:$PATH"
           echo "$bin_dir" >> "$GITHUB_PATH"
           echo "::group::Tooling"
           command -v unch
@@ -122,7 +123,7 @@ jobs:
             .semsearch/index.db
             .semsearch/manifest.json
             .semsearch/logs/
-          if-no-files-found: error
+          if-no-files-found: warn
 `
 
 func CIWorkflowPath(root string) string {

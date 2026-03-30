@@ -18,14 +18,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install unch
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.3'
+
+      - name: Build unch from source
         shell: bash
         run: |
           set -euo pipefail
-          brew install uchebnick/tap/unch
+          tool_dir="${RUNNER_TEMP}/unch-source"
+          bin_dir="${RUNNER_TEMP}/unch-bin"
+          probe_dir="${RUNNER_TEMP}/unch-probe"
+          rm -rf "$tool_dir" "$bin_dir" "$probe_dir"
+          mkdir -p "$bin_dir"
+          git clone --depth 1 https://github.com/uchebnick/unch.git "$tool_dir"
+          (
+            cd "$tool_dir"
+            go build -trimpath -o "$bin_dir/unch" .
+          )
+          echo "$bin_dir" >> "$GITHUB_PATH"
           echo "::group::Tooling"
           command -v unch
-          unch init --help
+          unch create ci --root "$probe_dir" >/dev/null
+          find "$probe_dir" -maxdepth 3 -type f | sort
           echo "::endgroup::"
 
       - name: Build local search index

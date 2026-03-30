@@ -35,11 +35,14 @@ func TestRunCreateCI(t *testing.T) {
 	if !strings.Contains(content, "name: searcher") {
 		t.Fatalf("generated workflow missing name: %s", content)
 	}
-	if !strings.Contains(content, "brew install uchebnick/tap/unch") {
-		t.Fatalf("generated workflow missing unch install step: %s", content)
+	if !strings.Contains(content, "git clone --depth 1 https://github.com/uchebnick/unch.git") {
+		t.Fatalf("generated workflow missing unch source clone step: %s", content)
 	}
 	if !strings.Contains(content, "unch index --root .") {
 		t.Fatalf("generated workflow missing index step: %s", content)
+	}
+	if !strings.Contains(content, "unch create ci --root \"$probe_dir\" >/dev/null") {
+		t.Fatalf("generated workflow missing tooling probe step: %s", content)
 	}
 	if !strings.Contains(content, "GITHUB_STEP_SUMMARY") {
 		t.Fatalf("generated workflow missing GitHub summary step: %s", content)

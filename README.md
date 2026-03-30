@@ -95,6 +95,16 @@ What gets embedded for each annotation:
 
 ## Usage
 
+### Create CI
+
+Create a local GitHub Actions workflow scaffold:
+
+```bash
+unch create ci
+```
+
+This writes `./.github/workflows/searcher.yml`. The generated workflow installs `unch`, builds `.semsearch/index.db`, and uploads the search index as a GitHub Actions artifact.
+
 ### Index
 
 Default command:

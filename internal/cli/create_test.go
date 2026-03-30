@@ -1,0 +1,47 @@
+package cli
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestRunCreateRejectsUnknownTarget(t *testing.T) {
+	t.Parallel()
+
+	err := runCreate(context.Background(), "unch", []string{"weird"}, t.TempDir())
+	if err == nil {
+		t.Fatalf("expected error for unknown create target")
+	}
+}
+
+func TestRunCreateCI(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := runCreate(context.Background(), "unch", []string{"ci", "--root", root}, root); err != nil {
+		t.Fatalf("runCreate() error: %v", err)
+	}
+
+	path := filepath.Join(root, ".github", "workflows", "searcher.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated workflow: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "name: searcher") {
+		t.Fatalf("generated workflow missing name: %s", content)
+	}
+	if !strings.Contains(content, "brew install uchebnick/tap/unch") {
+		t.Fatalf("generated workflow missing unch install step: %s", content)
+	}
+	if !strings.Contains(content, "unch index --root .") {
+		t.Fatalf("generated workflow missing index step: %s", content)
+	}
+	if !strings.Contains(content, "GITHUB_STEP_SUMMARY") {
+		t.Fatalf("generated workflow missing GitHub summary step: %s", content)
+	}
+}

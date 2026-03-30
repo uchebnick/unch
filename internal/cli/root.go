@@ -15,7 +15,7 @@ import (
 	"github.com/uchebnick/unch-searcher/internal/termui"
 )
 
-// @search: Run is the clean-architecture replacement for the old RunCLI entrypoint and dispatches to init, index, or search.
+// @search: Run is the clean-architecture replacement for the old RunCLI entrypoint and dispatches to init, create, index, or search.
 func Run(program string, args []string) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -31,6 +31,9 @@ func Run(program string, args []string) (err error) {
 	}
 	if command == "init" {
 		return runInit(ctx, program, commandArgs, cwd)
+	}
+	if command == "create" {
+		return runCreate(ctx, program, commandArgs, cwd)
 	}
 
 	paths, err := semsearch.PreparePaths(cwd)
@@ -71,7 +74,7 @@ func detectCommand(args []string) (string, []string, error) {
 	}
 
 	switch args[0] {
-	case "init", "index", "search":
+	case "create", "init", "index", "search":
 		return args[0], args[1:], nil
 	default:
 		if len(args[0]) > 0 && args[0][0] == '-' {

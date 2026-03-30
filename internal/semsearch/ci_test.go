@@ -34,6 +34,9 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	if !strings.Contains(content, "export PATH=\"$bin_dir:$PATH\"") {
 		t.Fatalf("workflow missing immediate PATH export")
 	}
+	if !strings.Contains(content, "GITHUB_TOKEN: ${{ github.token }}") {
+		t.Fatalf("workflow missing GitHub token env for indexing")
+	}
 	if !strings.Contains(content, ".semsearch/logs/searcher-index.log") {
 		t.Fatalf("workflow missing explicit searcher log output")
 	}

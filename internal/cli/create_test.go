@@ -47,6 +47,9 @@ func TestRunCreateCI(t *testing.T) {
 	if !strings.Contains(content, "unch create ci --root \"$probe_dir\" >/dev/null") {
 		t.Fatalf("generated workflow missing tooling probe step: %s", content)
 	}
+	if !strings.Contains(content, "GITHUB_TOKEN: ${{ github.token }}") {
+		t.Fatalf("generated workflow missing GitHub token env for indexing: %s", content)
+	}
 	if !strings.Contains(content, "if-no-files-found: warn") {
 		t.Fatalf("generated workflow missing artifact warning mode: %s", content)
 	}

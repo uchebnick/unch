@@ -54,6 +54,8 @@ jobs:
           echo "::endgroup::"
 
       - name: Build local search index
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail

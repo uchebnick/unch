@@ -1,8 +1,11 @@
 package runtime
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	goruntime "runtime"
 	"strings"
 	"testing"
@@ -155,5 +158,29 @@ func TestReplaceManagedDir(t *testing.T) {
 	}
 	if _, err := os.Stat(dst + ".bak"); !os.IsNotExist(err) {
 		t.Fatalf("backup dir should be removed, stat err = %v", err)
+	}
+}
+
+func TestCandidateLlamaVersionsFallsBackWhenNetworkUnavailable(t *testing.T) {
+	originalLatestFn := llamaLatestVersionFn
+	originalRecentFn := recentLlamaVersionsFn
+	t.Cleanup(func() {
+		llamaLatestVersionFn = originalLatestFn
+		recentLlamaVersionsFn = originalRecentFn
+	})
+
+	llamaLatestVersionFn = func() (string, error) {
+		return "", errors.New("latest unavailable")
+	}
+	recentLlamaVersionsFn = func(context.Context) ([]string, error) {
+		return nil, errors.New("recent unavailable")
+	}
+
+	got, err := candidateLlamaVersions(context.Background())
+	if err != nil {
+		t.Fatalf("candidateLlamaVersions() error: %v", err)
+	}
+	if !reflect.DeepEqual(got, fallbackLlamaVersions) {
+		t.Fatalf("candidateLlamaVersions() = %v, want %v", got, fallbackLlamaVersions)
 	}
 }

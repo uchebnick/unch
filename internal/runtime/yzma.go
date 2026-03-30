@@ -20,6 +20,12 @@ import (
 
 const llamaBuilderReleasesAPI = "https://api.github.com/repos/hybridgroup/llama-cpp-builder/releases?per_page=10"
 
+var (
+	llamaLatestVersionFn  = download.LlamaLatestVersion
+	recentLlamaVersionsFn = recentLlamaVersions
+	fallbackLlamaVersions = []string{"b8581", "b8580", "b8579", "b8578", "b8576"}
+)
+
 type YzmaResolver struct{}
 
 // @search: ResolveOrInstallYzmaLibPath uses YZMA_LIB, local .semsearch runtime libraries, or auto-downloads llama shared libraries when --lib is omitted.
@@ -324,14 +330,20 @@ func candidateLlamaVersions(ctx context.Context) ([]string, error) {
 		versions = append(versions, version)
 	}
 
-	latest, err := download.LlamaLatestVersion()
+	latest, err := llamaLatestVersionFn()
 	if err == nil {
 		add(latest)
 	}
 
-	recent, recentErr := recentLlamaVersions(ctx)
+	recent, recentErr := recentLlamaVersionsFn(ctx)
 	for _, version := range recent {
 		add(version)
+	}
+
+	if len(versions) == 0 {
+		for _, version := range fallbackLlamaVersions {
+			add(version)
+		}
 	}
 
 	if len(versions) == 0 {
@@ -354,6 +366,9 @@ func recentLlamaVersions(ctx context.Context) ([]string, error) {
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)

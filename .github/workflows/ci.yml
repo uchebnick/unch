@@ -33,13 +33,19 @@ jobs:
         run: |
           total="$(awk '/^total:/ {print $3}' coverage/coverage.txt)"
           percent="${total%%%}"
-          color="red"
+          color="$(
+            awk -v percent="$percent" 'BEGIN {
+              if (percent < 0) percent = 0
+              if (percent > 100) percent = 100
 
-          if awk "BEGIN {exit !($percent >= 85)}"; then
-            color="brightgreen"
-          elif awk "BEGIN {exit !($percent >= 70)}"; then
-            color="yellow"
-          fi
+              ratio = percent / 100
+              r = int((1 - ratio) * 229 + ratio * 46)
+              g = int((1 - ratio) * 57 + ratio * 160)
+              b = int((1 - ratio) * 53 + ratio * 67)
+
+              printf "%02X%02X%02X", r, g, b
+            }'
+          )"
 
           printf '{"schemaVersion":1,"label":"coverage","message":"%s","color":"%s"}\n' "$total" "$color" > coverage/coverage-badge.json
 

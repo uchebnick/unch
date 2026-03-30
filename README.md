@@ -103,7 +103,7 @@ Create a local GitHub Actions workflow scaffold:
 unch create ci
 ```
 
-This writes `./.github/workflows/searcher.yml`. The generated workflow installs `unch`, builds `.semsearch/index.db`, and uploads the search index as a GitHub Actions artifact.
+This writes `./.github/workflows/searcher.yml`. The generated workflow builds `unch`, pins the runtime downloader to a known-good `yzma` release, builds `.semsearch/index.db`, and uploads the search index as a GitHub Actions artifact.
 
 ### Index
 
@@ -222,6 +222,7 @@ This means:
 
 - `SEMSEARCH_HOME` overrides the global cache root
 - `SEMSEARCH_MODEL_URL` overrides the default GGUF model download URL
+- `SEMSEARCH_YZMA_VERSION` pins the auto-downloaded `yzma` runtime release
 - `YZMA_LIB` points to an existing `yzma` runtime directory
 
 ## Current Limitations

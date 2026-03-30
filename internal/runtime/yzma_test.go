@@ -184,3 +184,28 @@ func TestCandidateLlamaVersionsFallsBackWhenNetworkUnavailable(t *testing.T) {
 		t.Fatalf("candidateLlamaVersions() = %v, want %v", got, fallbackLlamaVersions)
 	}
 }
+
+func TestCandidateLlamaVersionsUsesPinnedVersion(t *testing.T) {
+	originalLatestFn := llamaLatestVersionFn
+	originalRecentFn := recentLlamaVersionsFn
+	t.Cleanup(func() {
+		llamaLatestVersionFn = originalLatestFn
+		recentLlamaVersionsFn = originalRecentFn
+	})
+
+	t.Setenv("SEMSEARCH_YZMA_VERSION", "b8581")
+	llamaLatestVersionFn = func() (string, error) {
+		return "", errors.New("latest should not be called")
+	}
+	recentLlamaVersionsFn = func(context.Context) ([]string, error) {
+		return nil, errors.New("recent should not be called")
+	}
+
+	got, err := candidateLlamaVersions(context.Background())
+	if err != nil {
+		t.Fatalf("candidateLlamaVersions() error: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{"b8581"}) {
+		t.Fatalf("candidateLlamaVersions() = %v, want [b8581]", got)
+	}
+}

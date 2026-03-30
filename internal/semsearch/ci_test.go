@@ -37,6 +37,9 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	if !strings.Contains(content, "GITHUB_TOKEN: ${{ github.token }}") {
 		t.Fatalf("workflow missing GitHub token env for indexing")
 	}
+	if !strings.Contains(content, "SEMSEARCH_YZMA_VERSION: b8581") {
+		t.Fatalf("workflow missing pinned yzma version for indexing")
+	}
 	if !strings.Contains(content, ".semsearch/logs/searcher-index.log") {
 		t.Fatalf("workflow missing explicit searcher log output")
 	}

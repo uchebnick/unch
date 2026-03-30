@@ -38,6 +38,9 @@ func TestTerminalUIRenderAndClear(t *testing.T) {
 
 	var out bytes.Buffer
 	ui := newTerminalUI(&out)
+	if ui.interactive {
+		t.Fatalf("expected bytes.Buffer-backed UI to be non-interactive")
+	}
 
 	ui.Status("Working")
 	ui.Finish("Done")

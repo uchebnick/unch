@@ -330,6 +330,11 @@ func candidateLlamaVersions(ctx context.Context) ([]string, error) {
 		versions = append(versions, version)
 	}
 
+	if pinned := strings.TrimSpace(os.Getenv("SEMSEARCH_YZMA_VERSION")); pinned != "" {
+		add(pinned)
+		return versions, nil
+	}
+
 	latest, err := llamaLatestVersionFn()
 	if err == nil {
 		add(latest)

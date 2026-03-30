@@ -88,14 +88,25 @@ func (s *Session) Clear() {
 	s.ui.Clear()
 }
 
+func (s *Session) Interactive() bool {
+	return s != nil && s.ui != nil && s.ui.interactive
+}
+
 type terminalUI struct {
-	mu      sync.Mutex
-	out     io.Writer
-	lastLen int
+	mu          sync.Mutex
+	out         io.Writer
+	lastLen     int
+	interactive bool
 }
 
 func newTerminalUI(out io.Writer) *terminalUI {
-	return &terminalUI{out: out}
+	interactive := false
+	if file, ok := out.(*os.File); ok {
+		if info, err := file.Stat(); err == nil {
+			interactive = info.Mode()&os.ModeCharDevice != 0
+		}
+	}
+	return &terminalUI{out: out, interactive: interactive}
 }
 
 func (u *terminalUI) Status(message string) {

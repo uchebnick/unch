@@ -38,6 +38,20 @@ func formatSearchResultPath(root string, target string) string {
 }
 
 func loadEmbedderWithSpinner(ctx context.Context, s *termui.Session, cfg llamaembed.Config) (*llamaembed.Embedder, error) {
+	if s == nil || !s.Interactive() {
+		embedder, err := llamaembed.New(cfg)
+		if err != nil {
+			if s != nil {
+				s.Clear()
+			}
+			return nil, fmt.Errorf("load embedder: %w", err)
+		}
+		if s != nil {
+			s.Finish(fmt.Sprintf("Loaded model       dim=%d", embedder.Dim()))
+		}
+		return embedder, nil
+	}
+
 	done := make(chan struct{})
 
 	go func() {

@@ -56,6 +56,7 @@ jobs:
       - name: Build local search index
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          SEMSEARCH_YZMA_VERSION: b8581
         shell: bash
         run: |
           set -euo pipefail

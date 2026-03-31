@@ -75,6 +75,14 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 		return err
 	}
 
+	remoteSync, err := semsearch.SyncRemoteIndex(ctx, targetPaths.LocalDir)
+	if err != nil {
+		return fmt.Errorf("sync remote index: %w", err)
+	}
+	if remoteSync.Checked && remoteSync.Note != "" {
+		printSessionLine(s, "%s", remoteSync.Note)
+	}
+
 	resolvedDBPath := *dbPath
 	if !dbWasExplicit {
 		resolvedDBPath = filepath.Join(targetPaths.LocalDir, "index.db")

@@ -32,8 +32,14 @@ func Run(program string, args []string) (err error) {
 	if command == "init" {
 		return runInit(ctx, program, commandArgs, cwd)
 	}
+	if command == "bind" {
+		return runBind(ctx, program, commandArgs, cwd)
+	}
 	if command == "create" {
 		return runCreate(ctx, program, commandArgs, cwd)
+	}
+	if command == "remote" {
+		return runRemote(ctx, program, commandArgs, cwd)
 	}
 
 	paths, err := semsearch.PreparePaths(cwd)
@@ -74,7 +80,7 @@ func detectCommand(args []string) (string, []string, error) {
 	}
 
 	switch args[0] {
-	case "create", "init", "index", "search":
+	case "bind", "create", "init", "index", "remote", "search":
 		return args[0], args[1:], nil
 	default:
 		if len(args[0]) > 0 && args[0][0] == '-' {

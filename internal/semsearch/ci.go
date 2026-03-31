@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   index:
@@ -49,8 +49,27 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           echo "::group::Tooling"
           command -v unch
-          unch create ci --root "$probe_dir" >/dev/null
+          unch create ci --root "$probe_dir" >/dev/null 2>&1
           find "$probe_dir" -maxdepth 3 -type f | sort
+          echo "::endgroup::"
+
+      - name: Restore published remote index
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ci_url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/searcher.yml"
+          mkdir -p .semsearch/logs
+          echo "::group::Bind CI manifest"
+          unch bind ci --root . "$ci_url"
+          cat .semsearch/manifest.json
+          echo "::endgroup::"
+          echo "::group::Restore published remote index"
+          unch remote sync --root . --allow-missing
+          if [ -f .semsearch/manifest.json ]; then
+            cat .semsearch/manifest.json
+          fi
           echo "::endgroup::"
 
       - name: Build local search index
@@ -68,6 +87,11 @@ jobs:
           echo "::group::unch index"
           unch index --root . 2>&1 | tee .semsearch/logs/searcher-index.log
           echo "::endgroup::"
+          echo "::group::Bind remote manifest"
+          ci_url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/searcher.yml"
+          unch bind ci --root . "$ci_url"
+          cat .semsearch/manifest.json
+          echo "::endgroup::"
           echo "::group::Generated search artifacts"
           find .semsearch -maxdepth 2 -type f | sort
           echo
@@ -76,6 +100,44 @@ jobs:
           echo "::group::Manifest"
           cat .semsearch/manifest.json
           echo "::endgroup::"
+
+      - name: Publish remote search index
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish_dir="${RUNNER_TEMP}/gh-pages"
+          repo_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          rm -rf "$publish_dir"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads "$repo_url" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$repo_url" "$publish_dir"
+          else
+            git clone --depth 1 "$repo_url" "$publish_dir"
+            (
+              cd "$publish_dir"
+              git checkout --orphan gh-pages
+              git rm -rf . >/dev/null 2>&1 || true
+            )
+          fi
+          mkdir -p "$publish_dir/semsearch"
+          cp .semsearch/index.db "$publish_dir/semsearch/index.db"
+          cp .semsearch/manifest.json "$publish_dir/semsearch/manifest.json"
+          echo "::group::Publish payload"
+          find "$publish_dir/semsearch" -maxdepth 1 -type f | sort
+          echo "::endgroup::"
+          (
+            cd "$publish_dir"
+            git add semsearch/index.db semsearch/manifest.json
+            if git diff --cached --quiet; then
+              echo "No gh-pages changes to publish."
+            else
+              git commit -m "Publish semsearch index for ${GITHUB_SHA}"
+              git push origin HEAD:gh-pages
+            fi
+          )
 
       - name: Render GitHub summary
         if: ${{ always() }}

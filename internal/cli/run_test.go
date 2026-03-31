@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -173,6 +174,38 @@ func TestRunDispatchesCreateCommand(t *testing.T) {
 	}
 }
 
+func TestRunDispatchesRemoteSyncCommand(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SEMSEARCH_HOME", filepath.Join(root, "global"))
+	chdirForTest(t, root)
+
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"remote", "sync"}); err != nil {
+			t.Fatalf("Run(remote sync) error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "not bound") {
+		t.Fatalf("Run(remote sync) output = %q, want not bound", output)
+	}
+}
+
+func TestRunDispatchesBindCommand(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SEMSEARCH_HOME", filepath.Join(root, "global"))
+	chdirForTest(t, root)
+
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"bind", "ci", "https://github.com/acme/widgets/actions/workflows/searcher.yml"}); err != nil {
+			t.Fatalf("Run(bind ci) error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "Bound ") {
+		t.Fatalf("Run(bind ci) output = %q, want Bound", output)
+	}
+}
+
 func TestRunSearchRequiresQuery(t *testing.T) {
 	t.Parallel()
 
@@ -201,6 +234,51 @@ func TestRunIndexRejectsUnknownFlag(t *testing.T) {
 
 	if !strings.Contains(stderr, "flag provided but not defined: -wat") {
 		t.Fatalf("runIndex() stderr = %q, want unknown flag message", stderr)
+	}
+}
+
+func TestConfirmRemoteReindexAcceptsYes(t *testing.T) {
+	t.Parallel()
+
+	var output bytes.Buffer
+	confirmed, err := confirmRemoteReindex(nil, strings.NewReader("yes\n"), &output, true)
+	if err != nil {
+		t.Fatalf("confirmRemoteReindex() error: %v", err)
+	}
+	if !confirmed {
+		t.Fatalf("confirmRemoteReindex() = false, want true")
+	}
+	if !strings.Contains(output.String(), "[yes/no]") {
+		t.Fatalf("confirmRemoteReindex() output = %q, want prompt", output.String())
+	}
+}
+
+func TestConfirmRemoteReindexRejectsNo(t *testing.T) {
+	t.Parallel()
+
+	var output bytes.Buffer
+	confirmed, err := confirmRemoteReindex(nil, strings.NewReader("no\n"), &output, true)
+	if err != nil {
+		t.Fatalf("confirmRemoteReindex() error: %v", err)
+	}
+	if confirmed {
+		t.Fatalf("confirmRemoteReindex() = true, want false")
+	}
+}
+
+func TestConfirmRemoteReindexRepromptsOnInvalidAnswer(t *testing.T) {
+	t.Parallel()
+
+	var output bytes.Buffer
+	confirmed, err := confirmRemoteReindex(nil, strings.NewReader("maybe\nyes\n"), &output, true)
+	if err != nil {
+		t.Fatalf("confirmRemoteReindex() error: %v", err)
+	}
+	if !confirmed {
+		t.Fatalf("confirmRemoteReindex() = false, want true")
+	}
+	if !strings.Contains(output.String(), "Please answer yes or no.") {
+		t.Fatalf("confirmRemoteReindex() output = %q, want retry hint", output.String())
 	}
 }
 

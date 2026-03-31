@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/uchebnick/unch-searcher/internal/embed/llama"
@@ -58,6 +60,21 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 	targetPaths, err := semsearch.PreparePaths(rootAbs)
 	if err != nil {
 		return err
+	}
+
+	currentManifest, err := semsearch.ReadManifest(targetPaths.LocalDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+	if err == nil && semsearch.HasRemoteBinding(currentManifest) {
+		printSessionLine(s, "Warning: local indexing will detach this repository from remote CI updates and switch the manifest back to local")
+		confirmed, confirmErr := confirmRemoteReindex(s, os.Stdin, os.Stderr, s != nil && s.Interactive() && isCharDevice(os.Stdin))
+		if confirmErr != nil {
+			return confirmErr
+		}
+		if !confirmed {
+			return fmt.Errorf("local reindex canceled; remote CI binding preserved")
+		}
 	}
 
 	resolvedDBPath := *dbPath

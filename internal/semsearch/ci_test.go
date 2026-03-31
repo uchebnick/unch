@@ -28,6 +28,9 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	if content != DefaultCIWorkflow {
 		t.Fatalf("workflow content mismatch")
 	}
+	if !strings.Contains(content, "permissions:\n  contents: write") {
+		t.Fatalf("workflow missing write permissions")
+	}
 	if !strings.Contains(content, "GITHUB_STEP_SUMMARY") {
 		t.Fatalf("workflow missing GitHub summary step")
 	}
@@ -45,6 +48,15 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(content, ".semsearch/logs/searcher-index.log") {
 		t.Fatalf("workflow missing explicit searcher log output")
+	}
+	if !strings.Contains(content, "unch bind ci --root . \"$ci_url\"") {
+		t.Fatalf("workflow missing bind ci step")
+	}
+	if !strings.Contains(content, "unch remote sync --root . --allow-missing") {
+		t.Fatalf("workflow missing remote sync step")
+	}
+	if !strings.Contains(content, "git push origin HEAD:gh-pages") {
+		t.Fatalf("workflow missing gh-pages publish step")
 	}
 	if !strings.Contains(content, "if-no-files-found: warn") {
 		t.Fatalf("workflow missing artifact warning mode")

@@ -27,6 +27,8 @@ var treeSitterSpecs = map[string]treeSitterSpec{
 	".py":  {language: func() *sitter.Language { return sitter.NewLanguage(tspython.Language()) }, extract: extractPythonSymbols},
 }
 
+// extractTreeSitterSymbols parses the file with the matching grammar and
+// returns symbols only when the parse completed without syntax errors.
 func extractTreeSitterSymbols(path string, source []byte) ([]IndexedSymbol, bool) {
 	spec, ok := treeSitterSpecs[strings.ToLower(filepath.Ext(path))]
 	if !ok {
@@ -54,6 +56,8 @@ func extractTreeSitterSymbols(path string, source []byte) ([]IndexedSymbol, bool
 	return spec.extract(source, root), true
 }
 
+// extractGoSymbols indexes top-level Go declarations and expands interface
+// methods into separate search entries.
 func extractGoSymbols(source []byte, root *sitter.Node) []IndexedSymbol {
 	children := nodeChildren(root)
 	fileContext := ""
@@ -559,6 +563,8 @@ func bodySnippet(node *sitter.Node, source []byte) string {
 	return ""
 }
 
+// declarationBodyNode locates the node that should be treated as the symbol body
+// for snippet extraction across different language grammars.
 func declarationBodyNode(node *sitter.Node) *sitter.Node {
 	if node == nil {
 		return nil
@@ -579,6 +585,8 @@ func declarationBodyNode(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
+// extractLeadingDoc attaches only the contiguous comment block immediately
+// above a declaration. Loose comments separated by blank lines are ignored.
 func extractLeadingDoc(children []sitter.Node, idx int, source []byte) string {
 	if idx <= 0 || idx >= len(children) {
 		return ""
@@ -613,6 +621,8 @@ func extractLeadingDoc(children []sitter.Node, idx int, source []byte) string {
 	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
+// extractTrailingComment captures same-line trailing comments from the
+// declaration itself or from child nodes that start on the same line.
 func extractTrailingComment(children []sitter.Node, idx int, source []byte) string {
 	if idx >= 0 && idx < len(children) {
 		current := children[idx]

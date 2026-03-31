@@ -7,12 +7,15 @@ import (
 	"strings"
 )
 
+// Paths contains the repository-local and shared filesystem locations used by unch.
 type Paths struct {
 	LocalDir     string
 	ManifestPath string
 	ModelsDir    string
 }
 
+// PreparePaths creates the local and global directories used by unch for
+// repository state, manifests, and shared model storage.
 func PreparePaths(root string) (Paths, error) {
 	localDir := filepath.Join(root, ".semsearch")
 	globalDir, err := globalSemsearchDir()

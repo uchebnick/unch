@@ -16,6 +16,7 @@ import (
 
 const ManifestSchemaVersion = 1
 
+// Manifest stores the local view of the current search index and optional remote binding.
 type Manifest struct {
 	SchemaVersion int     `json:"schema_version"`
 	Version       int64   `json:"version"`
@@ -24,14 +25,17 @@ type Manifest struct {
 	Remote        *Remote `json:"remote,omitempty"`
 }
 
+// Remote stores the remote CI workflow that publishes the repository index.
 type Remote struct {
 	CIURL string `json:"ci_url,omitempty"`
 }
 
+// ManifestFilePath returns the manifest location inside .semsearch.
 func ManifestFilePath(localDir string) string {
 	return filepath.Join(localDir, "manifest.json")
 }
 
+// DefaultManifest returns the initial local manifest state for a new repository.
 func DefaultManifest() Manifest {
 	return Manifest{
 		SchemaVersion: ManifestSchemaVersion,
@@ -41,6 +45,7 @@ func DefaultManifest() Manifest {
 	}
 }
 
+// Normalize fills in defaults and trims string fields before validation or persistence.
 func (m Manifest) Normalize() Manifest {
 	if m.SchemaVersion == 0 {
 		m.SchemaVersion = ManifestSchemaVersion
@@ -60,6 +65,7 @@ func (m Manifest) Normalize() Manifest {
 	return m
 }
 
+// Validate checks that the manifest contains supported schema and source values.
 func (m Manifest) Validate() error {
 	if m.SchemaVersion <= 0 {
 		return fmt.Errorf("invalid manifest schema_version %d", m.SchemaVersion)
@@ -72,6 +78,7 @@ func (m Manifest) Validate() error {
 	return nil
 }
 
+// ReadManifest loads and validates .semsearch/manifest.json.
 func ReadManifest(localDir string) (Manifest, error) {
 	path := ManifestFilePath(localDir)
 	data, err := os.ReadFile(path)
@@ -91,6 +98,7 @@ func ReadManifest(localDir string) (Manifest, error) {
 	return manifest, nil
 }
 
+// WriteManifest normalizes and persists the manifest to disk.
 func WriteManifest(localDir string, manifest Manifest) error {
 	manifest = manifest.Normalize()
 	if err := manifest.Validate(); err != nil {
@@ -114,6 +122,7 @@ func WriteManifest(localDir string, manifest Manifest) error {
 	return nil
 }
 
+// EnsureManifest reads the manifest when present or creates a default one on first use.
 func EnsureManifest(localDir string) (Manifest, bool, error) {
 	path := ManifestFilePath(localDir)
 	if _, err := os.Stat(path); err == nil {
@@ -130,6 +139,7 @@ func EnsureManifest(localDir string) (Manifest, bool, error) {
 	return manifest, true, nil
 }
 
+// UpdateIndexManifest increments the local manifest version and refreshes its logical index hash.
 func UpdateIndexManifest(localDir string, dbPath string, _ int64) (Manifest, error) {
 	manifest, _, err := EnsureManifest(localDir)
 	if err != nil {
@@ -152,6 +162,7 @@ func UpdateIndexManifest(localDir string, dbPath string, _ int64) (Manifest, err
 	return manifest, nil
 }
 
+// FileSHA256 computes a raw file checksum for artifact verification.
 func FileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {

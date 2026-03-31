@@ -1,7 +1,5 @@
 package runtime
 
-// @filectx: Global GGUF model cache that downloads, validates, repairs, and reuses the embedding model across repositories.
-
 import (
 	"context"
 	"fmt"
@@ -24,7 +22,7 @@ const defaultEmbeddingModelURL = "https://huggingface.co/ggml-org/embeddinggemma
 
 type ModelCache struct{}
 
-// @search: ResolveOrInstallModelPath reuses the global cached GGUF model and auto-downloads the default embedding model when needed.
+// ResolveOrInstallModelPath returns an existing GGUF model path or installs the default model when allowed.
 func (ModelCache) ResolveOrInstallModelPath(ctx context.Context, requestedPath string, defaultPath string, allowAutoDownload bool, reporter Reporter) (string, string, error) {
 	requestedPath = strings.TrimSpace(requestedPath)
 	if requestedPath == "" {

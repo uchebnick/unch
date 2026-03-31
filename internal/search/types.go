@@ -1,5 +1,6 @@
 package search
 
+// SearchResult is the stored symbol metadata returned from lexical or semantic search.
 type SearchResult struct {
 	Path          string
 	Line          int

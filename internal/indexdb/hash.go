@@ -13,6 +13,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// LogicalHash computes a stable hash of the active logical index contents,
+// ignoring SQLite file layout and other storage-level noise.
 func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 	sqlite_vec.Auto()
 

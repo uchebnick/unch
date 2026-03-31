@@ -1,7 +1,5 @@
 package search
 
-// @filectx: Search use case that chooses lexical or semantic retrieval and ranks current-version comment matches.
-
 import (
 	"context"
 	"fmt"
@@ -60,7 +58,7 @@ func NormalizeMode(mode string) (string, error) {
 	}
 }
 
-// @search: Run chooses lexical or semantic retrieval mode, ranks current-version symbols, and returns matches with display metrics.
+// Run executes lexical or semantic search and returns ranked symbol matches.
 func (s Service) Run(ctx context.Context, params Params, reporter Reporter) ([]Result, error) {
 	if params.Limit <= 0 {
 		params.Limit = 10

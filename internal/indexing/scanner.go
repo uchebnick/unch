@@ -11,10 +11,13 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
+// FileScanner walks repository files and extracts symbols into index jobs.
 type FileScanner struct {
 	Root string
 }
 
+// CollectJobs walks the repository, applies ignore rules, extracts symbols from
+// source files, and returns only files that produced indexable output.
 func (FileScanner) CollectJobs(root string, gitignorePath string, extraPatterns []string, commentPrefix string, contextPrefix string) ([]FileJob, int, error) {
 	matcher, err := buildIgnoreMatcher(gitignorePath, extraPatterns)
 	if err != nil {
@@ -119,6 +122,8 @@ func readSourceFile(path string) ([]byte, bool, error) {
 	return data, false, nil
 }
 
+// ResolveGitignorePath expands an optional gitignore path relative to the
+// repository root and falls back to <root>/.gitignore when omitted.
 func ResolveGitignorePath(root string, gitignorePath ...string) (string, error) {
 	switch len(gitignorePath) {
 	case 0:

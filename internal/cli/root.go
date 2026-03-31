@@ -1,7 +1,5 @@
 package cli
 
-// @filectx: Command-line composition root that wires clean-architecture services to concrete adapters.
-
 import (
 	"context"
 	"fmt"
@@ -15,7 +13,7 @@ import (
 	"github.com/uchebnick/unch-searcher/internal/termui"
 )
 
-// @search: Run is the clean-architecture replacement for the old RunCLI entrypoint and dispatches to init, create, index, or search.
+// Run initializes the CLI runtime and dispatches to the selected subcommand.
 func Run(program string, args []string) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

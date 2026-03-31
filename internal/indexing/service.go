@@ -1,7 +1,5 @@
 package indexing
 
-// @filectx: Indexing use case that scans repository files, embeds extracted symbols, and activates a new search version.
-
 import (
 	"context"
 	"fmt"
@@ -50,7 +48,7 @@ type Service struct {
 	Embedder Embedder
 }
 
-// @search: Run collects extracted symbols, reuses stored embeddings by hash, and writes the next active repository version.
+// Run scans the repository, embeds extracted symbols, and activates the new index version.
 func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Result, error) {
 	jobs, totalSymbols, err := s.Scanner.CollectJobs(
 		params.Root,

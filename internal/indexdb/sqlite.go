@@ -12,11 +12,13 @@ import (
 	"github.com/uchebnick/unch-searcher/internal/search"
 )
 
+// Store wraps the SQLite connection and vector dimension used by the index database.
 type Store struct {
 	db  *sql.DB
 	dim int
 }
 
+// Open initializes the SQLite schema used for symbol metadata and vector search.
 func Open(ctx context.Context, dbPath string, dim int) (*Store, error) {
 	sqlite_vec.Auto()
 
@@ -109,6 +111,7 @@ func (s *Store) init(ctx context.Context) error {
 	return nil
 }
 
+// CurrentVersion returns the currently active logical index version.
 func (s *Store) CurrentVersion(ctx context.Context) (int64, error) {
 	var version int64
 	err := s.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'current_version'`).Scan(&version)
@@ -118,6 +121,7 @@ func (s *Store) CurrentVersion(ctx context.Context) (int64, error) {
 	return version, nil
 }
 
+// WorkingVersion returns the next index version that should be written during reindexing.
 func (s *Store) WorkingVersion(ctx context.Context) (int64, error) {
 	current, err := s.CurrentVersion(ctx)
 	if err != nil {
@@ -126,6 +130,7 @@ func (s *Store) WorkingVersion(ctx context.Context) (int64, error) {
 	return current + 1, nil
 }
 
+// ActivateVersion marks the provided version as the current searchable snapshot.
 func (s *Store) ActivateVersion(ctx context.Context, version int64) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE meta SET value = ? WHERE key = 'current_version'`, version)
 	if err != nil {
@@ -134,6 +139,7 @@ func (s *Store) ActivateVersion(ctx context.Context, version int64) error {
 	return nil
 }
 
+// EmbeddingExists reports whether the vector table already contains the given embedding hash.
 func (s *Store) EmbeddingExists(ctx context.Context, embeddingHash string) (bool, error) {
 	var exists int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM embeddings WHERE comment_hash = ? LIMIT 1`, embeddingHash).Scan(&exists)
@@ -146,6 +152,7 @@ func (s *Store) EmbeddingExists(ctx context.Context, embeddingHash string) (bool
 	return true, nil
 }
 
+// AddEmbedding stores a new embedding vector under its content hash.
 func (s *Store) AddEmbedding(ctx context.Context, embeddingHash string, embedding []float32) error {
 	if len(embedding) != s.dim {
 		return fmt.Errorf("invalid embedding dimension: got=%d want=%d", len(embedding), s.dim)
@@ -163,6 +170,7 @@ func (s *Store) AddEmbedding(ctx context.Context, embeddingHash string, embeddin
 	return nil
 }
 
+// UpsertSymbol writes or updates the symbol metadata for one file entry in the working version.
 func (s *Store) UpsertSymbol(ctx context.Context, path string, symbol indexing.IndexedSymbol, embeddingHash string, version int64) error {
 	_, err := s.db.ExecContext(
 		ctx,
@@ -211,6 +219,7 @@ func (s *Store) UpsertSymbol(ctx context.Context, path string, symbol indexing.I
 	return nil
 }
 
+// CleanupOldVersions removes symbol rows from previous index generations.
 func (s *Store) CleanupOldVersions(ctx context.Context, activeVersion int64) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM symbols WHERE version < ?`, activeVersion)
 	if err != nil {
@@ -219,6 +228,7 @@ func (s *Store) CleanupOldVersions(ctx context.Context, activeVersion int64) err
 	return nil
 }
 
+// CleanupUnusedEmbeddings removes embeddings that are no longer referenced by active symbols.
 func (s *Store) CleanupUnusedEmbeddings(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM embeddings
 		WHERE comment_hash NOT IN (
@@ -230,6 +240,7 @@ func (s *Store) CleanupUnusedEmbeddings(ctx context.Context) error {
 	return nil
 }
 
+// SearchByVersion performs semantic nearest-neighbor search against one logical index version.
 func (s *Store) SearchByVersion(ctx context.Context, queryEmbedding []float32, version int64, limit int) ([]search.SearchResult, error) {
 	if len(queryEmbedding) != s.dim {
 		return nil, fmt.Errorf("invalid query dimension: got=%d want=%d", len(queryEmbedding), s.dim)
@@ -299,6 +310,7 @@ func (s *Store) SearchByVersion(ctx context.Context, queryEmbedding []float32, v
 	return results, nil
 }
 
+// SearchCurrent performs semantic nearest-neighbor search against the active index version.
 func (s *Store) SearchCurrent(ctx context.Context, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
 	version, err := s.CurrentVersion(ctx)
 	if err != nil {
@@ -307,6 +319,7 @@ func (s *Store) SearchCurrent(ctx context.Context, queryEmbedding []float32, lim
 	return s.SearchByVersion(ctx, queryEmbedding, version, limit)
 }
 
+// ListSymbolsByVersion returns all symbols stored in a specific index version.
 func (s *Store) ListSymbolsByVersion(ctx context.Context, version int64) ([]search.SearchResult, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
@@ -356,6 +369,7 @@ func (s *Store) ListSymbolsByVersion(ctx context.Context, version int64) ([]sear
 	return results, nil
 }
 
+// ListCurrentSymbols returns all symbols from the active index version for lexical search.
 func (s *Store) ListCurrentSymbols(ctx context.Context) ([]search.SearchResult, error) {
 	version, err := s.CurrentVersion(ctx)
 	if err != nil {

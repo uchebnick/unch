@@ -32,12 +32,14 @@ var (
 	remoteManifestHTTPClient   = &http.Client{Timeout: 20 * time.Second}
 )
 
+// GitHubWorkflowRef identifies one workflow file inside a GitHub repository.
 type GitHubWorkflowRef struct {
 	Owner        string
 	Repo         string
 	WorkflowFile string
 }
 
+// RemoteSyncResult summarizes whether a remote check ran and whether it updated the local cache.
 type RemoteSyncResult struct {
 	Checked    bool
 	Downloaded bool
@@ -45,10 +47,12 @@ type RemoteSyncResult struct {
 	Note       string
 }
 
+// HasRemoteBinding reports whether the manifest is currently bound to a remote CI workflow.
 func HasRemoteBinding(manifest Manifest) bool {
 	return manifest.Source == "remote" && manifest.Remote != nil && strings.TrimSpace(manifest.Remote.CIURL) != ""
 }
 
+// BindRemoteManifest switches the local manifest into remote mode for the provided CI workflow URL.
 func BindRemoteManifest(localDir string, ciURL string) (Manifest, error) {
 	resolvedCIURL, err := ResolveGitHubCIURL(ciURL)
 	if err != nil {
@@ -69,6 +73,7 @@ func BindRemoteManifest(localDir string, ciURL string) (Manifest, error) {
 	return manifest, nil
 }
 
+// DetectGitHubCIURL derives the default workflow URL from git remote origin.
 func DetectGitHubCIURL(root string) (string, error) {
 	originURL, err := gitOriginURL(root)
 	if err != nil {
@@ -87,6 +92,7 @@ func DetectGitHubCIURL(root string) (string, error) {
 	}.CIURL(), nil
 }
 
+// ResolveGitHubCIURL accepts either a repository URL or a full workflow URL and normalizes it.
 func ResolveGitHubCIURL(input string) (string, error) {
 	if workflow, err := ParseGitHubWorkflowURL(input); err == nil {
 		return workflow.CIURL(), nil
@@ -108,6 +114,7 @@ func ResolveGitHubCIURL(input string) (string, error) {
 	)
 }
 
+// ParseGitHubWorkflowURL validates and parses a GitHub Actions workflow URL.
 func ParseGitHubWorkflowURL(ciURL string) (GitHubWorkflowRef, error) {
 	ciURL = strings.TrimSpace(ciURL)
 	if ciURL == "" {
@@ -142,18 +149,22 @@ func ParseGitHubWorkflowURL(ciURL string) (GitHubWorkflowRef, error) {
 	}, nil
 }
 
+// CIURL reconstructs the canonical GitHub workflow URL.
 func (w GitHubWorkflowRef) CIURL() string {
 	return fmt.Sprintf("https://github.com/%s/%s/%s/%s", w.Owner, w.Repo, gitHubActionsWorkflowSegment, w.WorkflowFile)
 }
 
+// PublishedManifestURL returns the raw gh-pages manifest URL for this workflow.
 func (w GitHubWorkflowRef) PublishedManifestURL() (string, error) {
 	return joinURLPath(gitHubContentBaseURL, w.Owner, w.Repo, gitHubPagesBranch, gitHubPagesSemsearchDir, "manifest.json")
 }
 
+// PublishedIndexURL returns the raw gh-pages index database URL for this workflow.
 func (w GitHubWorkflowRef) PublishedIndexURL() (string, error) {
 	return joinURLPath(gitHubContentBaseURL, w.Owner, w.Repo, gitHubPagesBranch, gitHubPagesSemsearchDir, "index.db")
 }
 
+// SyncRemoteIndex refreshes the local index from the published remote CI artifacts when needed.
 func SyncRemoteIndex(ctx context.Context, localDir string) (RemoteSyncResult, error) {
 	manifest, err := ReadManifest(localDir)
 	if err != nil {

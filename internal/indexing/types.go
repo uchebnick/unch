@@ -14,6 +14,8 @@ type IndexedComment struct {
 	FollowingText string
 }
 
+// IndexedSymbol is the normalized search unit produced by Tree-sitter extraction
+// or by the legacy prefix fallback.
 type IndexedSymbol struct {
 	Line          int
 	Kind          string
@@ -26,6 +28,8 @@ type IndexedSymbol struct {
 	FileContext   string
 }
 
+// StableID returns a deterministic identifier for a symbol within a file so the
+// index can update moved or rewritten declarations without depending on line numbers.
 func (s IndexedSymbol) StableID() string {
 	payload := strings.Join([]string{
 		strings.TrimSpace(strings.ToLower(s.Kind)),
@@ -49,6 +53,7 @@ func (s IndexedSymbol) StableID() string {
 	return hex.EncodeToString(buf[:])
 }
 
+// SearchText flattens the symbol into a plain-text document suitable for lexical ranking.
 func (s IndexedSymbol) SearchText() string {
 	var parts []string
 	for _, value := range []string{
@@ -69,6 +74,7 @@ func (s IndexedSymbol) SearchText() string {
 	return strings.Join(parts, "\n")
 }
 
+// FileJob describes one source file and the symbols extracted from it during a scan.
 type FileJob struct {
 	Path       string
 	SourcePath string

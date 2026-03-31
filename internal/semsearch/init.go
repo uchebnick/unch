@@ -8,6 +8,7 @@ import (
 
 const DefaultGitignore = "*\n"
 
+// Init ensures the local .semsearch workspace exists and contains its baseline files.
 func Init(root string) (Paths, bool, error) {
 	paths, err := PreparePaths(root)
 	if err != nil {
@@ -25,6 +26,7 @@ func Init(root string) (Paths, bool, error) {
 	return paths, created, nil
 }
 
+// EnsureGitignore creates the local .semsearch/.gitignore when it does not exist yet.
 func EnsureGitignore(localDir string) (bool, error) {
 	path := filepath.Join(localDir, ".gitignore")
 	if _, err := os.Stat(path); err == nil {

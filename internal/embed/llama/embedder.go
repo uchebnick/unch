@@ -1,7 +1,5 @@
 package llamaembed
 
-// @filectx: yzma-backed embedding adapter that loads a GGUF model, formats retrieval prompts, and produces normalized vectors.
-
 import (
 	"encoding/hex"
 	"fmt"
@@ -51,7 +49,7 @@ const (
 	embeddingDocFormatVersion          = "v4"
 )
 
-// @search: New loads yzma shared libraries, opens the GGUF model, and creates an embedding context with mean pooling.
+// New loads the yzma runtime, opens the GGUF model, and prepares an embedding context.
 func New(cfg Config) (*Embedder, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -234,7 +232,7 @@ func (e *Embedder) EmbedQuery(text string) ([]float32, error) {
 	return e.Embed(formatEmbeddingGemmaQuery(text))
 }
 
-// @search: EmbedIndexedSymbol formats symbol metadata, docs, and code into one retrieval document and returns its hash and vector.
+// EmbedIndexedSymbol builds a retrieval document for a symbol and returns its hash and embedding vector.
 func (e *Embedder) EmbedIndexedSymbol(path string, symbol indexing.IndexedSymbol) (string, []float32, error) {
 	documentInput := formatIndexedSymbolDocument(path, symbol)
 	hash := hashComment("embedding_doc_format:" + embeddingDocFormatVersion + "\n" + documentInput)

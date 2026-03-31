@@ -1,7 +1,5 @@
 package runtime
 
-// @filectx: yzma runtime resolver that validates local shared libraries or downloads a managed llama runtime into .semsearch.
-
 import (
 	"context"
 	"encoding/json"
@@ -28,7 +26,8 @@ var (
 
 type YzmaResolver struct{}
 
-// @search: ResolveOrInstallYzmaLibPath uses YZMA_LIB, local .semsearch runtime libraries, or auto-downloads llama shared libraries when --lib is omitted.
+// ResolveOrInstallYzmaLibPath resolves yzma shared libraries from --lib, YZMA_LIB,
+// the local .semsearch runtime directory, or by downloading a managed runtime.
 func (YzmaResolver) ResolveOrInstallYzmaLibPath(ctx context.Context, requestedPath string, localDir string, reporter Reporter) (string, string, error) {
 	requestedPath = strings.TrimSpace(requestedPath)
 	if requestedPath != "" {

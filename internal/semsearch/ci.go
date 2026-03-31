@@ -192,10 +192,12 @@ jobs:
           if-no-files-found: warn
 `
 
+// CIWorkflowPath returns the generated workflow location under .github/workflows.
 func CIWorkflowPath(root string) string {
 	return filepath.Join(root, ".github", "workflows", "searcher.yml")
 }
 
+// EnsureCIWorkflow writes the default search-index workflow without overwriting an existing file.
 func EnsureCIWorkflow(root string) (string, bool, error) {
 	path := CIWorkflowPath(root)
 	if _, err := os.Stat(path); err == nil {

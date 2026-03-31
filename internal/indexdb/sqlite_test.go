@@ -78,3 +78,46 @@ func TestStoreLifecycle(t *testing.T) {
 		t.Fatalf("expected hash2 embedding to be removed after cleanup")
 	}
 }
+
+func TestLogicalHashIgnoresCurrentVersionMetadata(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+
+	store, err := Open(ctx, dbPath, 3)
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer store.Close()
+
+	vec := []float32{1, 0, 0}
+	if err := store.AddEmbedding(ctx, "hash1", vec); err != nil {
+		t.Fatalf("AddEmbedding() error: %v", err)
+	}
+	if err := store.UpsertComment(ctx, "/tmp/a.go", 10, "hash1", 1); err != nil {
+		t.Fatalf("UpsertComment(version=1) error: %v", err)
+	}
+	if err := store.ActivateVersion(ctx, 1); err != nil {
+		t.Fatalf("ActivateVersion(1) error: %v", err)
+	}
+
+	firstHash, err := LogicalHash(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("LogicalHash(first) error: %v", err)
+	}
+
+	if err := store.UpsertComment(ctx, "/tmp/a.go", 10, "hash1", 2); err != nil {
+		t.Fatalf("UpsertComment(version=2) error: %v", err)
+	}
+	if err := store.ActivateVersion(ctx, 2); err != nil {
+		t.Fatalf("ActivateVersion(2) error: %v", err)
+	}
+
+	secondHash, err := LogicalHash(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("LogicalHash(second) error: %v", err)
+	}
+
+	if firstHash != secondHash {
+		t.Fatalf("LogicalHash() changed after version-only update: first=%s second=%s", firstHash, secondHash)
+	}
+}

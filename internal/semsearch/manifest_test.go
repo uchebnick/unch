@@ -164,19 +164,23 @@ func TestUpdateIndexManifest(t *testing.T) {
 
 	localDir := t.TempDir()
 	dbPath := filepath.Join(localDir, "index.db")
-	if err := os.WriteFile(dbPath, []byte("index"), 0o644); err != nil {
-		t.Fatalf("write db file: %v", err)
+	writeTestIndexDB(t, dbPath, 3, "/tmp/a.go", 10, "hash1", []float32{1, 2, 3})
+	if _, err := BindRemoteManifest(localDir, "https://github.com/acme/widgets/actions/workflows/searcher.yml"); err != nil {
+		t.Fatalf("BindRemoteManifest() error: %v", err)
 	}
 
 	manifest, err := UpdateIndexManifest(localDir, dbPath, 3)
 	if err != nil {
 		t.Fatalf("UpdateIndexManifest() error: %v", err)
 	}
-	if manifest.Version != 3 {
-		t.Fatalf("manifest.Version = %d, want 3", manifest.Version)
+	if manifest.Version != 1 {
+		t.Fatalf("manifest.Version = %d, want 1", manifest.Version)
 	}
 	if manifest.Source != "local" {
 		t.Fatalf("manifest.Source = %q, want local", manifest.Source)
+	}
+	if manifest.Remote != nil {
+		t.Fatalf("manifest.Remote = %+v, want nil after local indexing", manifest.Remote)
 	}
 	if manifest.IndexingHash == "" {
 		t.Fatalf("expected non-empty indexing hash")
@@ -188,5 +192,13 @@ func TestUpdateIndexManifest(t *testing.T) {
 	}
 	if !reflect.DeepEqual(reloaded, manifest) {
 		t.Fatalf("ReadManifest() = %+v, want %+v", reloaded, manifest)
+	}
+
+	manifest, err = UpdateIndexManifest(localDir, dbPath, 99)
+	if err != nil {
+		t.Fatalf("UpdateIndexManifest(second call) error: %v", err)
+	}
+	if manifest.Version != 2 {
+		t.Fatalf("manifest.Version after second update = %d, want 2", manifest.Version)
 	}
 }

@@ -1,6 +1,7 @@
 package semsearch
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/uchebnick/unch-searcher/internal/indexdb"
 )
 
 const ManifestSchemaVersion = 1
@@ -127,20 +130,21 @@ func EnsureManifest(localDir string) (Manifest, bool, error) {
 	return manifest, true, nil
 }
 
-func UpdateIndexManifest(localDir string, dbPath string, version int64) (Manifest, error) {
+func UpdateIndexManifest(localDir string, dbPath string, _ int64) (Manifest, error) {
 	manifest, _, err := EnsureManifest(localDir)
 	if err != nil {
 		return Manifest{}, err
 	}
 
-	indexingHash, err := FileSHA256(dbPath)
+	indexingHash, err := indexdb.LogicalHash(context.Background(), dbPath)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("hash %s: %w", dbPath, err)
 	}
 
-	manifest.Version = max(version, 0)
+	manifest.Version++
 	manifest.IndexingHash = indexingHash
 	manifest.Source = "local"
+	manifest.Remote = nil
 
 	if err := WriteManifest(localDir, manifest); err != nil {
 		return Manifest{}, err

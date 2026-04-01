@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/unch-logo.svg" alt="unch logo" width="300">
+</p>
+
 # unch
 
 [![Release](https://img.shields.io/github/v/release/uchebnick/unch?display_name=tag)](https://github.com/uchebnick/unch/releases/latest)
@@ -5,48 +9,105 @@
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/uchebnick/unch/gh-pages/coverage/coverage-badge.json)](https://github.com/uchebnick/unch/actions/workflows/ci.yml)
 [![Go 1.25+](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://github.com/uchebnick/unch)
 
-Local-first CLI for semantic code search over source code objects. `unch` indexes top-level API and attached docs with Tree-sitter for Go, TypeScript, JavaScript, and Python, then lets you search the result locally or publish it through GitHub Actions.
+**Local-first semantic code search for real code objects.**
+
+`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal. It is built for the moment when you know what the code does, but do not remember the symbol name, file path, or exact text. By default everything stays local to the repository; GitHub Actions publishing is optional.
+
+<p align="center">
+  <img src="docs/assets/unch-demo.svg" alt="Terminal demo of unch indexing gorilla/mux and returning semantic search matches" width="920">
+</p>
+
+## Why `unch`
+
+- **Local-first by default.** The index, model cache, and search flow stay on your machine unless you explicitly publish a remote index.
+- **Symbol-aware search.** `unch` indexes top-level API and attached docs for `Go`, `TypeScript`, `JavaScript`, and `Python` instead of relying on manual inline prefixes.
+- **Terminal-native workflow.** Index once, search from the CLI, and optionally keep a repo-wide index fresh through GitHub Actions.
 
 ## Install
 
-### Homebrew
+Homebrew is the polished install path today:
 
 ```bash
 brew install uchebnick/tap/unch
 ```
 
-### From source
+For a cross-platform convenience path, use the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh
+```
+
+For source-based installation, use the canonical module path:
+
+```bash
+go install github.com/uchebnick/unch@latest
+```
+
+If you want to hack on the project directly, build it from the current checkout:
 
 ```bash
 go build -o unch .
 ```
 
-## Quick Start
+Packaged release archives are currently Darwin-only. On Linux and other unsupported targets, `install.sh` falls back to `go install` when Go is available.
 
-Index a repository directly. No inline prefixes are required.
+See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for reproducible smoke results on known repositories.
 
-```go
-// Run dispatches to index by default and to search when the first arg is search.
-func Run(program string, args []string) error {
-	...
-}
-```
-
-Build a local index and search it:
+## 30-Second Path
 
 ```bash
+cd path/to/repo
 unch index --root .
-unch search "command dispatch"
-unch search --mode lexical "Run"
+unch search "create a new router"
+unch search --details "get path variables from a request"
 ```
 
-First run may download the default model, download local `yzma` runtime libraries, and create `./.semsearch/`. Legacy `--comment-prefix` and `--context-prefix` flags remain available only as a fallback for unsupported files or parser failures.
+Real output from indexing [`gorilla/mux`](https://github.com/gorilla/mux):
+
+```text
+$ unch index --root .
+Loaded model       dim=768
+Indexed 278 symbols in 16 files
+
+$ unch search "create a new router"
+1. mux.go:32  0.7747
+2. mux.go:314 0.8135
+
+$ unch search --details "get path variables from a request"
+1. mux.go:466  0.7991
+   kind: function
+   name: Vars
+   signature: func Vars(r *http.Request) map[string]string
+   docs: Vars returns the route variables for the current request, if any.
+```
+
+First run may download the default embedding model, download local `yzma` runtime libraries, and create `./.semsearch/`.
+
+## What It Supports Today
+
+- Tree-sitter indexing for `Go`, `TypeScript`, `JavaScript`, and `Python`
+- Top-level API objects and attached documentation
+- Local indexing and search first, optional remote publishing through GitHub Actions
+- `auto`, `semantic`, and `lexical` search modes
+- Legacy `--comment-prefix` and `--context-prefix` only as fallback for unsupported files or parser failures
+
+## When `unch` Helps
+
+- You know the behavior you want, but not the exact symbol name.
+- You want documentation and API surface searchable together.
+- You want semantic search over a repo without sending code to a hosted service.
+
+## Use Something Else When
+
+- `grep` or `rg` is better for exact strings, literals, or known filenames.
+- LSP or IDE navigation is better when you already know the symbol family and want jump-to-definition or refactors.
+- Hosted code search is better when you need cross-repository search across an entire organization.
 
 ## Core Commands
 
 ### `index`
 
-Build or refresh the local search index for a repository. Supported Tree-sitter languages in the first wave are `Go`, `TypeScript`, `JavaScript`, and `Python`.
+Build or refresh the local index for a repository.
 
 ```bash
 unch index --root .
@@ -54,47 +115,29 @@ unch index --root .
 
 Useful flags:
 
-- `--exclude` skip generated or vendor paths
-- `--model` use a custom `.gguf` embedding model
-- `--lib` use an existing `yzma` runtime directory
-- `--comment-prefix` and `--context-prefix` keep legacy annotation fallback enabled for unsupported files
-
-Example:
-
-```bash
-unch index --root . --exclude vendor/ --exclude "*.pb.go"
-```
+- `--exclude` to skip generated, vendor, or irrelevant paths
+- `--model` to use a custom `.gguf` embedding model
+- `--lib` to use an existing `yzma` runtime directory
 
 ### `search`
 
-Search the current index.
-
-```bash
-unch search "global model cache"
-```
-
-Modes:
-
-- `auto` chooses between semantic and lexical search
-- `semantic` favors meaning-based matches
-- `lexical` favors exact symbol, path, and signature matches
-
-Useful flags:
-
-- `--mode`
-- `--limit`
-- `--max-distance`
-
-Examples:
+Query the current index.
 
 ```bash
 unch search "sqlite schema"
 unch search --mode lexical "Run"
 ```
 
+Useful flags:
+
+- `--mode` for `auto`, `semantic`, or `lexical`
+- `--limit` to control result count
+- `--max-distance` to narrow semantic matches
+- `--details` to print symbol metadata, signature, docs, and body context for each match
+
 ## Remote / CI
 
-Remote indexing is optional. Use it when you want GitHub Actions to publish a search index for the repository.
+Remote indexing is optional and stays secondary to the local workflow. Use it when you want GitHub Actions to publish an index for the repository.
 
 Create the workflow scaffold:
 
@@ -102,14 +145,16 @@ Create the workflow scaffold:
 unch create ci
 ```
 
-This creates a thin `searcher.yml` wrapper that delegates to the maintained reusable workflow in `uchebnick/unch`.
-
-Bind the repository to a GitHub repo or workflow URL:
+Bind the local repository state to a GitHub repo or workflow URL:
 
 ```bash
 unch bind ci https://github.com/uchebnick/unch
 ```
 
-After the workflow is committed and runs successfully once, `unch search` can refresh the published index automatically when a newer remote version exists. Use `unch remote sync` to force a refresh before searching.
+After the workflow is committed and runs successfully once, `unch search` can refresh the published index automatically when a newer remote version exists. Use `unch remote sync` when you want to force a refresh before searching.
 
-Set `SEMSEARCH_HOME` if you want to move the shared model cache to a different location.
+## Contributing and Feedback
+
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for the local dev loop.
+- Open a [bug report](https://github.com/uchebnick/unch/issues/new?template=bug_report.md) if search quality or indexing behavior looks wrong.
+- Open a [feature request](https://github.com/uchebnick/unch/issues/new?template=feature_request.md) if you want new language support, ranking behavior, or workflow features.

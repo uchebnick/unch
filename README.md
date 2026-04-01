@@ -51,7 +51,7 @@ go build -o unch .
 
 Packaged release archives are currently Darwin-only. On Linux and other unsupported targets, `install.sh` falls back to `go install` when Go is available.
 
-See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for reproducible smoke results on known repositories.
+See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the pinned benchmark suite, score formula, and current sample results.
 
 ## 30-Second Path
 

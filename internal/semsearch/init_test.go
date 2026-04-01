@@ -54,6 +54,9 @@ func TestInitCreatesSemsearchLayout(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(paths.LocalDir, ".gitignore")); err != nil {
 		t.Fatalf(".gitignore missing: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(paths.LocalDir, "file_weights.json")); err != nil {
+		t.Fatalf("file_weights.json missing: %v", err)
+	}
 	if _, err := os.Stat(paths.ModelsDir); err != nil {
 		t.Fatalf("ModelsDir missing: %v", err)
 	}

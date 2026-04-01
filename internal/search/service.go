@@ -22,6 +22,10 @@ type Embedder interface {
 	EmbedQuery(text string) ([]float32, error)
 }
 
+type PathWeighter interface {
+	Weight(path string) float64
+}
+
 type Result struct {
 	SearchResult
 	Text          string
@@ -40,8 +44,9 @@ type Params struct {
 }
 
 type Service struct {
-	Repo     Repository
-	Embedder Embedder
+	Repo         Repository
+	Embedder     Embedder
+	PathWeighter PathWeighter
 }
 
 func NormalizeMode(mode string) (string, error) {
@@ -112,17 +117,19 @@ func (s Service) searchSemanticCurrent(ctx context.Context, params Params, _ Rep
 	ranked := make([]Result, 0, len(candidates))
 	for _, candidate := range candidates {
 		text := resultSearchText(candidate)
+		fileWeight := effectiveFileWeight(s.PathWeighter, candidate.Path)
 
 		if params.MaxDistance > 0 && candidate.Distance > params.MaxDistance {
 			continue
 		}
 
+		lexicalScore := lexicalMatchScore(params.QueryText, candidate) * fileWeight
 		ranked = append(ranked, Result{
 			SearchResult:  candidate,
 			Text:          text,
-			LexicalScore:  lexicalMatchScore(params.QueryText, candidate),
+			LexicalScore:  lexicalScore,
 			DisplayMetric: fmt.Sprintf("%.4f", candidate.Distance),
-			sortKey:       candidate.Distance,
+			sortKey:       semanticSortDistance(candidate.Distance, fileWeight),
 		})
 	}
 
@@ -157,8 +164,7 @@ func (s Service) searchLexicalCurrent(ctx context.Context, params Params, _ Repo
 	ranked := make([]Result, 0, len(candidates))
 	for _, candidate := range candidates {
 		text := resultSearchText(candidate)
-
-		score := lexicalMatchScore(params.QueryText, candidate)
+		score := lexicalMatchScore(params.QueryText, candidate) * effectiveFileWeight(s.PathWeighter, candidate.Path)
 		if score <= 0 {
 			continue
 		}
@@ -325,6 +331,34 @@ func lexicalMatchScore(query string, candidate SearchResult) float64 {
 		return 1
 	}
 	return score
+}
+
+func effectiveFileWeight(weighter PathWeighter, path string) float64 {
+	if weighter == nil {
+		return 1
+	}
+
+	weight := weighter.Weight(path)
+	switch {
+	case weight <= 0:
+		return 1
+	case weight > 1:
+		return 1
+	default:
+		return weight
+	}
+}
+
+func semanticSortDistance(distance float64, weight float64) float64 {
+	if weight <= 0 || weight > 1 {
+		weight = 1
+	}
+
+	similarity := 1 - distance
+	if similarity <= 0 {
+		return distance
+	}
+	return 1 - similarity*weight
 }
 
 type weightedQueryToken struct {

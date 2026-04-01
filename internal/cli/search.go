@@ -74,6 +74,9 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 	if err != nil {
 		return err
 	}
+	if _, err := semsearch.EnsureFileWeights(targetPaths.LocalDir); err != nil {
+		return err
+	}
 
 	remoteSync, err := semsearch.SyncRemoteIndex(ctx, targetPaths.LocalDir)
 	if err != nil {
@@ -132,9 +135,15 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 	}
 	defer repo.Close()
 
+	fileWeights, err := semsearch.LoadFileWeights(targetPaths.LocalDir)
+	if err != nil {
+		return err
+	}
+
 	service := appsearch.Service{
-		Repo:     repo,
-		Embedder: embedder,
+		Repo:         repo,
+		Embedder:     embedder,
+		PathWeighter: fileWeights,
 	}
 
 	results, err := service.Run(ctx, appsearch.Params{

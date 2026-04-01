@@ -138,6 +138,9 @@ func TestRunInitCreatesSemsearchLayout(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".semsearch", "manifest.json")); err != nil {
 		t.Fatalf("expected manifest.json to be created: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(root, ".semsearch", "file_weights.json")); err != nil {
+		t.Fatalf("expected file_weights.json to be created: %v", err)
+	}
 }
 
 func TestRunDispatchesInitCommand(t *testing.T) {

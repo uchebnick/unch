@@ -153,3 +153,13 @@ func TestShouldPreferLexicalResults(t *testing.T) {
 		t.Fatalf("did not expect lexical results to win when semantic top distance is strong")
 	}
 }
+
+func TestSemanticSortDistanceUsesFileWeight(t *testing.T) {
+	t.Parallel()
+
+	unweighted := semanticSortDistance(0.4, 1)
+	downweighted := semanticSortDistance(0.4, 0.82)
+	if downweighted <= unweighted {
+		t.Fatalf("expected downweighted semantic distance to get worse, got %f <= %f", downweighted, unweighted)
+	}
+}

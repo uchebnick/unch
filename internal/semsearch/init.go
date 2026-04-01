@@ -19,6 +19,9 @@ func Init(root string) (Paths, bool, error) {
 	if err != nil {
 		return Paths{}, false, err
 	}
+	if _, err := EnsureFileWeights(paths.LocalDir); err != nil {
+		return Paths{}, false, err
+	}
 	if _, _, err := EnsureManifest(paths.LocalDir); err != nil {
 		return Paths{}, false, err
 	}

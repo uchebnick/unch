@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+type mockPathWeighter map[string]float64
+
+func (m mockPathWeighter) Weight(path string) float64 {
+	if weight, ok := m[path]; ok {
+		return weight
+	}
+	return 1
+}
+
 type mockRepo struct {
 	semantic []SearchResult
 	lexical  []SearchResult
@@ -101,5 +110,65 @@ func TestServiceRunPropagatesEmbedErrors(t *testing.T) {
 		Mode:      "semantic",
 	}, nil); err == nil {
 		t.Fatalf("expected embed error")
+	}
+}
+
+func TestServiceRunLexicalAppliesFileWeights(t *testing.T) {
+	t.Parallel()
+
+	service := Service{
+		Repo: mockRepo{
+			lexical: []SearchResult{
+				{Path: "examples/router_test.go", Line: 10, Name: "NewRouter", QualifiedName: "NewRouter", Documentation: "NewRouter example"},
+				{Path: "mux.go", Line: 32, Name: "NewRouter", QualifiedName: "NewRouter", Documentation: "NewRouter returns a new router instance"},
+			},
+		},
+		Embedder:     mockEmbedder{},
+		PathWeighter: mockPathWeighter{"examples/router_test.go": 0.82},
+	}
+
+	results, err := service.Run(context.Background(), Params{
+		QueryText: "NewRouter",
+		Mode:      "lexical",
+		Limit:     2,
+	}, nil)
+	if err != nil {
+		t.Fatalf("Service.Run(lexical with file weights) error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 lexical results, got %d", len(results))
+	}
+	if results[0].Path != "mux.go" {
+		t.Fatalf("expected canonical file to outrank downweighted example, got %+v", results)
+	}
+}
+
+func TestServiceRunSemanticAppliesFileWeights(t *testing.T) {
+	t.Parallel()
+
+	service := Service{
+		Repo: mockRepo{
+			semantic: []SearchResult{
+				{Path: "examples/router_test.go", Line: 10, Name: "NewRouter", Documentation: "example router", Distance: 0.38},
+				{Path: "mux.go", Line: 32, Name: "NewRouter", Documentation: "new router instance", Distance: 0.4},
+			},
+		},
+		Embedder:     mockEmbedder{},
+		PathWeighter: mockPathWeighter{"examples/router_test.go": 0.82},
+	}
+
+	results, err := service.Run(context.Background(), Params{
+		QueryText: "create a new router",
+		Mode:      "semantic",
+		Limit:     2,
+	}, nil)
+	if err != nil {
+		t.Fatalf("Service.Run(semantic with file weights) error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 semantic results, got %d", len(results))
+	}
+	if results[0].Path != "mux.go" {
+		t.Fatalf("expected canonical file to outrank downweighted example, got %+v", results)
 	}
 }

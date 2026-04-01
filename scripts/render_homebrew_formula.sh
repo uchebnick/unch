@@ -13,17 +13,17 @@ amd64_sha="$3"
 
 cat <<EOF
 class Unch < Formula
-  desc "Local-first semantic code search over repository annotations"
-  homepage "https://github.com/uchebnick/unch-searcher"
+  desc "Local-first semantic code search over code objects"
+  homepage "https://github.com/uchebnick/unch"
   version "${version}"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/uchebnick/unch-searcher/releases/download/v${version}/unch_Darwin_arm64.tar.gz"
+      url "https://github.com/uchebnick/unch/releases/download/v${version}/unch_Darwin_arm64.tar.gz"
       sha256 "${arm64_sha}"
     else
-      url "https://github.com/uchebnick/unch-searcher/releases/download/v${version}/unch_Darwin_x86_64.tar.gz"
+      url "https://github.com/uchebnick/unch/releases/download/v${version}/unch_Darwin_x86_64.tar.gz"
       sha256 "${amd64_sha}"
     end
   end

@@ -53,6 +53,14 @@ Packaged release archives are currently Darwin-only. On Linux and other unsuppor
 
 See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the pinned benchmark suite, score formula, and current sample results.
 
+Model selection accepts either a known model id or a direct `.gguf` path:
+
+```bash
+unch index --model embeddinggemma
+unch index --model qwen3
+unch search --model qwen3 "create a new router"
+```
+
 ## 30-Second Path
 
 ```bash
@@ -82,6 +90,8 @@ $ unch search --details "get path variables from a request"
 ```
 
 First run may download the default embedding model, download local `yzma` runtime libraries, and create `./.semsearch/`.
+
+Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
 
 ## What It Supports Today
 
@@ -116,7 +126,7 @@ unch index --root .
 Useful flags:
 
 - `--exclude` to skip generated, vendor, or irrelevant paths
-- `--model` to use a custom `.gguf` embedding model
+- `--model` to use `embeddinggemma`, `qwen3`, or a custom `.gguf` path
 - `--lib` to use an existing `yzma` runtime directory
 
 ### `search`
@@ -133,6 +143,7 @@ Useful flags:
 - `--mode` for `auto`, `semantic`, or `lexical`
 - `--limit` to control result count
 - `--max-distance` to narrow semantic matches
+- `--model` to search with `embeddinggemma`, `qwen3`, or a custom `.gguf` path
 - `--details` to print symbol metadata, signature, docs, and body context for each match
 
 ## Remote / CI
@@ -152,6 +163,8 @@ unch bind ci https://github.com/uchebnick/unch
 ```
 
 After the workflow is committed and runs successfully once, `unch search` can refresh the published index automatically when a newer remote version exists. Use `unch remote sync` when you want to force a refresh before searching.
+
+The benchmark suite runs in CI only on release tags so ordinary pushes stay fast, while coverage still runs on every push.
 
 ## Contributing and Feedback
 

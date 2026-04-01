@@ -86,7 +86,7 @@ func main() {
 		WarmIndexRuns:  *warmIndexRuns,
 		WarmSearchRuns: *warmSearchRuns,
 		SearchLimit:    *searchLimit,
-	})
+	}, os.Stdout)
 	if err != nil {
 		fatalf("run benchmark: %v", err)
 	}

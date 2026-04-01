@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,7 +109,7 @@ func TestRunBenchmarkProducesStableReport(t *testing.T) {
 		WarmIndexRuns:  2,
 		WarmSearchRuns: 2,
 		SearchLimit:    10,
-	})
+	}, io.Discard)
 	if err != nil {
 		t.Fatalf("RunBenchmark() error: %v", err)
 	}

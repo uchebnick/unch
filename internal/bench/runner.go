@@ -12,9 +12,11 @@ import (
 	"time"
 )
 
-func RunBenchmark(ctx context.Context, adapter Adapter, suite Suite, env Environment, cfg RunConfig) (Report, error) {
+func RunBenchmark(ctx context.Context, adapter Adapter, suite Suite, env Environment, cfg RunConfig, progress io.Writer) (Report, error) {
 	cfg = normalizeRunConfig(cfg)
+	tracker := newProgressTracker(progress, suite, cfg)
 
+	tracker.Printf("Preparing adapter %s", adapter.Name())
 	if err := adapter.Prepare(ctx, env); err != nil {
 		return Report{}, fmt.Errorf("prepare adapter %s: %w", adapter.Name(), err)
 	}
@@ -48,13 +50,14 @@ func RunBenchmark(ctx context.Context, adapter Adapter, suite Suite, env Environ
 	var allWarmSearchDurations []time.Duration
 	var allQueryMetrics []QueryMetrics
 
-	for _, repoCase := range suite.Repositories {
+	for repoIndex, repoCase := range suite.Repositories {
+		tracker.Printf("Checkout [%d/%d] %s@%s", repoIndex+1, len(suite.Repositories), repoCase.ID, shortCommit(repoCase.Commit))
 		checkedOutRepo, err := ensureRepoCheckout(ctx, repoCase, env.ReposRoot)
 		if err != nil {
 			return Report{}, err
 		}
 
-		repoReport, coldDurations, warmIndexDurations, warmSearchDurations, queryMetrics, err := benchmarkRepository(ctx, adapter, checkedOutRepo, env, cfg)
+		repoReport, coldDurations, warmIndexDurations, warmSearchDurations, queryMetrics, err := benchmarkRepository(ctx, adapter, checkedOutRepo, env, cfg, tracker)
 		if err != nil {
 			return Report{}, err
 		}
@@ -76,7 +79,7 @@ func RunBenchmark(ctx context.Context, adapter Adapter, suite Suite, env Environ
 	return report, nil
 }
 
-func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRepo, env Environment, cfg RunConfig) (RepositoryReport, []time.Duration, []time.Duration, []time.Duration, []QueryMetrics, error) {
+func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRepo, env Environment, cfg RunConfig, tracker *progressTracker) (RepositoryReport, []time.Duration, []time.Duration, []time.Duration, []QueryMetrics, error) {
 	report := RepositoryReport{
 		ID:       repo.Case.ID,
 		URL:      repo.Case.URL,
@@ -86,6 +89,7 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 
 	var coldDurations []time.Duration
 	for i := 0; i < cfg.ColdIndexRuns; i++ {
+		tracker.Step(repo.Case.ID, fmt.Sprintf("cold index %d/%d", i+1, cfg.ColdIndexRuns))
 		if err := removeLocalIndexState(repo.Root); err != nil {
 			return RepositoryReport{}, nil, nil, nil, nil, fmt.Errorf("remove local index state for %s cold run: %w", repo.Case.ID, err)
 		}
@@ -99,6 +103,7 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 
 	var warmIndexDurations []time.Duration
 	for i := 0; i < cfg.WarmIndexRuns; i++ {
+		tracker.Step(repo.Case.ID, fmt.Sprintf("warm index %d/%d", i+1, cfg.WarmIndexRuns))
 		if err := removeLocalIndexState(repo.Root); err != nil {
 			return RepositoryReport{}, nil, nil, nil, nil, fmt.Errorf("remove local index state for %s warm run: %w", repo.Case.ID, err)
 		}
@@ -127,6 +132,7 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 
 		var scoredHits []SearchHit
 		for i := 0; i < cfg.WarmSearchRuns; i++ {
+			tracker.Step(repo.Case.ID, fmt.Sprintf("search %s %d/%d", query.ID, i+1, cfg.WarmSearchRuns))
 			result, err := adapter.Search(ctx, repo, query, env, cfg)
 			if err != nil {
 				return RepositoryReport{}, nil, nil, nil, nil, err
@@ -151,6 +157,68 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 	report.Metrics = AggregateQueryMetrics(queryMetrics)
 
 	return report, coldDurations, warmIndexDurations, allWarmSearchDurations, queryMetrics, nil
+}
+
+type progressTracker struct {
+	out     io.Writer
+	total   int
+	current int
+}
+
+func newProgressTracker(out io.Writer, suite Suite, cfg RunConfig) *progressTracker {
+	if out == nil {
+		return &progressTracker{}
+	}
+	total := 1
+	for _, repo := range suite.Repositories {
+		total += cfg.ColdIndexRuns
+		total += cfg.WarmIndexRuns
+		total += len(repo.Queries) * cfg.WarmSearchRuns
+	}
+	return &progressTracker{out: out, total: total}
+}
+
+func (p *progressTracker) Printf(format string, args ...any) {
+	if p == nil || p.out == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(p.out, "[bench] %s\n", fmt.Sprintf(format, args...))
+}
+
+func (p *progressTracker) Step(repo string, detail string) {
+	if p == nil || p.out == nil {
+		return
+	}
+	p.current++
+	_, _ = fmt.Fprintf(p.out, "[bench] %s %3d/%-3d %s %s\n", progressBar(p.current, p.total, 20), p.current, p.total, repo, detail)
+}
+
+func progressBar(current int, total int, width int) string {
+	if total <= 0 {
+		total = 1
+	}
+	if width <= 0 {
+		width = 10
+	}
+	if current < 0 {
+		current = 0
+	}
+	if current > total {
+		current = total
+	}
+	filled := int(float64(current) / float64(total) * float64(width))
+	if filled > width {
+		filled = width
+	}
+	return "[" + strings.Repeat("#", filled) + strings.Repeat("-", width-filled) + "]"
+}
+
+func shortCommit(commit string) string {
+	commit = strings.TrimSpace(commit)
+	if len(commit) <= 7 {
+		return commit
+	}
+	return commit[:7]
 }
 
 func ensureRepoCheckout(ctx context.Context, repoCase RepositoryCase, reposRoot string) (CheckedOutRepo, error) {

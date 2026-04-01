@@ -34,7 +34,7 @@ jobs:
           tar -C dist/amd64 -czf dist/unch_Darwin_x86_64.tar.gz unch
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: dist/*.tar.gz

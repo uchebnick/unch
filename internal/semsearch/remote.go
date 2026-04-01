@@ -1,6 +1,8 @@
 package semsearch
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,15 +22,18 @@ import (
 
 const (
 	gitHubActionsWorkflowSegment = "actions/workflows"
+	defaultGitHubAPIBaseURL      = "https://api.github.com"
 	defaultGitHubContentBaseURL  = "https://raw.githubusercontent.com"
 	gitHubPagesBranch            = "gh-pages"
 	gitHubPagesSemsearchDir      = "semsearch"
 	defaultCIWorkflowFile        = "searcher.yml"
+	searchIndexArtifactName      = "semsearch-index"
 )
 
 var (
 	ErrRemoteIndexNotPublished = errors.New("remote index is not published yet; run the searcher GitHub Actions workflow once to publish it")
 	ErrRemoteIndexIncompatible = errors.New("remote index uses an incompatible schema; rerun the searcher GitHub Actions workflow to publish a compatible index")
+	gitHubAPIBaseURL           = defaultGitHubAPIBaseURL
 	gitHubContentBaseURL       = defaultGitHubContentBaseURL
 	remoteManifestHTTPClient   = &http.Client{Timeout: 20 * time.Second}
 )
@@ -44,6 +49,14 @@ type GitHubWorkflowRef struct {
 type RemoteSyncResult struct {
 	Checked    bool
 	Downloaded bool
+	Manifest   Manifest
+	Note       string
+}
+
+// ArtifactDownloadResult describes a one-shot artifact download for a specific commit.
+type ArtifactDownloadResult struct {
+	Downloaded bool
+	CommitSHA  string
 	Manifest   Manifest
 	Note       string
 }
@@ -237,6 +250,54 @@ func SyncRemoteIndex(ctx context.Context, localDir string) (RemoteSyncResult, er
 	}, nil
 }
 
+// DownloadIndexArtifactForCommit downloads the search index artifact for one commit without binding the local manifest to a remote workflow.
+func DownloadIndexArtifactForCommit(ctx context.Context, localDir string, ciTarget string, commitSHA string) (ArtifactDownloadResult, error) {
+	commitSHA = strings.TrimSpace(commitSHA)
+	if commitSHA == "" {
+		return ArtifactDownloadResult{}, fmt.Errorf("empty commit SHA")
+	}
+
+	resolvedCIURL, err := ResolveGitHubCIURL(ciTarget)
+	if err != nil {
+		return ArtifactDownloadResult{}, err
+	}
+	workflow, err := ParseGitHubWorkflowURL(resolvedCIURL)
+	if err != nil {
+		return ArtifactDownloadResult{}, fmt.Errorf("parse remote workflow URL: %w", err)
+	}
+
+	runID, artifactID, err := findSearchArtifactForCommit(ctx, workflow, commitSHA)
+	if err != nil {
+		return ArtifactDownloadResult{}, err
+	}
+
+	artifactZip, err := downloadArtifactArchive(ctx, workflow, artifactID)
+	if err != nil {
+		return ArtifactDownloadResult{}, err
+	}
+
+	downloadedManifest, indexBytes, err := extractIndexArtifactPayload(artifactZip)
+	if err != nil {
+		return ArtifactDownloadResult{}, err
+	}
+
+	localManifest := normalizeDownloadedArtifactManifest(downloadedManifest)
+	dbPath := filepath.Join(localDir, "index.db")
+	if err := writeDownloadedIndex(dbPath, indexBytes, downloadedManifest.IndexingHash); err != nil {
+		return ArtifactDownloadResult{}, fmt.Errorf("activate artifact index: %w", err)
+	}
+	if err := WriteManifest(localDir, localManifest); err != nil {
+		return ArtifactDownloadResult{}, fmt.Errorf("write downloaded manifest: %w", err)
+	}
+
+	return ArtifactDownloadResult{
+		Downloaded: true,
+		CommitSHA:  commitSHA,
+		Manifest:   localManifest,
+		Note:       fmt.Sprintf("Downloaded search index artifact for %s from workflow run %d", shortenCommitSHA(commitSHA), runID),
+	}, nil
+}
+
 func normalizePublishedManifest(remoteManifest Manifest, ciURL string) Manifest {
 	remoteManifest = remoteManifest.Normalize()
 	if remoteManifest.Source == "" {
@@ -247,6 +308,13 @@ func normalizePublishedManifest(remoteManifest Manifest, ciURL string) Manifest 
 		remoteManifest.Remote = &Remote{CIURL: strings.TrimSpace(ciURL)}
 	}
 	return remoteManifest
+}
+
+func normalizeDownloadedArtifactManifest(manifest Manifest) Manifest {
+	manifest = manifest.Normalize()
+	manifest.Source = "local"
+	manifest.Remote = nil
+	return manifest
 }
 
 func fetchPublishedManifest(ctx context.Context, workflow GitHubWorkflowRef) (Manifest, error) {
@@ -291,6 +359,23 @@ func downloadPublishedIndex(ctx context.Context, workflow GitHubWorkflowRef, des
 		return fmt.Errorf("write %s: %w", tmpPath, err)
 	}
 
+	return activateDownloadedIndex(ctx, tmpPath, destPath, expectedHash)
+}
+
+func writeDownloadedIndex(destPath string, data []byte, expectedHash string) error {
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", filepath.Dir(destPath), err)
+	}
+
+	tmpPath := destPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmpPath, err)
+	}
+
+	return activateDownloadedIndex(context.Background(), tmpPath, destPath, expectedHash)
+}
+
+func activateDownloadedIndex(ctx context.Context, tmpPath string, destPath string, expectedHash string) error {
 	if strings.TrimSpace(expectedHash) != "" {
 		gotHash, err := indexdb.LogicalHash(ctx, tmpPath)
 		if err != nil {
@@ -313,11 +398,178 @@ func downloadPublishedIndex(ctx context.Context, workflow GitHubWorkflowRef, des
 	return nil
 }
 
+type gitHubWorkflowRunsResponse struct {
+	WorkflowRuns []gitHubWorkflowRun `json:"workflow_runs"`
+}
+
+type gitHubWorkflowRun struct {
+	ID         int64  `json:"id"`
+	HeadSHA    string `json:"head_sha"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+}
+
+type gitHubArtifactsResponse struct {
+	Artifacts []gitHubArtifact `json:"artifacts"`
+}
+
+type gitHubArtifact struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Expired bool   `json:"expired"`
+}
+
+func findSearchArtifactForCommit(ctx context.Context, workflow GitHubWorkflowRef, commitSHA string) (int64, int64, error) {
+	runs, err := listWorkflowRuns(ctx, workflow, commitSHA)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for _, run := range runs {
+		if !strings.EqualFold(strings.TrimSpace(run.HeadSHA), commitSHA) {
+			continue
+		}
+		if strings.TrimSpace(run.Conclusion) != "success" {
+			continue
+		}
+
+		artifactID, ok, err := findRunArtifact(ctx, workflow, run.ID)
+		if err != nil {
+			return 0, 0, err
+		}
+		if ok {
+			return run.ID, artifactID, nil
+		}
+	}
+
+	return 0, 0, fmt.Errorf("%w for commit %s", ErrRemoteIndexNotPublished, shortenCommitSHA(commitSHA))
+}
+
+func listWorkflowRuns(ctx context.Context, workflow GitHubWorkflowRef, commitSHA string) ([]gitHubWorkflowRun, error) {
+	runsURL, err := workflowRunsAPIURL(workflow, commitSHA)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := fetchRemoteBytes(ctx, runsURL)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%w for commit %s", ErrRemoteIndexNotPublished, shortenCommitSHA(commitSHA))
+		}
+		return nil, fmt.Errorf("list workflow runs: %w", err)
+	}
+
+	var payload gitHubWorkflowRunsResponse
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, fmt.Errorf("decode workflow runs: %w", err)
+	}
+	return payload.WorkflowRuns, nil
+}
+
+func findRunArtifact(ctx context.Context, workflow GitHubWorkflowRef, runID int64) (int64, bool, error) {
+	artifactsURL, err := runArtifactsAPIURL(workflow, runID)
+	if err != nil {
+		return 0, false, err
+	}
+
+	data, err := fetchRemoteBytes(ctx, artifactsURL)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("list workflow artifacts: %w", err)
+	}
+
+	var payload gitHubArtifactsResponse
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return 0, false, fmt.Errorf("decode workflow artifacts: %w", err)
+	}
+
+	for _, artifact := range payload.Artifacts {
+		if artifact.Name == searchIndexArtifactName && !artifact.Expired {
+			return artifact.ID, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+func downloadArtifactArchive(ctx context.Context, workflow GitHubWorkflowRef, artifactID int64) ([]byte, error) {
+	artifactURL, err := artifactArchiveAPIURL(workflow, artifactID)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := fetchRemoteBytes(ctx, artifactURL)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%w: artifact %d is unavailable", ErrRemoteIndexNotPublished, artifactID)
+		}
+		return nil, fmt.Errorf("download artifact archive: %w", err)
+	}
+	return data, nil
+}
+
+func extractIndexArtifactPayload(archive []byte) (Manifest, []byte, error) {
+	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return Manifest{}, nil, fmt.Errorf("open artifact archive: %w", err)
+	}
+
+	var manifestBytes []byte
+	var indexBytes []byte
+	for _, file := range reader.File {
+		switch path.Base(file.Name) {
+		case "manifest.json":
+			manifestBytes, err = readZipFile(file)
+		case "index.db":
+			indexBytes, err = readZipFile(file)
+		default:
+			continue
+		}
+		if err != nil {
+			return Manifest{}, nil, err
+		}
+	}
+
+	if len(manifestBytes) == 0 {
+		return Manifest{}, nil, fmt.Errorf("artifact archive does not include manifest.json")
+	}
+	if len(indexBytes) == 0 {
+		return Manifest{}, nil, fmt.Errorf("artifact archive does not include index.db")
+	}
+
+	var manifest Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return Manifest{}, nil, fmt.Errorf("decode artifact manifest: %w", err)
+	}
+	manifest = manifest.Normalize()
+	if err := manifest.Validate(); err != nil {
+		return Manifest{}, nil, fmt.Errorf("validate artifact manifest: %w", err)
+	}
+	return manifest, indexBytes, nil
+}
+
+func readZipFile(file *zip.File) ([]byte, error) {
+	rc, err := file.Open()
+	if err != nil {
+		return nil, fmt.Errorf("open artifact member %s: %w", file.Name, err)
+	}
+	defer rc.Close()
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("read artifact member %s: %w", file.Name, err)
+	}
+	return data, nil
+}
+
 func fetchRemoteBytes(ctx context.Context, rawURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build GET %s: %w", rawURL, err)
 	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -445,6 +697,38 @@ func joinURLPath(base string, elems ...string) (string, error) {
 	parts := append([]string{parsed.Path}, elems...)
 	parsed.Path = path.Join(parts...)
 	return parsed.String(), nil
+}
+
+func workflowRunsAPIURL(workflow GitHubWorkflowRef, commitSHA string) (string, error) {
+	base, err := joinURLPath(gitHubAPIBaseURL, "repos", workflow.Owner, workflow.Repo, "actions", "workflows", workflow.WorkflowFile, "runs")
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("parse workflow runs URL %q: %w", base, err)
+	}
+	query := parsed.Query()
+	query.Set("head_sha", strings.TrimSpace(commitSHA))
+	query.Set("per_page", "100")
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func runArtifactsAPIURL(workflow GitHubWorkflowRef, runID int64) (string, error) {
+	return joinURLPath(gitHubAPIBaseURL, "repos", workflow.Owner, workflow.Repo, "actions", "runs", fmt.Sprintf("%d", runID), "artifacts")
+}
+
+func artifactArchiveAPIURL(workflow GitHubWorkflowRef, artifactID int64) (string, error) {
+	return joinURLPath(gitHubAPIBaseURL, "repos", workflow.Owner, workflow.Repo, "actions", "artifacts", fmt.Sprintf("%d", artifactID), "zip")
+}
+
+func shortenCommitSHA(commitSHA string) string {
+	commitSHA = strings.TrimSpace(commitSHA)
+	if len(commitSHA) <= 12 {
+		return commitSHA
+	}
+	return commitSHA[:12]
 }
 
 func fileExists(path string) bool {

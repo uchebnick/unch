@@ -193,6 +193,15 @@ func TestRunDispatchesRemoteSyncCommand(t *testing.T) {
 	}
 }
 
+func TestRunRemoteDownloadRequiresCommit(t *testing.T) {
+	t.Parallel()
+
+	err := runRemote(context.Background(), "unch", []string{"download", "https://github.com/acme/widgets"}, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "requires --commit") {
+		t.Fatalf("runRemote(download) error = %v, want missing commit error", err)
+	}
+}
+
 func TestRunDispatchesBindCommand(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("SEMSEARCH_HOME", filepath.Join(root, "global"))

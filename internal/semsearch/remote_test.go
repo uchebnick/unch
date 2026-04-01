@@ -1,6 +1,8 @@
 package semsearch
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -287,4 +289,234 @@ func TestSyncRemoteIndexSeedsNextCIVersion(t *testing.T) {
 	if manifestAfterBind.Remote == nil || manifestAfterBind.Remote.CIURL != ciURL {
 		t.Fatalf("manifestAfterBind.Remote = %+v", manifestAfterBind.Remote)
 	}
+}
+
+func TestDownloadIndexArtifactForCommit(t *testing.T) {
+	localDir := t.TempDir()
+	commitSHA := "8dfac53123456789abcdef1234567890abcdef12"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+
+	remoteDBPath := filepath.Join(t.TempDir(), "artifact-index.db")
+	remoteHash := writeTestIndexDB(t, remoteDBPath, 9, "internal/search/service.go", 42, "hash9", []float32{9, 4, 2})
+	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
+	artifactManifest := Manifest{
+		SchemaVersion: ManifestSchemaVersion,
+		Version:       9,
+		IndexingHash:  remoteHash,
+		Source:        "remote",
+		Remote:        &Remote{CIURL: ciURL},
+	}
+	artifactZip := buildArtifactArchive(t, artifactManifest, remoteDB)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+			if got := r.URL.Query().Get("head_sha"); got != commitSHA {
+				t.Fatalf("runs head_sha = %q, want %q", got, commitSHA)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"workflow_runs": []map[string]any{
+					{
+						"id":         123,
+						"head_sha":   commitSHA,
+						"status":     "completed",
+						"conclusion": "success",
+					},
+				},
+			})
+		case "/repos/acme/widgets/actions/runs/123/artifacts":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"artifacts": []map[string]any{
+					{
+						"id":      456,
+						"name":    searchIndexArtifactName,
+						"expired": false,
+					},
+				},
+			})
+		case "/repos/acme/widgets/actions/artifacts/456/zip":
+			w.Header().Set("Content-Type", "application/zip")
+			_, _ = w.Write(artifactZip)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	originalAPIBaseURL := gitHubAPIBaseURL
+	originalClient := remoteManifestHTTPClient
+	gitHubAPIBaseURL = server.URL
+	remoteManifestHTTPClient = server.Client()
+	t.Cleanup(func() {
+		gitHubAPIBaseURL = originalAPIBaseURL
+		remoteManifestHTTPClient = originalClient
+	})
+
+	result, err := DownloadIndexArtifactForCommit(context.Background(), localDir, "https://github.com/acme/widgets", commitSHA)
+	if err != nil {
+		t.Fatalf("DownloadIndexArtifactForCommit() error: %v", err)
+	}
+	if !result.Downloaded {
+		t.Fatalf("result.Downloaded = false, want true")
+	}
+	if result.Manifest.Version != 9 {
+		t.Fatalf("result.Manifest.Version = %d, want 9", result.Manifest.Version)
+	}
+	if result.Manifest.Source != "local" {
+		t.Fatalf("result.Manifest.Source = %q, want local", result.Manifest.Source)
+	}
+	if result.Manifest.Remote != nil {
+		t.Fatalf("result.Manifest.Remote = %+v, want nil", result.Manifest.Remote)
+	}
+
+	gotDB, err := os.ReadFile(filepath.Join(localDir, "index.db"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(index.db) error: %v", err)
+	}
+	if string(gotDB) != string(remoteDB) {
+		t.Fatalf("downloaded db != artifact db")
+	}
+
+	reloaded, err := ReadManifest(localDir)
+	if err != nil {
+		t.Fatalf("ReadManifest() error: %v", err)
+	}
+	if reloaded.Version != 9 || reloaded.IndexingHash != remoteHash || reloaded.Source != "local" || reloaded.Remote != nil {
+		t.Fatalf("ReadManifest() = %+v", reloaded)
+	}
+}
+
+func TestDownloadIndexArtifactForCommitReturnsNotPublishedWhenRunMissing(t *testing.T) {
+	localDir := t.TempDir()
+	commitSHA := "deadbeef12345678"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"workflow_runs": []map[string]any{},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	originalAPIBaseURL := gitHubAPIBaseURL
+	originalClient := remoteManifestHTTPClient
+	gitHubAPIBaseURL = server.URL
+	remoteManifestHTTPClient = server.Client()
+	t.Cleanup(func() {
+		gitHubAPIBaseURL = originalAPIBaseURL
+		remoteManifestHTTPClient = originalClient
+	})
+
+	_, err := DownloadIndexArtifactForCommit(context.Background(), localDir, "https://github.com/acme/widgets", commitSHA)
+	if err == nil || !errors.Is(err, ErrRemoteIndexNotPublished) {
+		t.Fatalf("DownloadIndexArtifactForCommit() error = %v, want ErrRemoteIndexNotPublished", err)
+	}
+}
+
+func TestDownloadIndexArtifactForCommitRejectsIncompatibleIndex(t *testing.T) {
+	localDir := t.TempDir()
+	commitSHA := "beadfeed12345678"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+
+	legacyDBPath := filepath.Join(t.TempDir(), "legacy-index.db")
+	writeLegacyTestIndexDB(t, legacyDBPath, 11)
+	legacyDB := readTestIndexDBBytes(t, legacyDBPath)
+	artifactManifest := Manifest{
+		SchemaVersion: ManifestSchemaVersion,
+		Version:       11,
+		IndexingHash:  "legacy-hash",
+		Source:        "remote",
+		Remote:        &Remote{CIURL: ciURL},
+	}
+	artifactZip := buildArtifactArchive(t, artifactManifest, legacyDB)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"workflow_runs": []map[string]any{
+					{
+						"id":         321,
+						"head_sha":   commitSHA,
+						"status":     "completed",
+						"conclusion": "success",
+					},
+				},
+			})
+		case "/repos/acme/widgets/actions/runs/321/artifacts":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"artifacts": []map[string]any{
+					{
+						"id":      654,
+						"name":    searchIndexArtifactName,
+						"expired": false,
+					},
+				},
+			})
+		case "/repos/acme/widgets/actions/artifacts/654/zip":
+			w.Header().Set("Content-Type", "application/zip")
+			_, _ = w.Write(artifactZip)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	originalAPIBaseURL := gitHubAPIBaseURL
+	originalClient := remoteManifestHTTPClient
+	gitHubAPIBaseURL = server.URL
+	remoteManifestHTTPClient = server.Client()
+	t.Cleanup(func() {
+		gitHubAPIBaseURL = originalAPIBaseURL
+		remoteManifestHTTPClient = originalClient
+	})
+
+	_, err := DownloadIndexArtifactForCommit(context.Background(), localDir, "https://github.com/acme/widgets", commitSHA)
+	if err == nil || !errors.Is(err, ErrRemoteIndexIncompatible) {
+		t.Fatalf("DownloadIndexArtifactForCommit() error = %v, want ErrRemoteIndexIncompatible", err)
+	}
+	if fileExists(filepath.Join(localDir, "index.db")) {
+		t.Fatalf("expected no activated local index after incompatible artifact")
+	}
+}
+
+func buildArtifactArchive(t *testing.T, manifest Manifest, indexBytes []byte) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	writer := zip.NewWriter(&buf)
+
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent(manifest) error: %v", err)
+	}
+	manifestData = append(manifestData, '\n')
+
+	for name, data := range map[string][]byte{
+		"manifest.json": manifestData,
+		"index.db":      indexBytes,
+		"logs/run.log":  []byte("ok\n"),
+	} {
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatalf("writer.Create(%s) error: %v", name, err)
+		}
+		if _, err := entry.Write(data); err != nil {
+			t.Fatalf("entry.Write(%s) error: %v", name, err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("writer.Close() error: %v", err)
+	}
+	return buf.Bytes()
 }

@@ -102,6 +102,8 @@ Create the workflow scaffold:
 unch create ci
 ```
 
+This creates a thin `searcher.yml` wrapper that delegates to the maintained reusable workflow in `uchebnick/unch`.
+
 Bind the repository to a GitHub repo or workflow URL:
 
 ```bash

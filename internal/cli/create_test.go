@@ -41,56 +41,23 @@ func TestRunCreateCI(t *testing.T) {
 	if !strings.Contains(content, "permissions:\n  contents: write") {
 		t.Fatalf("generated workflow missing write permissions for gh-pages publish: %s", content)
 	}
-	if !strings.Contains(content, "git clone --depth 1 https://github.com/uchebnick/unch.git") {
-		t.Fatalf("generated workflow missing unch source clone step: %s", content)
+	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/searcher-reusable.yml@v0.2.1") {
+		t.Fatalf("generated workflow missing reusable workflow reference: %s", content)
 	}
-	if !strings.Contains(content, "export PATH=\"$bin_dir:$PATH\"") {
-		t.Fatalf("generated workflow missing immediate PATH export: %s", content)
+	if !strings.Contains(content, "unch_repository: uchebnick/unch") {
+		t.Fatalf("generated workflow missing pinned reusable repository: %s", content)
 	}
-	if !strings.Contains(content, "unch bind ci --root . \"$ci_url\"") {
-		t.Fatalf("generated workflow missing bind ci step: %s", content)
+	if !strings.Contains(content, "unch_ref: v0.2.1") {
+		t.Fatalf("generated workflow missing pinned reusable ref: %s", content)
 	}
-	if !strings.Contains(content, "unch remote sync --root . --allow-missing") {
-		t.Fatalf("generated workflow missing remote sync step: %s", content)
+	if !strings.Contains(content, "secrets: inherit") {
+		t.Fatalf("generated workflow missing reusable secret inheritance: %s", content)
 	}
-	if !strings.Contains(content, "No compatible published remote index was restored; building from scratch") {
-		t.Fatalf("generated workflow missing explicit rebuild notice for legacy or missing snapshots: %s", content)
+	if strings.Contains(content, "git push origin HEAD:gh-pages") {
+		t.Fatalf("generated workflow should delegate publish logic to the reusable workflow: %s", content)
 	}
-	if !strings.Contains(content, "unch index --root .") {
-		t.Fatalf("generated workflow missing index step: %s", content)
-	}
-	if !strings.Contains(content, "unch create ci --root \"$probe_dir\" >/dev/null 2>&1") {
-		t.Fatalf("generated workflow missing tooling probe step: %s", content)
-	}
-	if !strings.Contains(content, "GITHUB_TOKEN: ${{ github.token }}") {
-		t.Fatalf("generated workflow missing GitHub token env for indexing: %s", content)
-	}
-	if !strings.Contains(content, "SEMSEARCH_YZMA_PROCESSOR: cpu") {
-		t.Fatalf("generated workflow missing pinned yzma processor for indexing: %s", content)
-	}
-	if !strings.Contains(content, "SEMSEARCH_YZMA_VERSION: b8581") {
-		t.Fatalf("generated workflow missing pinned yzma version for indexing: %s", content)
-	}
-	if !strings.Contains(content, "if-no-files-found: warn") {
-		t.Fatalf("generated workflow missing artifact warning mode: %s", content)
-	}
-	if !strings.Contains(content, "uses: actions/download-artifact@v4") {
-		t.Fatalf("generated workflow missing publish job artifact download step: %s", content)
-	}
-	if !strings.Contains(content, "needs: index") {
-		t.Fatalf("generated workflow missing publish job dependency: %s", content)
-	}
-	if !strings.Contains(content, "runs-on: ubuntu-latest") {
-		t.Fatalf("generated workflow missing dedicated publish job runner: %s", content)
-	}
-	if !strings.Contains(content, "git push origin HEAD:gh-pages") {
-		t.Fatalf("generated workflow missing gh-pages publish step: %s", content)
-	}
-	if !strings.Contains(content, "GITHUB_STEP_SUMMARY") {
-		t.Fatalf("generated workflow missing GitHub summary step: %s", content)
-	}
-	if strings.Contains(content, "### Artifact contents") {
-		t.Fatalf("generated workflow should not include artifact contents summary section: %s", content)
+	if strings.Contains(content, "unch index --root .") {
+		t.Fatalf("generated workflow should not inline the index steps anymore: %s", content)
 	}
 
 	if _, err := os.Stat(filepath.Join(root, ".semsearch")); !os.IsNotExist(err) {

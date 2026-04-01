@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
-	"github.com/uchebnick/unch-searcher/internal/indexing"
-	"github.com/uchebnick/unch-searcher/internal/runtime"
-	"github.com/uchebnick/unch-searcher/internal/semsearch"
+	"github.com/uchebnick/unch/internal/indexing"
+	"github.com/uchebnick/unch/internal/runtime"
+	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func captureStdout(t *testing.T, fn func()) string {

@@ -8,12 +8,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/uchebnick/unch-searcher/internal/embed/llama"
-	"github.com/uchebnick/unch-searcher/internal/indexdb"
-	"github.com/uchebnick/unch-searcher/internal/indexing"
-	"github.com/uchebnick/unch-searcher/internal/runtime"
-	"github.com/uchebnick/unch-searcher/internal/semsearch"
-	"github.com/uchebnick/unch-searcher/internal/termui"
+	"github.com/uchebnick/unch/internal/embed/llama"
+	"github.com/uchebnick/unch/internal/indexdb"
+	"github.com/uchebnick/unch/internal/indexing"
+	"github.com/uchebnick/unch/internal/runtime"
+	"github.com/uchebnick/unch/internal/semsearch"
+	"github.com/uchebnick/unch/internal/termui"
 )
 
 func runIndex(ctx context.Context, program string, args []string, paths semsearch.Paths, s *termui.Session, scanner indexing.FileScanner, runtimes runtime.YzmaResolver, models runtime.ModelCache) error {

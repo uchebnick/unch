@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uchebnick/unch-searcher/internal/semsearch"
+	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func runInit(ctx context.Context, program string, args []string, cwd string) error {

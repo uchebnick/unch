@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/uchebnick/unch-searcher/internal/semsearch"
+	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func runRemote(ctx context.Context, program string, args []string, cwd string) error {

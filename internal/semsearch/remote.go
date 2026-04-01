@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uchebnick/unch-searcher/internal/indexdb"
+	"github.com/uchebnick/unch/internal/indexdb"
 )
 
 const (

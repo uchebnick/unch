@@ -1,4 +1,4 @@
-module github.com/uchebnick/unch-searcher
+module github.com/uchebnick/unch
 
 go 1.25.3
 

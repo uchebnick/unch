@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uchebnick/unch-searcher/internal/semsearch"
+	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func TestRunCreateRejectsUnknownTarget(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/uchebnick/unch-searcher/internal/indexdb"
-	"github.com/uchebnick/unch-searcher/internal/indexing"
+	"github.com/uchebnick/unch/internal/indexdb"
+	"github.com/uchebnick/unch/internal/indexing"
 )
 
 func writeTestIndexDB(t *testing.T, dbPath string, version int64, path string, line int, commentHash string, embedding []float32) string {

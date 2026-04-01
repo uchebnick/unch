@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/uchebnick/unch-searcher/internal/indexing"
+	"github.com/uchebnick/unch/internal/indexing"
 )
 
 func TestStoreLifecycle(t *testing.T) {

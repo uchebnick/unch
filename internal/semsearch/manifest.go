@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uchebnick/unch-searcher/internal/indexdb"
+	"github.com/uchebnick/unch/internal/indexdb"
 )
 
 const ManifestSchemaVersion = 1

@@ -14,8 +14,8 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/jupiterrider/ffi"
-	"github.com/uchebnick/unch-searcher/internal/indexing"
-	unchruntime "github.com/uchebnick/unch-searcher/internal/runtime"
+	"github.com/uchebnick/unch/internal/indexing"
+	unchruntime "github.com/uchebnick/unch/internal/runtime"
 )
 
 type Config struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/uchebnick/unch-searcher/internal/cli"
+	"github.com/uchebnick/unch/internal/cli"
 )
 
 func main() {

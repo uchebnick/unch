@@ -7,10 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/uchebnick/unch-searcher/internal/indexing"
-	"github.com/uchebnick/unch-searcher/internal/runtime"
-	"github.com/uchebnick/unch-searcher/internal/semsearch"
-	"github.com/uchebnick/unch-searcher/internal/termui"
+	"github.com/uchebnick/unch/internal/indexing"
+	"github.com/uchebnick/unch/internal/runtime"
+	"github.com/uchebnick/unch/internal/semsearch"
+	"github.com/uchebnick/unch/internal/termui"
 )
 
 // Run initializes the CLI runtime and dispatches to the selected subcommand.

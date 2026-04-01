@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uchebnick/unch-searcher/internal/indexing"
+	"github.com/uchebnick/unch/internal/indexing"
 )
 
 func TestFormatIndexedSymbolDocumentIncludesMetadataAndBody(t *testing.T) {

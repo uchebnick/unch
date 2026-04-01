@@ -8,8 +8,8 @@ import (
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/uchebnick/unch-searcher/internal/indexing"
-	"github.com/uchebnick/unch-searcher/internal/search"
+	"github.com/uchebnick/unch/internal/indexing"
+	"github.com/uchebnick/unch/internal/search"
 )
 
 // Store wraps the SQLite connection and vector dimension used by the index database.

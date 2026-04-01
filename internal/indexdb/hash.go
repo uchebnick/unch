@@ -35,6 +35,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 	rows, err := db.QueryContext(
 		ctx,
 		`SELECT
+			cs.model_id,
 			s.path,
 			s.line,
 			s.symbol_id,
@@ -47,10 +48,14 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 			s.body,
 			s.embedding_hash,
 			e.embedding
-		FROM symbols s
-		JOIN embeddings e ON e.comment_hash = s.embedding_hash
-		WHERE s.version = (SELECT value FROM meta WHERE key = 'current_version')
-		ORDER BY s.path ASC, s.line ASC, s.symbol_id ASC`,
+		FROM current_model_snapshots cs
+		JOIN snapshot_symbols s
+		  ON s.model_id = cs.model_id
+		 AND s.snapshot_id = cs.snapshot_id
+		JOIN snapshot_embeddings e
+		  ON e.model_id = s.model_id
+		 AND e.embedding_hash = s.embedding_hash
+		ORDER BY cs.model_id ASC, s.path ASC, s.line ASC, s.symbol_id ASC`,
 	)
 	if err != nil {
 		if isSchemaQueryError(err) {
@@ -64,6 +69,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 	writeHashBytes(sum, []byte("semsearch-logical-index-v2"))
 
 	for rows.Next() {
+		var modelID string
 		var path string
 		var line int64
 		var symbolID string
@@ -77,6 +83,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 		var embeddingHash string
 		var embedding []byte
 		if err := rows.Scan(
+			&modelID,
 			&path,
 			&line,
 			&symbolID,
@@ -93,6 +100,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 			return "", fmt.Errorf("scan logical hash row: %w", err)
 		}
 
+		writeHashString(sum, modelID)
 		writeHashString(sum, path)
 		writeHashInt64(sum, line)
 		writeHashString(sum, symbolID)
@@ -114,12 +122,12 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 }
 
 func ensureLogicalHashSchema(ctx context.Context, db *sql.DB) error {
-	requiredTables := []string{"symbols", "embeddings", "meta"}
+	requiredTables := []string{"snapshot_symbols", "snapshot_embeddings", "current_model_snapshots"}
 	rows, err := db.QueryContext(
 		ctx,
 		`SELECT name
 		FROM sqlite_master
-		WHERE type = 'table' AND name IN ('symbols', 'embeddings', 'meta')
+		WHERE type = 'table' AND name IN ('snapshot_symbols', 'snapshot_embeddings', 'current_model_snapshots')
 		ORDER BY name ASC`,
 	)
 	if err != nil {

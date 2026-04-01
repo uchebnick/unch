@@ -20,53 +20,59 @@ func TestStoreLifecycle(t *testing.T) {
 	}
 	defer store.Close()
 
-	current, err := store.CurrentVersion(ctx)
-	if err != nil || current != 0 {
-		t.Fatalf("CurrentVersion() = (%d, %v)", current, err)
-	}
+	const modelID = "embeddinggemma"
 
-	working, err := store.WorkingVersion(ctx)
-	if err != nil || working != 1 {
-		t.Fatalf("WorkingVersion() = (%d, %v)", working, err)
+	snapshot1, err := store.BeginSnapshot(ctx, modelID)
+	if err != nil {
+		t.Fatalf("BeginSnapshot() error: %v", err)
+	}
+	snapshot2, err := store.BeginSnapshot(ctx, "qwen3")
+	if err != nil {
+		t.Fatalf("BeginSnapshot(qwen3) error: %v", err)
 	}
 
 	vec := []float32{1, 0, 0}
-	if err := store.AddEmbedding(ctx, "hash1", vec); err != nil {
+	if err := store.AddEmbedding(ctx, modelID, "hash1", vec); err != nil {
 		t.Fatalf("AddEmbedding(hash1) error: %v", err)
 	}
-	if err := store.AddEmbedding(ctx, "hash2", []float32{0, 1, 0}); err != nil {
+	if err := store.AddEmbedding(ctx, "qwen3", "hash2", []float32{0, 1, 0}); err != nil {
 		t.Fatalf("AddEmbedding(hash2) error: %v", err)
 	}
-	if err := store.UpsertSymbol(ctx, "a.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, snapshot1, modelID, "a.go", indexing.IndexedSymbol{
 		Line:          10,
 		Kind:          "function",
 		Name:          "A",
 		QualifiedName: "A",
 		Signature:     "func A()",
 		Documentation: "A docs",
-	}, "hash1", 1); err != nil {
-		t.Fatalf("UpsertSymbol(hash1) error: %v", err)
+	}, "hash1"); err != nil {
+		t.Fatalf("InsertSymbol(hash1) error: %v", err)
 	}
-	if err := store.UpsertSymbol(ctx, "b.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, snapshot2, "qwen3", "b.go", indexing.IndexedSymbol{
 		Line:          20,
 		Kind:          "function",
 		Name:          "B",
 		QualifiedName: "B",
 		Signature:     "func B()",
 		Documentation: "B docs",
-	}, "hash2", 0); err != nil {
-		t.Fatalf("UpsertSymbol(hash2) error: %v", err)
+	}, "hash2"); err != nil {
+		t.Fatalf("InsertSymbol(hash2) error: %v", err)
 	}
-	if err := store.ActivateVersion(ctx, 1); err != nil {
-		t.Fatalf("ActivateVersion() error: %v", err)
+	if err := store.ActivateSnapshot(ctx, modelID, snapshot1); err != nil {
+		t.Fatalf("ActivateSnapshot() error: %v", err)
 	}
 
-	exists, err := store.EmbeddingExists(ctx, "hash1")
+	currentSnapshot, err := store.CurrentSnapshot(ctx, modelID)
+	if err != nil || currentSnapshot != snapshot1 {
+		t.Fatalf("CurrentSnapshot() = (%d, %v), want (%d, nil)", currentSnapshot, err, snapshot1)
+	}
+
+	exists, err := store.EmbeddingExists(ctx, modelID, "hash1")
 	if err != nil || !exists {
 		t.Fatalf("EmbeddingExists(hash1) = (%v, %v)", exists, err)
 	}
 
-	listed, err := store.ListCurrentSymbols(ctx)
+	listed, err := store.ListCurrentSymbols(ctx, modelID)
 	if err != nil {
 		t.Fatalf("ListCurrentSymbols() error: %v", err)
 	}
@@ -74,7 +80,7 @@ func TestStoreLifecycle(t *testing.T) {
 		t.Fatalf("ListCurrentSymbols() = %+v", listed)
 	}
 
-	results, err := store.SearchCurrent(ctx, vec, 5)
+	results, err := store.SearchCurrent(ctx, modelID, vec, 5)
 	if err != nil {
 		t.Fatalf("SearchCurrent() error: %v", err)
 	}
@@ -82,22 +88,26 @@ func TestStoreLifecycle(t *testing.T) {
 		t.Fatalf("SearchCurrent() = %+v", results)
 	}
 
-	if err := store.CleanupOldVersions(ctx, 1); err != nil {
-		t.Fatalf("CleanupOldVersions() error: %v", err)
+	if _, err := store.ListCurrentSymbols(ctx, "qwen3"); !errors.Is(err, ErrNoActiveSnapshot) {
+		t.Fatalf("ListCurrentSymbols(qwen3) error = %v, want ErrNoActiveSnapshot", err)
+	}
+
+	if err := store.CleanupInactiveSnapshots(ctx); err != nil {
+		t.Fatalf("CleanupInactiveSnapshots() error: %v", err)
 	}
 	if err := store.CleanupUnusedEmbeddings(ctx); err != nil {
 		t.Fatalf("CleanupUnusedEmbeddings() error: %v", err)
 	}
-	exists, err = store.EmbeddingExists(ctx, "hash2")
+	exists, err = store.EmbeddingExists(ctx, "qwen3", "hash2")
 	if err != nil {
 		t.Fatalf("EmbeddingExists(hash2) error: %v", err)
 	}
 	if exists {
-		t.Fatalf("expected hash2 embedding to be removed after cleanup")
+		t.Fatalf("expected qwen3/hash2 embedding to be removed after cleanup")
 	}
 }
 
-func TestLogicalHashIgnoresCurrentVersionMetadata(t *testing.T) {
+func TestActiveSnapshotIsolationAcrossModels(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "index.db")
 
@@ -107,8 +117,63 @@ func TestLogicalHashIgnoresCurrentVersionMetadata(t *testing.T) {
 	}
 	defer store.Close()
 
+	if err := store.AddEmbedding(ctx, "embeddinggemma", "hash-gemma", []float32{1, 0, 0}); err != nil {
+		t.Fatalf("AddEmbedding(gemma) error: %v", err)
+	}
+	gemmaSnapshot, err := store.BeginSnapshot(ctx, "embeddinggemma")
+	if err != nil {
+		t.Fatalf("BeginSnapshot(gemma) error: %v", err)
+	}
+	if err := store.InsertSymbol(ctx, gemmaSnapshot, "embeddinggemma", "a.go", indexing.IndexedSymbol{
+		Line:          10,
+		Kind:          "function",
+		Name:          "A",
+		QualifiedName: "A",
+	}, "hash-gemma"); err != nil {
+		t.Fatalf("InsertSymbol(gemma) error: %v", err)
+	}
+	if err := store.ActivateSnapshot(ctx, "embeddinggemma", gemmaSnapshot); err != nil {
+		t.Fatalf("ActivateSnapshot(gemma) error: %v", err)
+	}
+
+	qwenSnapshot, err := store.BeginSnapshot(ctx, "qwen3")
+	if err != nil {
+		t.Fatalf("BeginSnapshot(qwen3) error: %v", err)
+	}
+	if err := store.AddEmbedding(ctx, "qwen3", "hash-qwen", []float32{0, 1, 0}); err != nil {
+		t.Fatalf("AddEmbedding(qwen3) error: %v", err)
+	}
+	if err := store.InsertSymbol(ctx, qwenSnapshot, "qwen3", "b.go", indexing.IndexedSymbol{
+		Line:          20,
+		Kind:          "function",
+		Name:          "B",
+		QualifiedName: "B",
+	}, "hash-qwen"); err != nil {
+		t.Fatalf("InsertSymbol(qwen3) error: %v", err)
+	}
+
+	listed, err := store.ListCurrentSymbols(ctx, "embeddinggemma")
+	if err != nil {
+		t.Fatalf("ListCurrentSymbols(gemma) error: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Path != "a.go" {
+		t.Fatalf("ListCurrentSymbols(gemma) = %+v", listed)
+	}
+}
+
+func TestLogicalHashIgnoresSnapshotOnlyChanges(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+
+	store, err := Open(ctx, dbPath, 3)
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer store.Close()
+
+	modelID := "embeddinggemma"
 	vec := []float32{1, 0, 0}
-	if err := store.AddEmbedding(ctx, "hash1", vec); err != nil {
+	if err := store.AddEmbedding(ctx, modelID, "hash1", vec); err != nil {
 		t.Fatalf("AddEmbedding() error: %v", err)
 	}
 	symbol := indexing.IndexedSymbol{
@@ -119,11 +184,16 @@ func TestLogicalHashIgnoresCurrentVersionMetadata(t *testing.T) {
 		Signature:     "func A()",
 		Documentation: "A docs",
 	}
-	if err := store.UpsertSymbol(ctx, "a.go", symbol, "hash1", 1); err != nil {
-		t.Fatalf("UpsertSymbol(version=1) error: %v", err)
+
+	firstSnapshot, err := store.BeginSnapshot(ctx, modelID)
+	if err != nil {
+		t.Fatalf("BeginSnapshot(first) error: %v", err)
 	}
-	if err := store.ActivateVersion(ctx, 1); err != nil {
-		t.Fatalf("ActivateVersion(1) error: %v", err)
+	if err := store.InsertSymbol(ctx, firstSnapshot, modelID, "a.go", symbol, "hash1"); err != nil {
+		t.Fatalf("InsertSymbol(first) error: %v", err)
+	}
+	if err := store.ActivateSnapshot(ctx, modelID, firstSnapshot); err != nil {
+		t.Fatalf("ActivateSnapshot(first) error: %v", err)
 	}
 
 	firstHash, err := LogicalHash(ctx, dbPath)
@@ -131,11 +201,15 @@ func TestLogicalHashIgnoresCurrentVersionMetadata(t *testing.T) {
 		t.Fatalf("LogicalHash(first) error: %v", err)
 	}
 
-	if err := store.UpsertSymbol(ctx, "a.go", symbol, "hash1", 2); err != nil {
-		t.Fatalf("UpsertSymbol(version=2) error: %v", err)
+	secondSnapshot, err := store.BeginSnapshot(ctx, modelID)
+	if err != nil {
+		t.Fatalf("BeginSnapshot(second) error: %v", err)
 	}
-	if err := store.ActivateVersion(ctx, 2); err != nil {
-		t.Fatalf("ActivateVersion(2) error: %v", err)
+	if err := store.InsertSymbol(ctx, secondSnapshot, modelID, "a.go", symbol, "hash1"); err != nil {
+		t.Fatalf("InsertSymbol(second) error: %v", err)
+	}
+	if err := store.ActivateSnapshot(ctx, modelID, secondSnapshot); err != nil {
+		t.Fatalf("ActivateSnapshot(second) error: %v", err)
 	}
 
 	secondHash, err := LogicalHash(ctx, dbPath)
@@ -144,7 +218,7 @@ func TestLogicalHashIgnoresCurrentVersionMetadata(t *testing.T) {
 	}
 
 	if firstHash != secondHash {
-		t.Fatalf("LogicalHash() changed after version-only update: first=%s second=%s", firstHash, secondHash)
+		t.Fatalf("LogicalHash() changed after snapshot-only update: first=%s second=%s", firstHash, secondHash)
 	}
 }
 

@@ -20,11 +20,11 @@ type mockRepo struct {
 	lexical  []SearchResult
 }
 
-func (m mockRepo) SearchCurrent(ctx context.Context, queryEmbedding []float32, limit int) ([]SearchResult, error) {
+func (m mockRepo) SearchCurrent(ctx context.Context, modelID string, queryEmbedding []float32, limit int) ([]SearchResult, error) {
 	return m.semantic, nil
 }
 
-func (m mockRepo) ListCurrentSymbols(ctx context.Context) ([]SearchResult, error) {
+func (m mockRepo) ListCurrentSymbols(ctx context.Context, modelID string) ([]SearchResult, error) {
 	return m.lexical, nil
 }
 

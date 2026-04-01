@@ -127,10 +127,15 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 	if modelNote != "" {
 		s.Logf("%s", modelNote)
 	}
+	modelID, err := runtime.CanonicalModelID(*modelPath, defaultModelPath)
+	if err != nil {
+		return fmt.Errorf("resolve model id: %w", err)
+	}
 
 	s.Logf("db=%s", resolvedDBPath)
 	s.Logf("lib=%s", resolvedLibPath)
 	s.Logf("model=%s", resolvedModelPath)
+	s.Logf("model_id=%s", modelID)
 	s.Logf("root=%s", rootAbs)
 	s.Logf("query=%q", queryText)
 	s.Logf("limit=%d", *limit)
@@ -174,8 +179,12 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 		Limit:         *limit,
 		Mode:          searchMode,
 		MaxDistance:   *maxDistance,
+		ModelID:       modelID,
 	}, s)
 	if err != nil {
+		if errors.Is(err, indexdb.ErrNoActiveSnapshot) {
+			return fmt.Errorf("no active index for model %q; run `unch index --model %s` first", modelID, modelID)
+		}
 		return err
 	}
 	if len(results) == 0 {

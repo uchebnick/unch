@@ -118,6 +118,10 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 	if modelNote != "" {
 		s.Logf("%s", modelNote)
 	}
+	modelID, err := runtime.CanonicalModelID(*modelPath, defaultModelPath)
+	if err != nil {
+		return fmt.Errorf("resolve model id: %w", err)
+	}
 
 	resolvedGitignore, err := indexing.ResolveGitignorePath(rootAbs, *gitignorePath)
 	if err != nil {
@@ -127,6 +131,7 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 	s.Logf("db=%s", resolvedDBPath)
 	s.Logf("lib=%s", resolvedLibPath)
 	s.Logf("model=%s", resolvedModelPath)
+	s.Logf("model_id=%s", modelID)
 	s.Logf("root=%s", rootAbs)
 
 	embedder, err := loadEmbedderWithSpinner(ctx, s, llamaembed.Config{
@@ -160,6 +165,7 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 		Excludes:      excludes,
 		ContextPrefix: *contextPrefix,
 		CommentPrefix: *commentPrefix,
+		ModelID:       modelID,
 	}, s)
 	if err != nil {
 		return err

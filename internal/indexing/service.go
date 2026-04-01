@@ -15,12 +15,12 @@ type Scanner interface {
 }
 
 type Repository interface {
-	WorkingVersion(ctx context.Context) (int64, error)
-	ActivateVersion(ctx context.Context, version int64) error
-	EmbeddingExists(ctx context.Context, embeddingHash string) (bool, error)
-	AddEmbedding(ctx context.Context, embeddingHash string, embedding []float32) error
-	UpsertSymbol(ctx context.Context, path string, symbol IndexedSymbol, embeddingHash string, version int64) error
-	CleanupOldVersions(ctx context.Context, activeVersion int64) error
+	BeginSnapshot(ctx context.Context, modelID string) (int64, error)
+	ActivateSnapshot(ctx context.Context, modelID string, snapshotID int64) error
+	EmbeddingExists(ctx context.Context, modelID string, embeddingHash string) (bool, error)
+	AddEmbedding(ctx context.Context, modelID string, embeddingHash string, embedding []float32) error
+	InsertSymbol(ctx context.Context, snapshotID int64, modelID string, path string, symbol IndexedSymbol, embeddingHash string) error
+	CleanupInactiveSnapshots(ctx context.Context) error
 	CleanupUnusedEmbeddings(ctx context.Context) error
 }
 
@@ -34,6 +34,7 @@ type Params struct {
 	Excludes      []string
 	ContextPrefix string
 	CommentPrefix string
+	ModelID       string
 }
 
 type Result struct {
@@ -65,12 +66,18 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Res
 		reporter.Logf("symbols to index=%d", totalSymbols)
 	}
 
-	workingVersion, err := s.Repo.WorkingVersion(ctx)
+	modelID := params.ModelID
+	if modelID == "" {
+		modelID = "embeddinggemma"
+	}
+
+	snapshotID, err := s.Repo.BeginSnapshot(ctx, modelID)
 	if err != nil {
-		return Result{}, fmt.Errorf("get working version: %w", err)
+		return Result{}, fmt.Errorf("begin snapshot: %w", err)
 	}
 	if reporter != nil {
-		reporter.Logf("working version=%d", workingVersion)
+		reporter.Logf("model=%s", modelID)
+		reporter.Logf("snapshot id=%d", snapshotID)
 	}
 
 	processed := 0
@@ -87,18 +94,18 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Res
 				return Result{}, fmt.Errorf("embed symbol at %s:%d: %w", job.Path, symbol.Line, err)
 			}
 
-			exists, err := s.Repo.EmbeddingExists(ctx, hash)
+			exists, err := s.Repo.EmbeddingExists(ctx, modelID, hash)
 			if err != nil {
 				return Result{}, fmt.Errorf("check embedding exists: %w", err)
 			}
 			if !exists {
-				if err := s.Repo.AddEmbedding(ctx, hash, vec); err != nil {
+				if err := s.Repo.AddEmbedding(ctx, modelID, hash, vec); err != nil {
 					return Result{}, fmt.Errorf("store embedding: %w", err)
 				}
 			}
 
-			if err := s.Repo.UpsertSymbol(ctx, job.Path, symbol, hash, workingVersion); err != nil {
-				return Result{}, fmt.Errorf("upsert symbol: %w", err)
+			if err := s.Repo.InsertSymbol(ctx, snapshotID, modelID, job.Path, symbol, hash); err != nil {
+				return Result{}, fmt.Errorf("insert symbol: %w", err)
 			}
 		}
 
@@ -108,11 +115,11 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Res
 		}
 	}
 
-	if err := s.Repo.ActivateVersion(ctx, workingVersion); err != nil {
-		return Result{}, fmt.Errorf("activate version: %w", err)
+	if err := s.Repo.ActivateSnapshot(ctx, modelID, snapshotID); err != nil {
+		return Result{}, fmt.Errorf("activate snapshot: %w", err)
 	}
-	if err := s.Repo.CleanupOldVersions(ctx, workingVersion); err != nil {
-		return Result{}, fmt.Errorf("cleanup old versions: %w", err)
+	if err := s.Repo.CleanupInactiveSnapshots(ctx); err != nil {
+		return Result{}, fmt.Errorf("cleanup inactive snapshots: %w", err)
 	}
 	if err := s.Repo.CleanupUnusedEmbeddings(ctx); err != nil {
 		return Result{}, fmt.Errorf("cleanup unused embeddings: %w", err)
@@ -122,7 +129,7 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Res
 	}
 
 	return Result{
-		Version:        workingVersion,
+		Version:        snapshotID,
 		IndexedFiles:   len(jobs),
 		IndexedSymbols: totalSymbols,
 	}, nil

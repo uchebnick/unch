@@ -12,13 +12,15 @@ import (
 	"github.com/uchebnick/unch/internal/search"
 )
 
+var ErrNoActiveSnapshot = errors.New("no active snapshot for model")
+
 // Store wraps the SQLite connection and vector dimension used by the index database.
 type Store struct {
 	db  *sql.DB
 	dim int
 }
 
-// Open initializes the SQLite schema used for symbol metadata and vector search.
+// Open initializes the SQLite schema used for snapshot-based symbol metadata and vector search.
 func Open(ctx context.Context, dbPath string, dim int) (*Store, error) {
 	sqlite_vec.Auto()
 
@@ -51,18 +53,26 @@ func (s *Store) Close() error {
 func (s *Store) init(ctx context.Context) error {
 	stmts := []string{
 		`
-		CREATE TABLE IF NOT EXISTS meta (
-			key TEXT PRIMARY KEY,
-			value INTEGER NOT NULL
+		CREATE TABLE IF NOT EXISTS index_snapshots (
+			snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			model_id TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		`,
 		`
-		INSERT INTO meta(key, value)
-		VALUES ('current_version', 0)
-		ON CONFLICT(key) DO NOTHING;
+		CREATE INDEX IF NOT EXISTS idx_index_snapshots_model_id
+		ON index_snapshots(model_id, snapshot_id);
 		`,
 		`
-		CREATE TABLE IF NOT EXISTS symbols (
+		CREATE TABLE IF NOT EXISTS current_model_snapshots (
+			model_id TEXT PRIMARY KEY,
+			snapshot_id INTEGER NOT NULL
+		);
+		`,
+		`
+		CREATE TABLE IF NOT EXISTS snapshot_symbols (
+			snapshot_id INTEGER NOT NULL,
+			model_id TEXT NOT NULL,
 			path TEXT NOT NULL,
 			line INTEGER NOT NULL,
 			symbol_id TEXT NOT NULL,
@@ -74,21 +84,24 @@ func (s *Store) init(ctx context.Context) error {
 			documentation TEXT NOT NULL,
 			body TEXT NOT NULL,
 			embedding_hash TEXT NOT NULL,
-			version INTEGER NOT NULL,
-			PRIMARY KEY (path, symbol_id)
+			PRIMARY KEY (snapshot_id, path, symbol_id)
 		);
 		`,
 		`
-		CREATE INDEX IF NOT EXISTS idx_symbols_version
-		ON symbols(version);
+		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_snapshot_id
+		ON snapshot_symbols(snapshot_id);
 		`,
 		`
-		CREATE INDEX IF NOT EXISTS idx_symbols_embedding_hash
-		ON symbols(embedding_hash);
+		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_model_id
+		ON snapshot_symbols(model_id, snapshot_id);
 		`,
 		`
-		CREATE INDEX IF NOT EXISTS idx_symbols_qualified_name
-		ON symbols(qualified_name);
+		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_embedding_hash
+		ON snapshot_symbols(model_id, embedding_hash);
+		`,
+		`
+		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_qualified_name
+		ON snapshot_symbols(model_id, qualified_name);
 		`,
 	}
 
@@ -99,50 +112,74 @@ func (s *Store) init(ctx context.Context) error {
 	}
 
 	vecStmt := fmt.Sprintf(`
-		CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
-			comment_hash TEXT PRIMARY KEY,
+		CREATE VIRTUAL TABLE IF NOT EXISTS snapshot_embeddings USING vec0(
+			embedding_key TEXT PRIMARY KEY,
+			model_id TEXT NOT NULL,
+			embedding_hash TEXT NOT NULL,
 			embedding FLOAT[%d]
 		);
 	`, s.dim)
 	if _, err := s.db.ExecContext(ctx, vecStmt); err != nil {
-		return fmt.Errorf("create embeddings vec0: %w", err)
+		return fmt.Errorf("create snapshot_embeddings vec0: %w", err)
 	}
 
 	return nil
 }
 
-// CurrentVersion returns the currently active logical index version.
-func (s *Store) CurrentVersion(ctx context.Context) (int64, error) {
-	var version int64
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'current_version'`).Scan(&version)
+// BeginSnapshot creates a new immutable snapshot id for one model family.
+func (s *Store) BeginSnapshot(ctx context.Context, modelID string) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `INSERT INTO index_snapshots(model_id) VALUES (?)`, modelID)
 	if err != nil {
-		return 0, fmt.Errorf("select current_version: %w", err)
+		return 0, fmt.Errorf("insert snapshot: %w", err)
 	}
-	return version, nil
+	snapshotID, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("read snapshot id: %w", err)
+	}
+	return snapshotID, nil
 }
 
-// WorkingVersion returns the next index version that should be written during reindexing.
-func (s *Store) WorkingVersion(ctx context.Context) (int64, error) {
-	current, err := s.CurrentVersion(ctx)
+// CurrentSnapshot returns the active snapshot for one model family.
+func (s *Store) CurrentSnapshot(ctx context.Context, modelID string) (int64, error) {
+	var snapshotID int64
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT snapshot_id FROM current_model_snapshots WHERE model_id = ?`,
+		modelID,
+	).Scan(&snapshotID)
 	if err != nil {
-		return 0, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%w: %s", ErrNoActiveSnapshot, modelID)
+		}
+		return 0, fmt.Errorf("select current snapshot: %w", err)
 	}
-	return current + 1, nil
+	return snapshotID, nil
 }
 
-// ActivateVersion marks the provided version as the current searchable snapshot.
-func (s *Store) ActivateVersion(ctx context.Context, version int64) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE meta SET value = ? WHERE key = 'current_version'`, version)
+// ActivateSnapshot marks one snapshot as the active searchable snapshot for its model family.
+func (s *Store) ActivateSnapshot(ctx context.Context, modelID string, snapshotID int64) error {
+	_, err := s.db.ExecContext(
+		ctx,
+		`INSERT INTO current_model_snapshots(model_id, snapshot_id)
+		VALUES (?, ?)
+		ON CONFLICT(model_id) DO UPDATE SET snapshot_id = excluded.snapshot_id`,
+		modelID,
+		snapshotID,
+	)
 	if err != nil {
-		return fmt.Errorf("update current_version: %w", err)
+		return fmt.Errorf("activate snapshot: %w", err)
 	}
 	return nil
 }
 
-// EmbeddingExists reports whether the vector table already contains the given embedding hash.
-func (s *Store) EmbeddingExists(ctx context.Context, embeddingHash string) (bool, error) {
+// EmbeddingExists reports whether the vector table already contains the given embedding hash for one model.
+func (s *Store) EmbeddingExists(ctx context.Context, modelID string, embeddingHash string) (bool, error) {
 	var exists int
-	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM embeddings WHERE comment_hash = ? LIMIT 1`, embeddingHash).Scan(&exists)
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT 1 FROM snapshot_embeddings WHERE embedding_key = ? LIMIT 1`,
+		embeddingKey(modelID, embeddingHash),
+	).Scan(&exists)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -152,8 +189,8 @@ func (s *Store) EmbeddingExists(ctx context.Context, embeddingHash string) (bool
 	return true, nil
 }
 
-// AddEmbedding stores a new embedding vector under its content hash.
-func (s *Store) AddEmbedding(ctx context.Context, embeddingHash string, embedding []float32) error {
+// AddEmbedding stores a new embedding vector under its content hash for one model family.
+func (s *Store) AddEmbedding(ctx context.Context, modelID string, embeddingHash string, embedding []float32) error {
 	if len(embedding) != s.dim {
 		return fmt.Errorf("invalid embedding dimension: got=%d want=%d", len(embedding), s.dim)
 	}
@@ -163,18 +200,27 @@ func (s *Store) AddEmbedding(ctx context.Context, embeddingHash string, embeddin
 		return fmt.Errorf("serialize embedding: %w", err)
 	}
 
-	_, err = s.db.ExecContext(ctx, `INSERT INTO embeddings(comment_hash, embedding) VALUES (?, ?)`, embeddingHash, vec)
+	_, err = s.db.ExecContext(
+		ctx,
+		`INSERT INTO snapshot_embeddings(embedding_key, model_id, embedding_hash, embedding) VALUES (?, ?, ?, ?)`,
+		embeddingKey(modelID, embeddingHash),
+		modelID,
+		embeddingHash,
+		vec,
+	)
 	if err != nil {
 		return fmt.Errorf("insert embedding: %w", err)
 	}
 	return nil
 }
 
-// UpsertSymbol writes or updates the symbol metadata for one file entry in the working version.
-func (s *Store) UpsertSymbol(ctx context.Context, path string, symbol indexing.IndexedSymbol, embeddingHash string, version int64) error {
+// InsertSymbol stores one symbol row inside a building snapshot without mutating active snapshots.
+func (s *Store) InsertSymbol(ctx context.Context, snapshotID int64, modelID string, path string, symbol indexing.IndexedSymbol, embeddingHash string) error {
 	_, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO symbols(
+		`INSERT INTO snapshot_symbols(
+			snapshot_id,
+			model_id,
 			path,
 			line,
 			symbol_id,
@@ -185,21 +231,11 @@ func (s *Store) UpsertSymbol(ctx context.Context, path string, symbol indexing.I
 			signature,
 			documentation,
 			body,
-			embedding_hash,
-			version
+			embedding_hash
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(path, symbol_id) DO UPDATE SET
-			line = excluded.line,
-			symbol_kind = excluded.symbol_kind,
-			symbol_name = excluded.symbol_name,
-			symbol_container = excluded.symbol_container,
-			qualified_name = excluded.qualified_name,
-			signature = excluded.signature,
-			documentation = excluded.documentation,
-			body = excluded.body,
-			embedding_hash = excluded.embedding_hash,
-			version = excluded.version`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		snapshotID,
+		modelID,
 		path,
 		symbol.Line,
 		symbol.StableID(),
@@ -211,37 +247,49 @@ func (s *Store) UpsertSymbol(ctx context.Context, path string, symbol indexing.I
 		symbol.Documentation,
 		symbol.Body,
 		embeddingHash,
-		version,
 	)
 	if err != nil {
-		return fmt.Errorf("upsert symbol: %w", err)
+		return fmt.Errorf("insert symbol: %w", err)
 	}
 	return nil
 }
 
-// CleanupOldVersions removes symbol rows from previous index generations.
-func (s *Store) CleanupOldVersions(ctx context.Context, activeVersion int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM symbols WHERE version < ?`, activeVersion)
-	if err != nil {
-		return fmt.Errorf("delete old symbols: %w", err)
+// CleanupInactiveSnapshots removes building or stale snapshots that are not active for any model family.
+func (s *Store) CleanupInactiveSnapshots(ctx context.Context) error {
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM snapshot_symbols
+		WHERE snapshot_id NOT IN (SELECT snapshot_id FROM current_model_snapshots)`,
+	); err != nil {
+		return fmt.Errorf("delete inactive snapshot symbols: %w", err)
+	}
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM index_snapshots
+		WHERE snapshot_id NOT IN (SELECT snapshot_id FROM current_model_snapshots)`,
+	); err != nil {
+		return fmt.Errorf("delete inactive snapshots: %w", err)
 	}
 	return nil
 }
 
-// CleanupUnusedEmbeddings removes embeddings that are no longer referenced by active symbols.
+// CleanupUnusedEmbeddings removes embeddings that are no longer referenced by active or building snapshot rows.
 func (s *Store) CleanupUnusedEmbeddings(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM embeddings
-		WHERE comment_hash NOT IN (
-			SELECT DISTINCT embedding_hash FROM symbols
-		)`)
+	_, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM snapshot_embeddings
+		WHERE embedding_key NOT IN (
+			SELECT DISTINCT model_id || ':' || embedding_hash FROM snapshot_symbols
+		)`,
+	)
 	if err != nil {
 		return fmt.Errorf("delete unused embeddings: %w", err)
 	}
 	return nil
 }
 
-// SearchByVersion performs semantic nearest-neighbor search against one logical index version.
-func (s *Store) SearchByVersion(ctx context.Context, queryEmbedding []float32, version int64, limit int) ([]search.SearchResult, error) {
+// SearchBySnapshot performs semantic nearest-neighbor search against one immutable snapshot.
+func (s *Store) SearchBySnapshot(ctx context.Context, modelID string, snapshotID int64, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
 	if len(queryEmbedding) != s.dim {
 		return nil, fmt.Errorf("invalid query dimension: got=%d want=%d", len(queryEmbedding), s.dim)
 	}
@@ -268,15 +316,19 @@ func (s *Store) SearchByVersion(ctx context.Context, queryEmbedding []float32, v
 			s.documentation,
 			s.body,
 			e.distance
-		FROM embeddings e
-		JOIN symbols s ON s.embedding_hash = e.comment_hash
+		FROM snapshot_embeddings e
+		JOIN snapshot_symbols s
+		  ON s.model_id = e.model_id
+		 AND s.embedding_hash = e.embedding_hash
 		WHERE e.embedding MATCH ?
 		  AND k = ?
-		  AND s.version = ?
+		  AND s.model_id = ?
+		  AND s.snapshot_id = ?
 		ORDER BY e.distance ASC`,
 		queryVec,
 		limit,
-		version,
+		modelID,
+		snapshotID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search query: %w", err)
@@ -310,17 +362,17 @@ func (s *Store) SearchByVersion(ctx context.Context, queryEmbedding []float32, v
 	return results, nil
 }
 
-// SearchCurrent performs semantic nearest-neighbor search against the active index version.
-func (s *Store) SearchCurrent(ctx context.Context, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
-	version, err := s.CurrentVersion(ctx)
+// SearchCurrent performs semantic nearest-neighbor search against the active snapshot for one model.
+func (s *Store) SearchCurrent(ctx context.Context, modelID string, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
+	snapshotID, err := s.CurrentSnapshot(ctx, modelID)
 	if err != nil {
 		return nil, err
 	}
-	return s.SearchByVersion(ctx, queryEmbedding, version, limit)
+	return s.SearchBySnapshot(ctx, modelID, snapshotID, queryEmbedding, limit)
 }
 
-// ListSymbolsByVersion returns all symbols stored in a specific index version.
-func (s *Store) ListSymbolsByVersion(ctx context.Context, version int64) ([]search.SearchResult, error) {
+// ListSymbolsBySnapshot returns all symbols stored in one immutable snapshot.
+func (s *Store) ListSymbolsBySnapshot(ctx context.Context, modelID string, snapshotID int64) ([]search.SearchResult, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT
@@ -334,10 +386,12 @@ func (s *Store) ListSymbolsByVersion(ctx context.Context, version int64) ([]sear
 			signature,
 			documentation,
 			body
-		FROM symbols
-		WHERE version = ?
+		FROM snapshot_symbols
+		WHERE model_id = ?
+		  AND snapshot_id = ?
 		ORDER BY path ASC, line ASC, qualified_name ASC`,
-		version,
+		modelID,
+		snapshotID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list symbols: %w", err)
@@ -369,11 +423,15 @@ func (s *Store) ListSymbolsByVersion(ctx context.Context, version int64) ([]sear
 	return results, nil
 }
 
-// ListCurrentSymbols returns all symbols from the active index version for lexical search.
-func (s *Store) ListCurrentSymbols(ctx context.Context) ([]search.SearchResult, error) {
-	version, err := s.CurrentVersion(ctx)
+// ListCurrentSymbols returns all symbols from the active snapshot for one model family.
+func (s *Store) ListCurrentSymbols(ctx context.Context, modelID string) ([]search.SearchResult, error) {
+	snapshotID, err := s.CurrentSnapshot(ctx, modelID)
 	if err != nil {
 		return nil, err
 	}
-	return s.ListSymbolsByVersion(ctx, version)
+	return s.ListSymbolsBySnapshot(ctx, modelID, snapshotID)
+}
+
+func embeddingKey(modelID string, embeddingHash string) string {
+	return modelID + ":" + embeddingHash
 }

@@ -14,8 +14,8 @@ type Reporter interface {
 }
 
 type Repository interface {
-	SearchCurrent(ctx context.Context, queryEmbedding []float32, limit int) ([]SearchResult, error)
-	ListCurrentSymbols(ctx context.Context) ([]SearchResult, error)
+	SearchCurrent(ctx context.Context, modelID string, queryEmbedding []float32, limit int) ([]SearchResult, error)
+	ListCurrentSymbols(ctx context.Context, modelID string) ([]SearchResult, error)
 }
 
 type Embedder interface {
@@ -41,6 +41,7 @@ type Params struct {
 	Limit         int
 	Mode          string
 	MaxDistance   float64
+	ModelID       string
 }
 
 type Service struct {
@@ -109,7 +110,12 @@ func (s Service) searchSemanticCurrent(ctx context.Context, params Params, _ Rep
 		candidateLimit = 20
 	}
 
-	candidates, err := s.Repo.SearchCurrent(ctx, queryVec, candidateLimit)
+	modelID := params.ModelID
+	if modelID == "" {
+		modelID = "embeddinggemma"
+	}
+
+	candidates, err := s.Repo.SearchCurrent(ctx, modelID, queryVec, candidateLimit)
 	if err != nil {
 		return nil, fmt.Errorf("search current index: %w", err)
 	}
@@ -156,7 +162,12 @@ func (s Service) searchSemanticCurrent(ctx context.Context, params Params, _ Rep
 }
 
 func (s Service) searchLexicalCurrent(ctx context.Context, params Params, _ Reporter) ([]Result, error) {
-	candidates, err := s.Repo.ListCurrentSymbols(ctx)
+	modelID := params.ModelID
+	if modelID == "" {
+		modelID = "embeddinggemma"
+	}
+
+	candidates, err := s.Repo.ListCurrentSymbols(ctx, modelID)
 	if err != nil {
 		return nil, fmt.Errorf("list current symbols: %w", err)
 	}

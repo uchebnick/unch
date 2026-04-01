@@ -18,31 +18,36 @@ func (s testScanner) CollectJobs(root string, gitignorePath string, extraPattern
 }
 
 type testRepo struct {
-	workingVersion int64
-	existing       map[string]bool
-	added          []string
-	upserts        []string
-	activated      int64
-	cleaned        bool
+	snapshotID int64
+	existing   map[string]bool
+	added      []string
+	inserts    []string
+	models     []string
+	activated  int64
+	cleaned    bool
 }
 
-func (r *testRepo) WorkingVersion(ctx context.Context) (int64, error) { return r.workingVersion, nil }
-func (r *testRepo) ActivateVersion(ctx context.Context, version int64) error {
-	r.activated = version
+func (r *testRepo) BeginSnapshot(ctx context.Context, modelID string) (int64, error) {
+	r.models = append(r.models, modelID)
+	return r.snapshotID, nil
+}
+func (r *testRepo) ActivateSnapshot(ctx context.Context, modelID string, snapshotID int64) error {
+	r.models = append(r.models, modelID)
+	r.activated = snapshotID
 	return nil
 }
-func (r *testRepo) EmbeddingExists(ctx context.Context, commentHash string) (bool, error) {
+func (r *testRepo) EmbeddingExists(ctx context.Context, modelID string, commentHash string) (bool, error) {
 	return r.existing[commentHash], nil
 }
-func (r *testRepo) AddEmbedding(ctx context.Context, commentHash string, embedding []float32) error {
+func (r *testRepo) AddEmbedding(ctx context.Context, modelID string, commentHash string, embedding []float32) error {
 	r.added = append(r.added, commentHash)
 	return nil
 }
-func (r *testRepo) UpsertSymbol(ctx context.Context, path string, symbol IndexedSymbol, commentHash string, version int64) error {
-	r.upserts = append(r.upserts, path)
+func (r *testRepo) InsertSymbol(ctx context.Context, snapshotID int64, modelID string, path string, symbol IndexedSymbol, commentHash string) error {
+	r.inserts = append(r.inserts, path)
 	return nil
 }
-func (r *testRepo) CleanupOldVersions(ctx context.Context, activeVersion int64) error {
+func (r *testRepo) CleanupInactiveSnapshots(ctx context.Context) error {
 	r.cleaned = true
 	return nil
 }
@@ -73,8 +78,8 @@ func TestServiceRunIndexesComments(t *testing.T) {
 		}}},
 	}
 	repo := &testRepo{
-		workingVersion: 2,
-		existing:       map[string]bool{"a.go:First": true},
+		snapshotID: 2,
+		existing:   map[string]bool{"a.go:First": true},
 	}
 	reporter := &testReporter{}
 
@@ -89,6 +94,7 @@ func TestServiceRunIndexesComments(t *testing.T) {
 		GitignorePath: "/tmp/.gitignore",
 		CommentPrefix: "@search:",
 		ContextPrefix: "@filectx:",
+		ModelID:       "qwen3",
 	}, reporter)
 	if err != nil {
 		t.Fatalf("Service.Run() error: %v", err)
@@ -103,16 +109,19 @@ func TestServiceRunIndexesComments(t *testing.T) {
 	if len(repo.added) != 1 {
 		t.Fatalf("expected one new embedding, got %v", repo.added)
 	}
-	if len(repo.upserts) != 2 {
-		t.Fatalf("expected two upserts, got %v", repo.upserts)
+	if len(repo.inserts) != 2 {
+		t.Fatalf("expected two inserts, got %v", repo.inserts)
 	}
-	for _, got := range repo.upserts {
+	for _, got := range repo.inserts {
 		if got != "a.go" {
-			t.Fatalf("expected relative upsert path, got %q", got)
+			t.Fatalf("expected relative insert path, got %q", got)
 		}
 	}
 	if repo.activated != 2 || !repo.cleaned {
 		t.Fatalf("expected version activation and cleanup, got activated=%d cleaned=%v", repo.activated, repo.cleaned)
+	}
+	if len(repo.models) < 2 || repo.models[0] != "qwen3" || repo.models[len(repo.models)-1] != "qwen3" {
+		t.Fatalf("expected model tracking for qwen3, got %v", repo.models)
 	}
 	if reporter.progressCalls == 0 {
 		t.Fatalf("expected progress updates")
@@ -129,7 +138,7 @@ func TestServiceRunHonorsContextCancellation(t *testing.T) {
 		Scanner: testScanner{
 			jobs: []FileJob{{Path: "/tmp/a.go", Symbols: []IndexedSymbol{{Line: 1, Kind: "function", Name: "A", QualifiedName: "A"}}}},
 		},
-		Repo:     &testRepo{workingVersion: 1, existing: map[string]bool{}},
+		Repo:     &testRepo{snapshotID: 1, existing: map[string]bool{}},
 		Embedder: testEmbedder{},
 	}
 

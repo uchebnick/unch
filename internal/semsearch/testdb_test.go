@@ -13,6 +13,7 @@ import (
 
 func writeTestIndexDB(t *testing.T, dbPath string, version int64, path string, line int, commentHash string, embedding []float32) string {
 	t.Helper()
+	_ = version
 
 	ctx := context.Background()
 	store, err := indexdb.Open(ctx, dbPath, len(embedding))
@@ -25,21 +26,27 @@ func writeTestIndexDB(t *testing.T, dbPath string, version int64, path string, l
 		}
 	}()
 
-	if err := store.AddEmbedding(ctx, commentHash, embedding); err != nil {
+	const modelID = "embeddinggemma"
+
+	snapshotID, err := store.BeginSnapshot(ctx, modelID)
+	if err != nil {
+		t.Fatalf("BeginSnapshot() error: %v", err)
+	}
+	if err := store.AddEmbedding(ctx, modelID, commentHash, embedding); err != nil {
 		t.Fatalf("AddEmbedding() error: %v", err)
 	}
-	if err := store.UpsertSymbol(ctx, path, indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, snapshotID, modelID, path, indexing.IndexedSymbol{
 		Line:          line,
 		Kind:          "function",
 		Name:          "TestSymbol",
 		QualifiedName: "TestSymbol",
 		Signature:     "func TestSymbol()",
 		Documentation: "test symbol",
-	}, commentHash, version); err != nil {
-		t.Fatalf("UpsertSymbol() error: %v", err)
+	}, commentHash); err != nil {
+		t.Fatalf("InsertSymbol() error: %v", err)
 	}
-	if err := store.ActivateVersion(ctx, version); err != nil {
-		t.Fatalf("ActivateVersion() error: %v", err)
+	if err := store.ActivateSnapshot(ctx, modelID, snapshotID); err != nil {
+		t.Fatalf("ActivateSnapshot() error: %v", err)
 	}
 
 	gotHash, err := indexdb.LogicalHash(ctx, dbPath)

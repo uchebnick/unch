@@ -34,11 +34,29 @@ jobs:
             goarch: amd64
             asset_name: unch_Linux_x86_64.tar.gz
             archive_type: tar.gz
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            asset_name: unch_Linux_arm64.tar.gz
+            archive_type: tar.gz
           - runner: windows-latest
             goos: windows
             goarch: amd64
             asset_name: unch_Windows_x86_64.zip
             archive_type: zip
+            msystem: MINGW64
+            msys_pkg: mingw-w64-x86_64-gcc
+            cc: gcc
+            msys_bin: C:\msys64\mingw64\bin
+          - runner: windows-11-arm
+            goos: windows
+            goarch: arm64
+            asset_name: unch_Windows_arm64.zip
+            archive_type: zip
+            msystem: CLANGARM64
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
+            msys_bin: C:\msys64\clangarm64\bin
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -54,10 +72,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: ${{ matrix.msystem }}
           update: true
           install: >-
-            mingw-w64-x86_64-gcc
+            ${{ matrix.msys_pkg }}
 
       - name: Build Unix archive
         if: runner.os != 'Windows'
@@ -80,12 +98,12 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CC: gcc
+          CC: ${{ matrix.cc }}
         run: |
           New-Item -ItemType Directory -Force -Path dist/build | Out-Null
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          $env:PATH = "${{ matrix.msys_bin }};$env:PATH"
           $env:CGO_ENABLED = "1"
-          gcc --version
+          & "${{ matrix.cc }}" --version
           go build -trimpath -o dist/build/unch.exe .
           if ($LASTEXITCODE -ne 0) {
             throw "go build failed on Windows release build step"

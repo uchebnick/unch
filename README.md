@@ -58,8 +58,8 @@ go build -o unch .
 Published release archives currently cover:
 
 - macOS: `arm64`, `x86_64`
-- Linux: `x86_64`
-- Windows: `x86_64` (`unch.exe`)
+- Linux: `arm64`, `x86_64`
+- Windows: `arm64`, `x86_64` (`unch.exe`)
 
 When a matching release archive is not available, `install.sh` and `install/install.ps1` fall back to `go install` when Go is available.
 

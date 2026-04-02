@@ -58,13 +58,27 @@ function Resolve-AssetArchive {
     return $DestinationPath
 }
 
+function Detect-Arch {
+    $arch = $env:PROCESSOR_ARCHITECTURE
+    if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
+        $arch = $env:PROCESSOR_ARCHITEW6432
+    }
+
+    switch ($arch.ToUpperInvariant()) {
+        "AMD64" { return "x86_64" }
+        "ARM64" { return "arm64" }
+        default { return "unknown" }
+    }
+}
+
 function Install-ReleaseArchive {
     param(
         [string]$ResolvedVersion,
         [string]$Destination
     )
 
-    $asset = "unch_Windows_x86_64.zip"
+    $arch = Detect-Arch
+    $asset = "unch_Windows_${arch}.zip"
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
     try {
@@ -120,7 +134,7 @@ if (-not $installed) {
 }
 
 if (-not $installed) {
-    throw "Could not install unch. Windows release archives are currently published for x86_64; otherwise install Go and rerun this script."
+    throw "Could not install unch. Windows release archives are currently published for x86_64 and arm64; otherwise install Go and rerun this script."
 }
 
 Write-Note "Installed unch to $(Join-Path $BinDir 'unch.exe')"

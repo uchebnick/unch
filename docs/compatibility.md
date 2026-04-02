@@ -62,8 +62,8 @@ This document describes the current compatibility contract for `unch`.
 | `install.sh` | Supported | Uses release assets on macOS and Linux, with Go fallback elsewhere |
 | `install/install.ps1` | Supported | Uses release assets on Windows, with Go fallback elsewhere |
 | Darwin release binaries | Supported | `arm64` and `x86_64` |
-| Linux release binaries | Supported | `x86_64` |
-| Windows release binaries | Supported | `x86_64` (`unch.exe`) |
+| Linux release binaries | Supported | `arm64` and `x86_64` |
+| Windows release binaries | Supported | `arm64` and `x86_64` (`unch.exe`) |
 | Remote indexing | Supported | GitHub Actions `searcher` workflow |
 
 ## Current Practical Rules

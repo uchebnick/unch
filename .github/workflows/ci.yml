@@ -127,15 +127,26 @@ jobs:
           - os: ubuntu-latest
             label: linux
             asset_name: unch_Linux_x86_64.tar.gz
-            shell_name: bash
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+            asset_name: unch_Linux_arm64.tar.gz
           - os: macos-14
             label: macos
             asset_name: unch_Darwin_arm64.tar.gz
-            shell_name: bash
           - os: windows-latest
             label: windows
             asset_name: unch_Windows_x86_64.zip
-            shell_name: pwsh
+            msystem: MINGW64
+            msys_pkg: mingw-w64-x86_64-gcc
+            cc: gcc
+            msys_bin: C:\msys64\mingw64\bin
+          - os: windows-11-arm
+            label: windows-arm64
+            asset_name: unch_Windows_arm64.zip
+            msystem: CLANGARM64
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
+            msys_bin: C:\msys64\clangarm64\bin
 
     steps:
       - name: Checkout
@@ -150,10 +161,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: ${{ matrix.msystem }}
           update: true
           install: >-
-            mingw-w64-x86_64-gcc
+            ${{ matrix.msys_pkg }}
 
       - name: Build local Unix release asset
         if: runner.os != 'Windows'
@@ -169,15 +180,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          CC: gcc
+          CC: ${{ matrix.cc }}
         run: |
           $assetDir = Join-Path $env:RUNNER_TEMP "release-assets"
           $buildDir = Join-Path $env:RUNNER_TEMP "build"
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
           New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          $env:PATH = "${{ matrix.msys_bin }};$env:PATH"
           $env:CGO_ENABLED = "1"
-          gcc --version
+          & "${{ matrix.cc }}" --version
           go build -trimpath -o (Join-Path $buildDir "unch.exe") .
           if ($LASTEXITCODE -ne 0) {
             throw "go build failed on Windows install-smoke step"

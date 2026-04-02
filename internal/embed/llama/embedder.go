@@ -122,7 +122,7 @@ func New(cfg Config) (*Embedder, error) {
 
 	ctx, err := llama.InitFromModel(model, ctxParams)
 	if err != nil {
-		llama.ModelFree(model)
+		_ = llama.ModelFree(model)
 		llamaInitRefCounter--
 		if llamaInitRefCounter == 0 {
 			llama.Close()
@@ -158,11 +158,11 @@ func (e *Embedder) Close() {
 	defer e.mu.Unlock()
 
 	if e.ctx != 0 {
-		llama.Free(e.ctx)
+		_ = llama.Free(e.ctx)
 		e.ctx = 0
 	}
 	if e.model != 0 {
-		llama.ModelFree(e.model)
+		_ = llama.ModelFree(e.model)
 		e.model = 0
 	}
 

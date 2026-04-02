@@ -554,7 +554,9 @@ func readZipFile(file *zip.File) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open artifact member %s: %w", file.Name, err)
 	}
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 
 	data, err := io.ReadAll(rc)
 	if err != nil {
@@ -581,7 +583,9 @@ func fetchRemoteBytes(ctx context.Context, rawURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GET %s: %w", rawURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, os.ErrNotExist

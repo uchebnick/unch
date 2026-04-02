@@ -23,7 +23,9 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open db: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	if err := ensureLogicalHashSchema(ctx, db); err != nil {
 		return "", err
@@ -60,7 +62,9 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 		}
 		return "", fmt.Errorf("query logical hash rows: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	sum := sha256.New()
 	writeHashBytes(sum, []byte("semsearch-logical-index-v2"))
@@ -130,7 +134,9 @@ func ensureLogicalHashSchema(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("inspect logical hash schema: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	present := make(map[string]bool, len(requiredTables))
 	for rows.Next() {

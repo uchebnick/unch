@@ -18,7 +18,9 @@ func TestStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 
 	const modelID = "embeddinggemma"
 
@@ -115,7 +117,9 @@ func TestActiveSnapshotIsolationAcrossModels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 
 	if err := store.AddEmbedding(ctx, "embeddinggemma", "hash-gemma", []float32{1, 0, 0}); err != nil {
 		t.Fatalf("AddEmbedding(gemma) error: %v", err)
@@ -169,7 +173,9 @@ func TestLogicalHashIgnoresSnapshotOnlyChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 
 	modelID := "embeddinggemma"
 	vec := []float32{1, 0, 0}
@@ -230,7 +236,9 @@ func TestLogicalHashRejectsLegacySchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sql.Open() error: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	for _, stmt := range []string{
 		`CREATE TABLE comments (

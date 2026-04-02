@@ -331,7 +331,9 @@ func validateGGUFFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(f, header); err != nil {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -29,30 +30,30 @@ func runHelp(program string, args []string) error {
 
 	switch args[0] {
 	case "index":
-		return runIndex(nil, name, []string{"--help"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+		return runIndex(context.TODO(), name, []string{"--help"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	case "search":
-		return runSearch(nil, name, []string{"--help"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+		return runSearch(context.TODO(), name, []string{"--help"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	case "init":
-		return runInit(nil, name, []string{"--help"}, ".")
+		return runInit(context.TODO(), name, []string{"--help"}, ".")
 	case "create":
 		if len(args) > 1 && args[1] == "ci" {
-			return runCreate(nil, name, []string{"ci", "--help"}, ".")
+			return runCreate(context.TODO(), name, []string{"ci", "--help"}, ".")
 		}
 		return printCreateHelp(os.Stdout, name)
 	case "bind":
 		if len(args) > 1 && args[1] == "ci" {
-			return runBind(nil, name, []string{"ci", "--help"}, ".")
+			return runBind(context.TODO(), name, []string{"ci", "--help"}, ".")
 		}
 		return printBindHelp(os.Stdout, name)
 	case "remote":
 		if len(args) > 1 {
 			switch args[1] {
 			case "sync":
-				return runRemote(nil, name, []string{"sync", "--help"}, ".")
+				return runRemote(context.TODO(), name, []string{"sync", "--help"}, ".")
 			case "download":
-				return runRemote(nil, name, []string{"download", "--help"}, ".")
+				return runRemote(context.TODO(), name, []string{"download", "--help"}, ".")
 			case "bind":
-				return runRemote(nil, name, []string{"bind", "--help"}, ".")
+				return runRemote(context.TODO(), name, []string{"bind", "--help"}, ".")
 			}
 		}
 		return printRemoteHelp(os.Stdout, name)

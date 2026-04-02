@@ -104,7 +104,9 @@ func readSourceFile(path string) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	binary, err := looksLikeBinaryFile(file)
 	if err != nil {

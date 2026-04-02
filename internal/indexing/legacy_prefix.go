@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -42,7 +41,9 @@ func ExtractPrefixedBlocks(path string, searchPrefix string, ctxPrefix string) (
 	if err != nil {
 		return nil, "", err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	isBinary, err := looksLikeBinaryFile(file)
 	if err != nil {
@@ -185,12 +186,4 @@ func firstNLines(text string, limit int) string {
 		lines[i] = strings.TrimRight(lines[i], " \t")
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
-}
-
-func trimPathBase(path string) string {
-	base := strings.TrimSpace(filepath.Base(path))
-	if base == "" || base == "." || base == string(filepath.Separator) {
-		return "unknown"
-	}
-	return base
 }

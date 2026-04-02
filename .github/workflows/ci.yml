@@ -88,6 +88,24 @@ jobs:
           path: benchmarks/results/
           if-no-files-found: warn
 
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.7.2
+
   test-matrix:
     name: test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}

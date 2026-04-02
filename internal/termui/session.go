@@ -125,7 +125,7 @@ func (u *terminalUI) Clear() {
 		return
 	}
 
-	fmt.Fprintf(u.out, "\r%s\r", strings.Repeat(" ", u.lastLen))
+	_, _ = fmt.Fprintf(u.out, "\r%s\r", strings.Repeat(" ", u.lastLen))
 	u.lastLen = 0
 }
 
@@ -138,9 +138,9 @@ func (u *terminalUI) render(message string, newline bool) {
 		padding = strings.Repeat(" ", diff)
 	}
 
-	fmt.Fprintf(u.out, "\r%s%s", message, padding)
+	_, _ = fmt.Fprintf(u.out, "\r%s%s", message, padding)
 	if newline {
-		fmt.Fprintln(u.out)
+		_, _ = fmt.Fprintln(u.out)
 		u.lastLen = 0
 		return
 	}

@@ -161,7 +161,9 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 	if err != nil {
 		return err
 	}
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	service := indexing.Service{
 		Scanner:  scanner,

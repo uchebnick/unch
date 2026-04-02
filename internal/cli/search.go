@@ -169,7 +169,9 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 	if err != nil {
 		return err
 	}
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	fileWeights, err := semsearch.LoadFileWeights(targetPaths.LocalDir)
 	if err != nil {

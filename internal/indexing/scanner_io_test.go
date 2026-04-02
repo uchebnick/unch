@@ -130,7 +130,9 @@ func TestLooksLikeBinaryFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open binary file: %v", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	binary, err := looksLikeBinaryFile(f)
 	if err != nil {

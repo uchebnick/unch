@@ -331,7 +331,9 @@ func (s *Store) SearchBySnapshot(ctx context.Context, modelID string, snapshotID
 	if err != nil {
 		return nil, fmt.Errorf("search query: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	results := make([]search.SearchResult, 0, limit)
 	for rows.Next() {
@@ -394,7 +396,9 @@ func (s *Store) ListSymbolsBySnapshot(ctx context.Context, modelID string, snaps
 	if err != nil {
 		return nil, fmt.Errorf("list symbols: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var results []search.SearchResult
 	for rows.Next() {

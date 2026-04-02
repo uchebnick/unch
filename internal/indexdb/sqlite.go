@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/search"
 )
@@ -22,7 +20,7 @@ type Store struct {
 
 // Open initializes the SQLite schema used for snapshot-based symbol metadata and vector search.
 func Open(ctx context.Context, dbPath string, dim int) (*Store, error) {
-	sqlite_vec.Auto()
+	registerSQLiteVec()
 
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -195,7 +193,7 @@ func (s *Store) AddEmbedding(ctx context.Context, modelID string, embeddingHash 
 		return fmt.Errorf("invalid embedding dimension: got=%d want=%d", len(embedding), s.dim)
 	}
 
-	vec, err := sqlite_vec.SerializeFloat32(embedding)
+	vec, err := serializeVector(embedding)
 	if err != nil {
 		return fmt.Errorf("serialize embedding: %w", err)
 	}
@@ -297,7 +295,7 @@ func (s *Store) SearchBySnapshot(ctx context.Context, modelID string, snapshotID
 		limit = 10
 	}
 
-	queryVec, err := sqlite_vec.SerializeFloat32(queryEmbedding)
+	queryVec, err := serializeVector(queryEmbedding)
 	if err != nil {
 		return nil, fmt.Errorf("serialize query vector: %w", err)
 	}

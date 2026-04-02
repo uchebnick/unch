@@ -25,16 +25,22 @@
 
 ## Install
 
-Homebrew is the polished install path today:
+Homebrew is still the most polished install path on macOS:
 
 ```bash
 brew install uchebnick/tap/unch
 ```
 
-For a cross-platform convenience path, use the install script:
+For release-based installs without Homebrew:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh
+```
+
+On Windows x86_64, use the PowerShell installer:
+
+```powershell
+iwr https://raw.githubusercontent.com/uchebnick/unch/main/install/install.ps1 -useb | iex
 ```
 
 For source-based installation, use the canonical module path:
@@ -49,7 +55,13 @@ If you want to hack on the project directly, build it from the current checkout:
 go build -o unch .
 ```
 
-Packaged release archives are currently Darwin-only. On Linux and other unsupported targets, `install.sh` falls back to `go install` when Go is available.
+Published release archives currently cover:
+
+- macOS: `arm64`, `x86_64`
+- Linux: `arm64`, `x86_64`
+- Windows: `x86_64` (`unch.exe`)
+
+On those supported macOS, Linux, and Windows x86_64 targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available.
 
 See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the pinned benchmark suite, score formula, and current sample results.
 

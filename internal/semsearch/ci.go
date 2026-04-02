@@ -148,7 +148,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -278,7 +278,7 @@ jobs:
 
       - name: Upload search index
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semsearch-index
           path: |
@@ -295,7 +295,7 @@ jobs:
 
     steps:
       - name: Download search index artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: semsearch-index
           path: semsearch-artifact

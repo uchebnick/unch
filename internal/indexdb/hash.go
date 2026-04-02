@@ -10,9 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"strings"
-
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var ErrIncompatibleSchema = errors.New("incompatible index schema")
@@ -20,7 +17,7 @@ var ErrIncompatibleSchema = errors.New("incompatible index schema")
 // LogicalHash computes a stable hash of the active logical index contents,
 // ignoring SQLite file layout and other storage-level noise.
 func LogicalHash(ctx context.Context, dbPath string) (string, error) {
-	sqlite_vec.Auto()
+	registerSQLiteVec()
 
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {

@@ -14,7 +14,7 @@ Installs unch into the selected bin directory.
 
 Options:
   -b BIN_DIR   install destination (default: $HOME/.local/bin)
-  -v VERSION   version tag to install, for example v0.2.1
+  -v VERSION   version tag to install, for example v0.3.0
   -h           show this help
 EOF
 }
@@ -57,6 +57,7 @@ detect_os() {
   case "$(uname -s)" in
     Darwin) printf 'Darwin\n' ;;
     Linux) printf 'Linux\n' ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) printf 'Windows\n' ;;
     *) printf 'unknown\n' ;;
   esac
 }
@@ -74,22 +75,54 @@ install_release_archive() {
   os_name="$2"
   arch_name="$3"
 
-  if ! has_cmd curl || ! has_cmd tar; then
+  case "$os_name" in
+    Windows)
+      archive_ext="zip"
+      asset_binary="unch.exe"
+      ;;
+    *)
+      archive_ext="tar.gz"
+      asset_binary="unch"
+      ;;
+  esac
+
+  if ! has_cmd curl; then
     return 1
   fi
 
-  asset="unch_${os_name}_${arch_name}.tar.gz"
-  url="https://github.com/${repo}/releases/download/${version}/${asset}"
+  if [ "$archive_ext" = "tar.gz" ] && ! has_cmd tar; then
+    return 1
+  fi
+  if [ "$archive_ext" = "zip" ] && ! has_cmd unzip; then
+    return 1
+  fi
+
+  asset="unch_${os_name}_${arch_name}.${archive_ext}"
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$tmp_dir"' EXIT INT TERM HUP
+  asset_path="${tmp_dir}/${asset}"
 
-  say "Downloading ${url}"
-  if ! curl -fsSL "$url" -o "${tmp_dir}/${asset}"; then
-    return 1
+  if [ -n "${UNCH_INSTALL_ASSET_DIR:-}" ] && [ -f "${UNCH_INSTALL_ASSET_DIR}/${asset}" ]; then
+    say "Using local install asset ${UNCH_INSTALL_ASSET_DIR}/${asset}"
+    cp "${UNCH_INSTALL_ASSET_DIR}/${asset}" "${asset_path}"
+  else
+    url="https://github.com/${repo}/releases/download/${version}/${asset}"
+    say "Downloading ${url}"
+    if ! curl -fsSL "$url" -o "${asset_path}"; then
+      return 1
+    fi
   fi
 
-  tar -xzf "${tmp_dir}/${asset}" -C "${tmp_dir}"
-  install -m 0755 "${tmp_dir}/unch" "${bin_dir}/unch"
+  case "$archive_ext" in
+    tar.gz)
+      tar -xzf "${asset_path}" -C "${tmp_dir}"
+      install -m 0755 "${tmp_dir}/${asset_binary}" "${bin_dir}/${asset_binary}"
+      ;;
+    zip)
+      unzip -q "${asset_path}" -d "${tmp_dir}"
+      install -m 0755 "${tmp_dir}/${asset_binary}" "${bin_dir}/${asset_binary}"
+      ;;
+  esac
   rm -rf "$tmp_dir"
   trap - EXIT INT TERM HUP
   return 0
@@ -139,8 +172,8 @@ arch_name="$(detect_arch)"
 
 installed="false"
 
-if [ "$os_name" = "Darwin" ] && { [ "$arch_name" = "arm64" ] || [ "$arch_name" = "x86_64" ]; }; then
-  if [ "$version" != "latest" ] && install_release_archive "$version" "$os_name" "$arch_name"; then
+if [ "$version" != "latest" ] || [ -n "${UNCH_INSTALL_ASSET_DIR:-}" ]; then
+  if install_release_archive "$version" "$os_name" "$arch_name"; then
     installed="true"
   fi
 fi
@@ -153,12 +186,17 @@ fi
 
 if [ "$installed" != "true" ]; then
   say "Could not install unch for ${os_name}/${arch_name}."
-  say "Release archives are currently published for Darwin arm64 and x86_64."
+  say "Release archives are currently published for Darwin arm64/x86_64, Linux arm64/x86_64, and Windows x86_64."
   say "Install Go and rerun this script, or use Homebrew on macOS."
   exit 1
 fi
 
-say "Installed unch to ${bin_dir}/unch"
+installed_binary="unch"
+if [ "$os_name" = "Windows" ]; then
+  installed_binary="unch.exe"
+fi
+
+say "Installed unch to ${bin_dir}/${installed_binary}"
 case ":$PATH:" in
   *":${bin_dir}:"*) ;;
   *)

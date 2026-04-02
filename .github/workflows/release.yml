@@ -14,7 +14,39 @@ env:
 jobs:
   build:
     name: build-release-assets
-    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+            asset_name: unch_Darwin_arm64.tar.gz
+            archive_type: tar.gz
+          - runner: macos-14
+            goos: darwin
+            goarch: amd64
+            asset_name: unch_Darwin_x86_64.tar.gz
+            archive_type: tar.gz
+            cc: "clang -arch x86_64"
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            asset_name: unch_Linux_x86_64.tar.gz
+            archive_type: tar.gz
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            asset_name: unch_Linux_arm64.tar.gz
+            archive_type: tar.gz
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            asset_name: unch_Windows_x86_64.zip
+            archive_type: zip
+            msystem: UCRT64
+            msys_pkg: mingw-w64-ucrt-x86_64-gcc
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
@@ -25,19 +57,54 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build unch archives
+      - name: Setup MSYS2 toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          path-type: inherit
+          update: true
+          install: ${{ matrix.msys_pkg }}
+
+      - name: Build Unix archive
+        if: runner.os != 'Windows'
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc || '' }}
         run: |
-          mkdir -p dist/arm64 dist/amd64
-          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/arm64/unch .
-          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CC='clang -arch x86_64' go build -trimpath -o dist/amd64/unch .
-          tar -C dist/arm64 -czf dist/unch_Darwin_arm64.tar.gz unch
-          tar -C dist/amd64 -czf dist/unch_Darwin_x86_64.tar.gz unch
+          set -euo pipefail
+          mkdir -p dist/build
+          if [ -n "${CC}" ]; then
+            export CC
+          fi
+          CGO_ENABLED=1 go build -trimpath -o dist/build/unch .
+          tar -C dist/build -czf "dist/${{ matrix.asset_name }}" unch
+
+      - name: Build Windows archive
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/build
+          export CGO_ENABLED=1
+          export CC=gcc
+          go build -trimpath -o dist/build/unch.exe .
+
+      - name: Archive Windows asset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/build/unch.exe" -DestinationPath "dist/${{ matrix.asset_name }}" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: release-assets
-          path: dist/*.tar.gz
+          name: release-assets-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/${{ matrix.asset_name }}
           if-no-files-found: error
 
   release:
@@ -52,12 +119,13 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
-          name: release-assets
+          pattern: release-assets-*
           path: dist
+          merge-multiple: true
 
       - name: Generate checksums
         run: |
-          sha256sum dist/*.tar.gz > dist/checksums.txt
+          sha256sum dist/* > dist/checksums.txt
 
       - name: Prepare release notes
         run: |
@@ -80,6 +148,7 @@ jobs:
           body_path: dist/release-notes.md
           files: |
             dist/*.tar.gz
+            dist/*.zip
             dist/checksums.txt
 
   publish-homebrew:
@@ -94,12 +163,13 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
-          name: release-assets
+          pattern: release-assets-*
           path: dist
+          merge-multiple: true
 
       - name: Generate checksums
         run: |
-          sha256sum dist/*.tar.gz > dist/checksums.txt
+          sha256sum dist/* > dist/checksums.txt
 
       - name: Update Homebrew tap
         env:

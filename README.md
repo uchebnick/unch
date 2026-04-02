@@ -61,7 +61,7 @@ Published release archives currently cover:
 - Linux: `arm64`, `x86_64`
 - Windows: `arm64`, `x86_64` (`unch.exe`)
 
-When a matching release archive is not available, `install.sh` and `install/install.ps1` fall back to `go install` when Go is available.
+On those supported Linux and Windows targets, the installers use the published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available.
 
 See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the pinned benchmark suite, score formula, and current sample results.
 

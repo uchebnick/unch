@@ -51,4 +51,3 @@ This policy covers:
 
 Third-party services, GitHub-hosted infrastructure, and vulnerabilities in
 upstream dependencies may need to be reported upstream as well.
-

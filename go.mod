@@ -7,9 +7,16 @@ replace github.com/asg017/sqlite-vec-go-bindings => ./third_party/sqlite-vec-go-
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/cespare/xxhash/v2 v2.3.0
+	github.com/hashicorp/go-getter v1.8.3
 	github.com/hybridgroup/yzma v1.11.1
-	github.com/mattn/go-sqlite3 v1.14.37
+	github.com/jupiterrider/ffi v0.6.0
+	github.com/mattn/go-sqlite3 v1.14.38
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
+	github.com/tree-sitter/go-tree-sitter v0.25.0
+	github.com/tree-sitter/tree-sitter-go v0.25.0
+	github.com/tree-sitter/tree-sitter-javascript v0.25.0
+	github.com/tree-sitter/tree-sitter-python v0.25.0
+	github.com/tree-sitter/tree-sitter-typescript v0.23.2
 )
 
 require (
@@ -45,17 +52,10 @@ require (
 	github.com/googleapis/gax-go/v2 v2.7.1 // indirect
 	github.com/hashicorp/aws-sdk-go-base/v2 v2.0.0-beta.65 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-getter v1.8.3 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
-	github.com/jupiterrider/ffi v0.6.0 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/tree-sitter/go-tree-sitter v0.25.0 // indirect
-	github.com/tree-sitter/tree-sitter-go v0.25.0 // indirect
-	github.com/tree-sitter/tree-sitter-javascript v0.25.0 // indirect
-	github.com/tree-sitter/tree-sitter-python v0.25.0 // indirect
-	github.com/tree-sitter/tree-sitter-typescript v0.23.2 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.43.0 // indirect

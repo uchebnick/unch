@@ -136,21 +136,14 @@ jobs:
           - os: windows-latest
             label: windows
             asset_name: unch_Windows_x86_64.zip
-            msystem: MINGW64
-            msys_pkg: mingw-w64-x86_64-gcc
-            cc: gcc
-            msys_bin: C:\msys64\mingw64\bin
-          - os: windows-11-arm
-            label: windows-arm64
-            asset_name: unch_Windows_arm64.zip
-            msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-clang
-            cc: clang
-            msys_bin: C:\msys64\clangarm64\bin
+            msystem: UCRT64
+            msys_pkg: >-
+              mingw-w64-ucrt-x86_64-gcc
+              zip
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -162,9 +155,9 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: ${{ matrix.msystem }}
+          path-type: inherit
           update: true
-          install: >-
-            ${{ matrix.msys_pkg }}
+          install: ${{ matrix.msys_pkg }}
 
       - name: Build local Unix release asset
         if: runner.os != 'Windows'
@@ -178,25 +171,17 @@ jobs:
 
       - name: Build local Windows release asset
         if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          CC: ${{ matrix.cc }}
+        shell: msys2 {0}
         run: |
-          $assetDir = Join-Path $env:RUNNER_TEMP "release-assets"
-          $buildDir = Join-Path $env:RUNNER_TEMP "build"
-          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
-          New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
-          $env:PATH = "${{ matrix.msys_bin }};$env:PATH"
-          $env:CGO_ENABLED = "1"
-          & "${{ matrix.cc }}" --version
-          go build -trimpath -o (Join-Path $buildDir "unch.exe") .
-          if ($LASTEXITCODE -ne 0) {
-            throw "go build failed on Windows install-smoke step"
-          }
-          if (-not (Test-Path (Join-Path $buildDir "unch.exe"))) {
-            throw "expected $(Join-Path $buildDir 'unch.exe') to exist after go build"
-          }
-          Compress-Archive -Path (Join-Path $buildDir "unch.exe") -DestinationPath (Join-Path $assetDir "${{ matrix.asset_name }}") -Force
+          set -euo pipefail
+          asset_dir="$(cygpath -u "$RUNNER_TEMP")/release-assets"
+          build_dir="$(cygpath -u "$RUNNER_TEMP")/build"
+          mkdir -p "${asset_dir}" "${build_dir}"
+          export CGO_ENABLED=1
+          export CC=gcc
+          go build -trimpath -o "${build_dir}/unch.exe" .
+          cd "${build_dir}"
+          zip -q "${asset_dir}/${{ matrix.asset_name }}" unch.exe
 
       - name: Install from local asset with shell installer
         if: runner.os != 'Windows'

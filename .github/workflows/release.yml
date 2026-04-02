@@ -44,19 +44,10 @@ jobs:
             goarch: amd64
             asset_name: unch_Windows_x86_64.zip
             archive_type: zip
-            msystem: MINGW64
-            msys_pkg: mingw-w64-x86_64-gcc
-            cc: gcc
-            msys_bin: C:\msys64\mingw64\bin
-          - runner: windows-11-arm
-            goos: windows
-            goarch: arm64
-            asset_name: unch_Windows_arm64.zip
-            archive_type: zip
-            msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-clang
-            cc: clang
-            msys_bin: C:\msys64\clangarm64\bin
+            msystem: UCRT64
+            msys_pkg: >-
+              mingw-w64-ucrt-x86_64-gcc
+              zip
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -73,9 +64,9 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: ${{ matrix.msystem }}
+          path-type: inherit
           update: true
-          install: >-
-            ${{ matrix.msys_pkg }}
+          install: ${{ matrix.msys_pkg }}
 
       - name: Build Unix archive
         if: runner.os != 'Windows'
@@ -94,24 +85,15 @@ jobs:
 
       - name: Build Windows archive
         if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CC: ${{ matrix.cc }}
+        shell: msys2 {0}
         run: |
-          New-Item -ItemType Directory -Force -Path dist/build | Out-Null
-          $env:PATH = "${{ matrix.msys_bin }};$env:PATH"
-          $env:CGO_ENABLED = "1"
-          & "${{ matrix.cc }}" --version
+          set -euo pipefail
+          mkdir -p dist/build
+          export CGO_ENABLED=1
+          export CC=gcc
           go build -trimpath -o dist/build/unch.exe .
-          if ($LASTEXITCODE -ne 0) {
-            throw "go build failed on Windows release build step"
-          }
-          if (-not (Test-Path "dist/build/unch.exe")) {
-            throw "expected dist/build/unch.exe to exist after go build"
-          }
-          Compress-Archive -Path dist/build/unch.exe -DestinationPath "dist/${{ matrix.asset_name }}"
+          cd dist/build
+          zip -q "../${{ matrix.asset_name }}" unch.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

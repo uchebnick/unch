@@ -97,6 +97,41 @@ func TestServiceRunAutoFallsBackToLexical(t *testing.T) {
 	}
 }
 
+func TestServiceRunAutoKeepsSemanticResultsForNaturalLanguageQuery(t *testing.T) {
+	t.Parallel()
+
+	service := Service{
+		Repo: mockRepo{
+			semantic: []SearchResult{
+				{Path: "internal/runtime/model_cache.go", Line: 159, Name: "installEmbeddingModel", Documentation: "install qwen model", Distance: 0.9033},
+			},
+			lexical: []SearchResult{
+				{Path: "internal/embed/llama/model_profile.go", Line: 150, Documentation: "qwen profile"},
+			},
+		},
+		Embedder: mockEmbedder{},
+	}
+
+	results, err := service.Run(context.Background(), Params{
+		QueryText:   "qwen install",
+		Mode:        "auto",
+		Limit:       10,
+		MaxDistance: 0.85,
+	}, nil)
+	if err != nil {
+		t.Fatalf("Service.Run(auto semantic-first) error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 semantic result, got %+v", results)
+	}
+	if results[0].Path != "internal/runtime/model_cache.go" {
+		t.Fatalf("expected semantic install result, got %+v", results)
+	}
+	if results[0].DisplayMetric == "lexical" {
+		t.Fatalf("expected semantic result to win for natural-language query, got %+v", results)
+	}
+}
+
 func TestServiceRunPropagatesEmbedErrors(t *testing.T) {
 	t.Parallel()
 

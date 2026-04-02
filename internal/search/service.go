@@ -80,7 +80,7 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) ([]R
 			return s.searchLexicalCurrent(ctx, params, reporter)
 		}
 
-		semanticResults, err := s.searchSemanticCurrent(ctx, params, reporter)
+		semanticResults, err := s.searchAutoSemanticCurrent(ctx, params, reporter)
 		if err != nil {
 			return nil, err
 		}
@@ -92,11 +92,27 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) ([]R
 		if err != nil {
 			return nil, err
 		}
-		if shouldPreferLexicalResults(semanticResults, lexicalResults) {
+		if shouldPreferLexicalResults(params.QueryText, semanticResults, lexicalResults) {
 			return lexicalResults, nil
 		}
 		return semanticResults, nil
 	}
+}
+
+func (s Service) searchAutoSemanticCurrent(ctx context.Context, params Params, reporter Reporter) ([]Result, error) {
+	results, err := s.searchSemanticCurrent(ctx, params, reporter)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) > 0 || params.MaxDistance <= 0 {
+		return results, nil
+	}
+
+	// Auto mode should stay semantic-first for natural-language queries even when
+	// the default distance cutoff is slightly too strict for the best candidates.
+	relaxed := params
+	relaxed.MaxDistance = 0
+	return s.searchSemanticCurrent(ctx, relaxed, reporter)
 }
 
 func (s Service) searchSemanticCurrent(ctx context.Context, params Params, _ Reporter) ([]Result, error) {
@@ -224,12 +240,15 @@ func resultSearchText(result SearchResult) string {
 	return strings.Join(parts, "\n")
 }
 
-func shouldPreferLexicalResults(semanticResults []Result, lexicalResults []Result) bool {
+func shouldPreferLexicalResults(query string, semanticResults []Result, lexicalResults []Result) bool {
 	if len(lexicalResults) == 0 {
 		return false
 	}
 	if len(semanticResults) == 0 {
 		return true
+	}
+	if !shouldPreferLexicalSearch(query) {
+		return false
 	}
 
 	semanticTop := semanticResults[0]
@@ -245,11 +264,12 @@ func shouldPreferLexicalResults(semanticResults []Result, lexicalResults []Resul
 }
 
 func shouldPreferLexicalSearch(query string) bool {
+	query = strings.TrimSpace(query)
 	tokens := searchQueryTokens(query)
 	if len(tokens) == 0 {
 		return false
 	}
-	if looksCodeLikeQuery(query) {
+	if !strings.ContainsFunc(query, unicode.IsSpace) && looksCodeLikeQuery(query) {
 		return true
 	}
 	if len(tokens) == 1 && len([]rune(tokens[0])) <= 3 {

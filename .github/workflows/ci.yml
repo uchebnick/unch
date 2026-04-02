@@ -27,7 +27,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Restore benchmark cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.UNCH_BENCH_ROOT }}/cache
           key: benchmark-${{ runner.os }}-${{ hashFiles('benchmarks/suites/smoke.json', 'go.mod') }}

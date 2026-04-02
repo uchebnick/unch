@@ -2,7 +2,7 @@
   <img src="docs/assets/unch-logo.svg" alt="unch logo" width="300">
 </p>
 
-# unch
+# unch <img src="docs/assets/search-icon.svg" alt="search icon" width="22" valign="text-bottom">
 
 [![Release](https://img.shields.io/github/v/release/uchebnick/unch?display_name=tag)](https://github.com/uchebnick/unch/releases/latest)
 [![Homebrew Tap](https://img.shields.io/badge/Homebrew-uchebnick%2Ftap-FBB040?logo=homebrew&logoColor=white)](https://github.com/uchebnick/homebrew-tap)
@@ -73,6 +73,13 @@ unch index --model qwen3
 unch search --model qwen3 "create a new router"
 ```
 
+Default runtime profiles:
+
+- `embeddinggemma`: `ctx-size=2048`, `batch-size=2048`
+- `qwen3`: `ctx-size=8192`, `batch-size=8192`
+
+Leave `--ctx-size` and `--batch-size` at `0` to use the selected model default.
+
 ## 30-Second Path
 
 ```bash
@@ -103,7 +110,7 @@ $ unch search --details "get path variables from a request"
 
 First run may download the default embedding model, download local `yzma` runtime libraries, and create `./.semsearch/`.
 
-Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
+Use the same model family for both indexing and search. Each model keeps its own active snapshot, so rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
 
 ## What It Supports Today
 

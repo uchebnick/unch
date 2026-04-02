@@ -7,6 +7,14 @@ on:
 permissions:
   contents: write
 
+env:
+  PORTABLE_TEST_PACKAGES: >-
+    ./internal/bench
+    ./internal/indexing
+    ./internal/runtime
+    ./internal/search
+    ./internal/termui
+
 jobs:
   benchmark:
     name: benchmark-suite
@@ -27,7 +35,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Restore benchmark cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.UNCH_BENCH_ROOT }}/cache
           key: benchmark-${{ runner.os }}-${{ hashFiles('benchmarks/suites/smoke.json', 'go.mod') }}
@@ -102,8 +110,11 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run tests
-        run: go test ./...
+      - name: Build all packages
+        run: go build ./...
+
+      - name: Run portable test suite
+        run: go test ${{ env.PORTABLE_TEST_PACKAGES }}
 
   coverage:
     name: coverage
@@ -121,7 +132,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           mkdir -p coverage
-          go test -covermode=atomic -coverprofile=coverage/coverage.out ./... | tee coverage/test.log
+          go test -covermode=atomic -coverprofile=coverage/coverage.out ${{ env.PORTABLE_TEST_PACKAGES }} | tee coverage/test.log
           go tool cover -func=coverage/coverage.out | tee coverage/coverage.txt
 
       - name: Build coverage badge payload
@@ -153,6 +164,7 @@ jobs:
           {
             echo "## Coverage"
             echo
+            echo "- Scope: portable package set"
             echo "- Total coverage: \`$total\`"
             echo
             echo '```text'

@@ -35,6 +35,9 @@ func TestShouldPreferLexicalSearch(t *testing.T) {
 		{query: "", want: false},
 		{query: "hui", want: true},
 		{query: "RunCLI", want: true},
+		{query: "internal/runtime/model_cache.go", want: true},
+		{query: "qwen install", want: false},
+		{query: "qwen3 install", want: false},
 		{query: "global model cache", want: false},
 	}
 
@@ -143,13 +146,19 @@ func TestShouldPreferLexicalResults(t *testing.T) {
 
 	semantic := []Result{{SearchResult: SearchResult{Distance: 0.9}}}
 	lexical := []Result{{LexicalScore: 0.7}}
-	if !shouldPreferLexicalResults(semantic, lexical) {
+	if !shouldPreferLexicalResults("RunCLI", semantic, lexical) {
 		t.Fatalf("expected lexical results to win when semantic top distance is weak")
 	}
 
 	semantic = []Result{{SearchResult: SearchResult{Distance: 0.72}}}
 	lexical = []Result{{LexicalScore: 0.95}}
-	if shouldPreferLexicalResults(semantic, lexical) {
+	if shouldPreferLexicalResults("qwen install", semantic, lexical) {
+		t.Fatalf("did not expect lexical results to win for natural-language query")
+	}
+
+	semantic = []Result{{SearchResult: SearchResult{Distance: 0.72}}}
+	lexical = []Result{{LexicalScore: 0.95}}
+	if shouldPreferLexicalResults("global model cache", semantic, lexical) {
 		t.Fatalf("did not expect lexical results to win when semantic top distance is strong")
 	}
 }

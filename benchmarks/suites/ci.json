@@ -53,15 +53,15 @@
       ]
     },
     {
-      "id": "julienschmidt/httprouter",
-      "url": "https://github.com/julienschmidt/httprouter.git",
-      "commit": "484018016424d215c0b87c42f4c9b57d980fbd00",
-      "language": "go",
+      "id": "sindresorhus/p-limit",
+      "url": "https://github.com/sindresorhus/p-limit.git",
+      "commit": "9f52583119f0cb0d85c6fec600c94a21fd89d060",
+      "language": "javascript",
       "queries": [
-        { "id": "httprouter-new-semantic", "text": "create a new router with redirect and options handling enabled", "mode": "semantic", "expected_hits": ["router.go:213"] },
-        { "id": "httprouter-handle-semantic", "text": "register a request handler for an http method and path", "mode": "semantic", "expected_hits": ["router.go:292"] },
-        { "id": "httprouter-lookup-auto", "text": "lookup a route manually by method and path", "mode": "auto", "expected_hits": ["router.go:394"] },
-        { "id": "httprouter-serve-http-lexical", "text": "ServeHTTP", "mode": "lexical", "expected_hits": ["router.go:463"] }
+        { "id": "plimit-create-semantic", "text": "create a concurrency-limited function runner", "mode": "semantic", "expected_hits": ["index.js:3"] },
+        { "id": "plimit-active-count-semantic", "text": "number of currently running tasks", "mode": "semantic", "expected_hits": ["index.js:71"] },
+        { "id": "plimit-clear-queue-auto", "text": "clear any queued pending work", "mode": "auto", "expected_hits": ["index.js:77"] },
+        { "id": "plimit-limit-function-lexical", "text": "limitFunction", "mode": "lexical", "expected_hits": ["index.js:117"] }
       ]
     },
     {

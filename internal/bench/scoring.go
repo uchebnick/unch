@@ -23,6 +23,7 @@ func ScoreQuery(expectedHits []string, hits []SearchHit) QueryMetrics {
 		metrics.Top1Success = hit.Rank == 1
 		metrics.Top3Success = hit.Rank <= 3
 		metrics.RR = 1.0 / float64(hit.Rank)
+		metrics.ObservedRank = hit.Rank
 		return metrics
 	}
 

@@ -12,7 +12,7 @@ func TestScoreQueryExactHitAtRank1(t *testing.T) {
 		{Rank: 1, Path: "mux.go", Line: 32},
 	})
 
-	if !metrics.Top1Success || !metrics.Top3Success || metrics.RR != 1 {
+	if !metrics.Top1Success || !metrics.Top3Success || metrics.RR != 1 || metrics.ObservedRank != 1 {
 		t.Fatalf("ScoreQuery(rank1) = %+v", metrics)
 	}
 }
@@ -35,6 +35,9 @@ func TestScoreQueryExactHitAtRank3(t *testing.T) {
 	if metrics.RR != 1.0/3.0 {
 		t.Fatalf("expected rr=1/3, got %+v", metrics)
 	}
+	if metrics.ObservedRank != 3 {
+		t.Fatalf("expected observed rank 3, got %+v", metrics)
+	}
 }
 
 func TestScoreQueryHitOutsideTop10(t *testing.T) {
@@ -46,6 +49,9 @@ func TestScoreQueryHitOutsideTop10(t *testing.T) {
 
 	if metrics.Top1Success || metrics.Top3Success || metrics.RR != 0 {
 		t.Fatalf("ScoreQuery(outside top10) = %+v", metrics)
+	}
+	if metrics.ObservedRank != 0 {
+		t.Fatalf("expected observed rank 0, got %+v", metrics)
 	}
 }
 
@@ -64,6 +70,9 @@ func TestScoreQuerySupportsMultipleExpectedHits(t *testing.T) {
 	}
 	if metrics.RR != 0.5 {
 		t.Fatalf("expected rr=0.5, got %+v", metrics)
+	}
+	if metrics.ObservedRank != 2 {
+		t.Fatalf("expected observed rank 2, got %+v", metrics)
 	}
 }
 

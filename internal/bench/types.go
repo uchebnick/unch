@@ -88,9 +88,10 @@ type Adapter interface {
 }
 
 type QueryMetrics struct {
-	Top1Success bool    `json:"top1_success"`
-	Top3Success bool    `json:"top3_success"`
-	RR          float64 `json:"rr"`
+	Top1Success  bool    `json:"top1_success"`
+	Top3Success  bool    `json:"top3_success"`
+	RR           float64 `json:"rr"`
+	ObservedRank int     `json:"observed_rank,omitempty"`
 }
 
 type AggregateMetrics struct {
@@ -104,6 +105,23 @@ type TimingMetrics struct {
 	ColdIndexMeanMS  float64 `json:"cold_index_mean_ms"`
 	WarmIndexMeanMS  float64 `json:"warm_index_mean_ms"`
 	WarmSearchMeanMS float64 `json:"warm_search_mean_ms"`
+}
+
+type QueryTiming struct {
+	WarmSearchMeanMS float64 `json:"warm_search_mean_ms"`
+}
+
+type SuiteCoverage struct {
+	RepositoryCount int            `json:"repository_count"`
+	QueryCount      int            `json:"query_count"`
+	ModeCounts      map[string]int `json:"mode_counts,omitempty"`
+}
+
+type RepositoryStats struct {
+	QueryCount         int            `json:"query_count"`
+	ModeCounts         map[string]int `json:"mode_counts,omitempty"`
+	LastIndexedSymbols int            `json:"last_indexed_symbols,omitempty"`
+	LastIndexedFiles   int            `json:"last_indexed_files,omitempty"`
 }
 
 type SearchRunReport struct {
@@ -124,6 +142,8 @@ type QueryReport struct {
 	Mode         string            `json:"mode"`
 	ExpectedHits []string          `json:"expected_hits"`
 	Runs         []SearchRunReport `json:"runs"`
+	Timing       QueryTiming       `json:"timing"`
+	TopHit       *SearchHit        `json:"top_hit,omitempty"`
 	Metrics      QueryMetrics      `json:"metrics"`
 }
 
@@ -135,6 +155,7 @@ type RepositoryReport struct {
 	ColdIndexRuns []IndexRunReport `json:"cold_index_runs"`
 	WarmIndexRuns []IndexRunReport `json:"warm_index_runs"`
 	Queries       []QueryReport    `json:"queries"`
+	Stats         RepositoryStats  `json:"stats"`
 	Timing        TimingMetrics    `json:"timing"`
 	Metrics       AggregateMetrics `json:"metrics"`
 }
@@ -145,6 +166,7 @@ type Report struct {
 	SuitePath     string             `json:"suite_path"`
 	SuiteRevision string             `json:"suite_revision"`
 	Suite         Suite              `json:"suite"`
+	Coverage      SuiteCoverage      `json:"coverage"`
 	Environment   ReportEnvironment  `json:"environment"`
 	Config        RunConfig          `json:"config"`
 	Repositories  []RepositoryReport `json:"repositories"`

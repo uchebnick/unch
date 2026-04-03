@@ -1,8 +1,8 @@
 {
   "suite_id": "default",
-  "suite_version": 2,
+  "suite_version": 3,
   "name": "default",
-  "description": "Full pinned benchmark suite for tool-to-tool comparisons across Go, TypeScript, JavaScript, and Python repositories.",
+  "description": "Expanded pinned benchmark suite for tool-to-tool comparisons across multiple Go, TypeScript, JavaScript, and Python repositories.",
   "repositories": [
     {
       "id": "gorilla/mux",
@@ -163,6 +163,70 @@
         { "id": "clear-state-semantic", "text": "disconnect all receivers and senders for tests", "mode": "auto", "expected_hits": ["src/blinker/base.py:456"] },
         { "id": "named-signal-semantic", "text": "named generic notification emitter", "mode": "auto", "expected_hits": ["src/blinker/base.py:464"] },
         { "id": "namespace-signal-semantic", "text": "return or create a named signal in the namespace", "mode": "auto", "expected_hits": ["src/blinker/base.py:486"] }
+      ]
+    },
+    {
+      "id": "go-chi/chi",
+      "url": "https://github.com/go-chi/chi.git",
+      "commit": "a54874f0e2f12647a19e82ee70dfa8185014100c",
+      "language": "go",
+      "queries": [
+        { "id": "chi-new-router-semantic", "text": "create a new router", "mode": "semantic", "expected_hits": ["chi.go:60"] },
+        { "id": "chi-new-router-lexical", "text": "NewRouter", "mode": "lexical", "expected_hits": ["chi.go:60"] },
+        { "id": "chi-url-param-semantic", "text": "get a URL parameter from a request", "mode": "semantic", "expected_hits": ["context.go:10"] },
+        { "id": "chi-url-param-lexical", "text": "URLParam", "mode": "lexical", "expected_hits": ["context.go:10"] },
+        { "id": "chi-walk-routes-auto", "text": "walk every route in a router tree", "mode": "auto", "expected_hits": ["tree.go:834"] },
+        { "id": "chi-route-subrouter-auto", "text": "create a subrouter mounted at a pattern", "mode": "auto", "expected_hits": ["mux.go:272"] },
+        { "id": "chi-mount-handler-auto", "text": "mount another handler or router under a path", "mode": "auto", "expected_hits": ["mux.go:289"] },
+        { "id": "chi-mount-lexical", "text": "Mount", "mode": "lexical", "expected_hits": ["mux.go:289"] }
+      ]
+    },
+    {
+      "id": "sindresorhus/p-queue",
+      "url": "https://github.com/sindresorhus/p-queue.git",
+      "commit": "9eec7efb433c33f66799d9dec41aa56d43f3435a",
+      "language": "typescript",
+      "queries": [
+        { "id": "pqueue-class-semantic", "text": "promise queue with concurrency control", "mode": "semantic", "expected_hits": ["source/index.ts:16"] },
+        { "id": "pqueue-class-lexical", "text": "PQueue", "mode": "lexical", "expected_hits": ["source/index.ts:16"] },
+        { "id": "pqueue-add-auto", "text": "add a task to the queue", "mode": "auto", "expected_hits": ["source/index.ts:444"] },
+        { "id": "pqueue-add-all-auto", "text": "add many tasks to the queue and wait for all results", "mode": "auto", "expected_hits": ["source/index.ts:581"] },
+        { "id": "pqueue-set-priority-auto", "text": "change the priority of a queued task by id", "mode": "auto", "expected_hits": ["source/index.ts:432"] },
+        { "id": "pqueue-on-empty-auto", "text": "wait until the queue becomes empty", "mode": "auto", "expected_hits": ["source/index.ts:652"] },
+        { "id": "pqueue-on-size-less-than-auto", "text": "block until queue size drops below a limit", "mode": "auto", "expected_hits": ["source/index.ts:668"] },
+        { "id": "pqueue-on-idle-auto", "text": "wait until the queue becomes idle", "mode": "auto", "expected_hits": ["source/index.ts:682"] }
+      ]
+    },
+    {
+      "id": "expressjs/cors",
+      "url": "https://github.com/expressjs/cors.git",
+      "commit": "ee714bd54ea1f0f7a493bc569fa1e8cfeab7d86c",
+      "language": "javascript",
+      "queries": [
+        { "id": "cors-origin-allowed-semantic", "text": "decide whether an origin is allowed", "mode": "semantic", "expected_hits": ["lib/index.js:19"] },
+        { "id": "cors-origin-config-auto", "text": "configure Access-Control-Allow-Origin", "mode": "auto", "expected_hits": ["lib/index.js:36"] },
+        { "id": "cors-methods-auto", "text": "configure Access-Control-Allow-Methods", "mode": "auto", "expected_hits": ["lib/index.js:73"] },
+        { "id": "cors-allowed-headers-auto", "text": "reflect requested allowed headers", "mode": "auto", "expected_hits": ["lib/index.js:94"] },
+        { "id": "cors-apply-headers-auto", "text": "apply CORS headers to the response", "mode": "auto", "expected_hits": ["lib/index.js:144"] },
+        { "id": "cors-core-handler-auto", "text": "handle preflight and actual CORS responses", "mode": "auto", "expected_hits": ["lib/index.js:159"] },
+        { "id": "cors-middleware-wrapper-auto", "text": "create middleware from static or dynamic options", "mode": "auto", "expected_hits": ["lib/index.js:192"] },
+        { "id": "cors-middleware-wrapper-lexical", "text": "middlewareWrapper", "mode": "lexical", "expected_hits": ["lib/index.js:192"] }
+      ]
+    },
+    {
+      "id": "theskumar/python-dotenv",
+      "url": "https://github.com/theskumar/python-dotenv.git",
+      "commit": "fa4e6a90b45428212452afc6ee0d5c8103b9301d",
+      "language": "python",
+      "queries": [
+        { "id": "dotenv-class-semantic", "text": "dotenv reader and loader object", "mode": "semantic", "expected_hits": ["src/dotenv/main.py:42"] },
+        { "id": "dotenv-class-lexical", "text": "DotEnv", "mode": "lexical", "expected_hits": ["src/dotenv/main.py:42"] },
+        { "id": "dotenv-export-env-auto", "text": "load parsed dotenv values into os.environ", "mode": "auto", "expected_hits": ["src/dotenv/main.py:97"] },
+        { "id": "dotenv-get-key-auto", "text": "get a key from a dotenv file", "mode": "auto", "expected_hits": ["src/dotenv/main.py:125"] },
+        { "id": "dotenv-set-key-auto", "text": "set or update a key in a dotenv file", "mode": "auto", "expected_hits": ["src/dotenv/main.py:193"] },
+        { "id": "dotenv-find-dotenv-auto", "text": "search parent directories for a dotenv file", "mode": "auto", "expected_hits": ["src/dotenv/main.py:332"] },
+        { "id": "dotenv-load-dotenv-auto", "text": "load environment variables from a dotenv file", "mode": "auto", "expected_hits": ["src/dotenv/main.py:383"] },
+        { "id": "dotenv-values-auto", "text": "parse a dotenv file into a dictionary", "mode": "auto", "expected_hits": ["src/dotenv/main.py:433"] }
       ]
     }
   ]

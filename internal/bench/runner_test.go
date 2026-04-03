@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -141,8 +142,29 @@ func TestRunBenchmarkProducesStableReport(t *testing.T) {
 	if repoReport.Timing.WarmSearchMeanMS != 65 {
 		t.Fatalf("warm search mean = %v", repoReport.Timing.WarmSearchMeanMS)
 	}
+	if report.Coverage.RepositoryCount != 1 || report.Coverage.QueryCount != 2 {
+		t.Fatalf("unexpected suite coverage: %+v", report.Coverage)
+	}
+	if repoReport.Stats.QueryCount != 2 {
+		t.Fatalf("repoReport.Stats.QueryCount = %d", repoReport.Stats.QueryCount)
+	}
+	if repoReport.Stats.LastIndexedSymbols != 10 || repoReport.Stats.LastIndexedFiles != 3 {
+		t.Fatalf("unexpected repo stats: %+v", repoReport.Stats)
+	}
 	if repoReport.Metrics.Top1 != 0.5 || repoReport.Metrics.Top3 != 1 || repoReport.Metrics.MRR != 0.75 || repoReport.Metrics.QualityScore != 68 {
 		t.Fatalf("unexpected repo metrics: %+v", repoReport.Metrics)
+	}
+	if len(repoReport.Queries) != 2 {
+		t.Fatalf("repoReport.Queries = %d", len(repoReport.Queries))
+	}
+	if repoReport.Queries[0].Timing.WarmSearchMeanMS != 50 {
+		t.Fatalf("first query mean = %v", repoReport.Queries[0].Timing.WarmSearchMeanMS)
+	}
+	if repoReport.Queries[0].TopHit == nil || repoReport.Queries[0].TopHit.Path != "main.go" || repoReport.Queries[0].TopHit.Line != 12 {
+		t.Fatalf("first query top hit = %+v", repoReport.Queries[0].TopHit)
+	}
+	if repoReport.Queries[1].Metrics.ObservedRank != 2 {
+		t.Fatalf("second query observed rank = %d", repoReport.Queries[1].Metrics.ObservedRank)
 	}
 
 	outputPath := filepath.Join(root, "results", "report.json")
@@ -160,6 +182,9 @@ func TestRunBenchmarkProducesStableReport(t *testing.T) {
 	}
 	if decoded.Metrics.QualityScore != 68 {
 		t.Fatalf("decoded quality score = %d", decoded.Metrics.QualityScore)
+	}
+	if decoded.Coverage.QueryCount != 2 {
+		t.Fatalf("decoded coverage query count = %d", decoded.Coverage.QueryCount)
 	}
 }
 
@@ -253,6 +278,88 @@ func TestRunBenchmarkWarmIndexReusesExistingLocalState(t *testing.T) {
 	}
 	if !adapter.indexSawExisting[1] || !adapter.indexSawExisting[2] {
 		t.Fatalf("warm index runs should reuse existing local state, got %v", adapter.indexSawExisting)
+	}
+}
+
+func TestPrintSummaryIncludesCoverageProfileAndMisses(t *testing.T) {
+	t.Parallel()
+
+	report := Report{
+		Tool:          "fake",
+		SuitePath:     "/tmp/suite.json",
+		SuiteRevision: "sha256:test",
+		Suite:         Suite{ID: "default", Version: 3},
+		Coverage: SuiteCoverage{
+			RepositoryCount: 1,
+			QueryCount:      2,
+			ModeCounts:      map[string]int{"auto": 1, "lexical": 1},
+		},
+		Environment: ReportEnvironment{
+			OS:          "darwin",
+			Arch:        "arm64",
+			CPUInfo:     "Apple M4",
+			NumCPU:      10,
+			ToolVersion: "fake-v1",
+		},
+		Config: RunConfig{
+			ColdIndexRuns:  1,
+			WarmIndexRuns:  2,
+			WarmSearchRuns: 3,
+			SearchLimit:    10,
+		},
+		Timing:  TimingMetrics{ColdIndexMeanMS: 1000, WarmIndexMeanMS: 250, WarmSearchMeanMS: 65},
+		Metrics: AggregateMetrics{QualityScore: 68, Top1: 0.5, Top3: 1, MRR: 0.75},
+		Repositories: []RepositoryReport{
+			{
+				ID:       "local/repo",
+				Language: "go",
+				Commit:   "1234567890abcdef1234567890abcdef12345678",
+				Stats: RepositoryStats{
+					QueryCount:         2,
+					ModeCounts:         map[string]int{"auto": 1, "lexical": 1},
+					LastIndexedSymbols: 10,
+					LastIndexedFiles:   3,
+				},
+				Timing:  TimingMetrics{ColdIndexMeanMS: 1000, WarmIndexMeanMS: 250, WarmSearchMeanMS: 65},
+				Metrics: AggregateMetrics{QualityScore: 68, Top1: 0.5, Top3: 1, MRR: 0.75},
+				Queries: []QueryReport{
+					{
+						ID:           "exact",
+						Mode:         "auto",
+						ExpectedHits: []string{"main.go:12"},
+						Timing:       QueryTiming{WarmSearchMeanMS: 50},
+						TopHit:       &SearchHit{Rank: 1, Path: "main.go", Line: 12},
+						Metrics:      QueryMetrics{Top1Success: true, Top3Success: true, RR: 1, ObservedRank: 1},
+					},
+					{
+						ID:           "second",
+						Mode:         "lexical",
+						ExpectedHits: []string{"main.go:20"},
+						Timing:       QueryTiming{WarmSearchMeanMS: 80},
+						TopHit:       &SearchHit{Rank: 2, Path: "main.go", Line: 20},
+						Metrics:      QueryMetrics{Top1Success: false, Top3Success: true, RR: 0.5, ObservedRank: 2},
+					},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := PrintSummary(&buf, report); err != nil {
+		t.Fatalf("PrintSummary() error: %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Suite coverage: 1 repos • 2 queries • auto=1 lexical=1",
+		"Run profile: 1 cold / 2 warm / 3 search repeats • top 10 hits",
+		"latest index snapshot: 10 symbols / 3 files",
+		"Top1 misses: 1",
+		"local/repo / second (lexical, 80.00ms): expected main.go:20, got main.go:20 @ rank 2",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("PrintSummary() output missing %q:\n%s", want, output)
+		}
 	}
 }
 

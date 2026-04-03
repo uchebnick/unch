@@ -32,6 +32,7 @@ func RunBenchmark(ctx context.Context, adapter Adapter, suite Suite, env Environ
 		SuitePath:     env.SuitePath,
 		SuiteRevision: suiteRevision,
 		Suite:         suite,
+		Coverage:      BuildSuiteCoverage(suite),
 		Environment: ReportEnvironment{
 			OS:          env.OS,
 			Arch:        env.Arch,
@@ -137,6 +138,7 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 		}
 
 		var scoredHits []SearchHit
+		var querySearchDurations []time.Duration
 		for i := 0; i < cfg.WarmSearchRuns; i++ {
 			tracker.Step(repo.Case.ID, fmt.Sprintf("search %s %d/%d", query.ID, i+1, cfg.WarmSearchRuns))
 			result, err := adapter.Search(ctx, repo, query, env, cfg)
@@ -146,13 +148,27 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 			if i == 0 {
 				scoredHits = append(scoredHits, result.Hits...)
 			}
+			querySearchDurations = append(querySearchDurations, result.Duration)
 			queryReport.Runs = append(queryReport.Runs, searchRunToReport(result))
 			allWarmSearchDurations = append(allWarmSearchDurations, result.Duration)
 		}
 
+		queryReport.Timing = QueryTiming{
+			WarmSearchMeanMS: durationMS(meanDuration(querySearchDurations)),
+		}
+		queryReport.TopHit = FirstTopHit(queryReport.Runs)
 		queryReport.Metrics = ScoreQuery(query.ExpectedHits, scoredHits)
 		queryMetrics = append(queryMetrics, queryReport.Metrics)
 		report.Queries = append(report.Queries, queryReport)
+	}
+
+	report.Stats = RepositoryStats{
+		QueryCount: len(repo.Case.Queries),
+		ModeCounts: RepositoryModeCounts(repo.Case.Queries),
+	}
+	if latestIndexRun, ok := LatestIndexRun(report); ok {
+		report.Stats.LastIndexedSymbols = latestIndexRun.IndexedSymbols
+		report.Stats.LastIndexedFiles = latestIndexRun.IndexedFiles
 	}
 
 	report.Timing = TimingMetrics{
@@ -345,6 +361,12 @@ func PrintSummary(w io.Writer, report Report) error {
 	if _, err := fmt.Fprintf(w, " • %d cores\n", report.Environment.NumCPU); err != nil {
 		return err
 	}
+	if _, err := fmt.Fprintf(w, "Suite coverage: %d repos • %d queries • %s\n", report.Coverage.RepositoryCount, report.Coverage.QueryCount, FormatModeCounts(report.Coverage.ModeCounts)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Run profile: %d cold / %d warm / %d search repeats • top %d hits\n", report.Config.ColdIndexRuns, report.Config.WarmIndexRuns, report.Config.WarmSearchRuns, report.Config.SearchLimit); err != nil {
+		return err
+	}
 	if _, err := fmt.Fprintf(w, "Cold index mean: %s\n", formatDurationMS(report.Timing.ColdIndexMeanMS)); err != nil {
 		return err
 	}
@@ -362,7 +384,15 @@ func PrintSummary(w io.Writer, report Report) error {
 	}
 
 	for _, repo := range report.Repositories {
-		if _, err := fmt.Fprintf(w, "- %s [%s]\n", repo.ID, repo.Language); err != nil {
+		if _, err := fmt.Fprintf(w, "- %s [%s] • %d queries • %s\n", repo.ID, repo.Language, repo.Stats.QueryCount, FormatModeCounts(repo.Stats.ModeCounts)); err != nil {
+			return err
+		}
+		if repo.Stats.LastIndexedSymbols > 0 || repo.Stats.LastIndexedFiles > 0 {
+			if _, err := fmt.Fprintf(w, "  latest index snapshot: %d symbols / %d files\n", repo.Stats.LastIndexedSymbols, repo.Stats.LastIndexedFiles); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintf(w, "  pinned commit: %s\n", shortCommit(repo.Commit)); err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintf(w, "  cold index: %s\n", formatDurationMS(repo.Timing.ColdIndexMeanMS)); err != nil {
@@ -379,7 +409,68 @@ func PrintSummary(w io.Writer, report Report) error {
 		}
 	}
 
+	misses := collectRankingMisses(report)
+	if len(misses) > 0 {
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "Top1 misses: %d\n", len(misses)); err != nil {
+			return err
+		}
+		maxMisses := 10
+		for i, miss := range misses {
+			if i >= maxMisses {
+				if _, err := fmt.Fprintf(w, "... %d more misses omitted\n", len(misses)-maxMisses); err != nil {
+					return err
+				}
+				break
+			}
+			if _, err := fmt.Fprintf(w, "- %s / %s (%s, %s): expected %s, got %s\n",
+				miss.repoID,
+				miss.query.ID,
+				normalizeQueryMode(miss.query.Mode),
+				formatDurationMS(miss.query.Timing.WarmSearchMeanMS),
+				formatExpectedHits(miss.query.ExpectedHits),
+				formatTopHitWithRank(miss.query),
+			); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
+}
+
+type rankingMiss struct {
+	repoID string
+	query  QueryReport
+}
+
+func collectRankingMisses(report Report) []rankingMiss {
+	var misses []rankingMiss
+	for _, repo := range report.Repositories {
+		for _, query := range repo.Queries {
+			if query.Metrics.Top1Success {
+				continue
+			}
+			misses = append(misses, rankingMiss{repoID: repo.ID, query: query})
+		}
+	}
+	return misses
+}
+
+func formatExpectedHits(hits []string) string {
+	return strings.Join(hits, ", ")
+}
+
+func formatTopHitWithRank(query QueryReport) string {
+	if query.TopHit == nil {
+		return "no hits"
+	}
+	if query.Metrics.ObservedRank > 0 {
+		return fmt.Sprintf("%s:%d @ rank %d", query.TopHit.Path, query.TopHit.Line, query.Metrics.ObservedRank)
+	}
+	return fmt.Sprintf("%s:%d", query.TopHit.Path, query.TopHit.Line)
 }
 
 func formatDurationMS(ms float64) string {

@@ -33,8 +33,8 @@ File: [`benchmarks/suites/smoke.json`](../benchmarks/suites/smoke.json)
 File: [`benchmarks/suites/default.json`](../benchmarks/suites/default.json)
 
 - `suite_id`: `default`
-- `suite_version`: `2`
-- size: `129` queries
+- `suite_version`: `3`
+- size: `161` queries across `8` pinned repositories
 - purpose: broader tool-to-tool comparisons and quality tracking
 
 ## Quick Start
@@ -87,10 +87,13 @@ The runner records:
 - `cold index mean`
 - `warm index mean`
 - `warm search mean`
+- per-query `warm search mean`
+- per-query top hit and observed rank
 - `top1`
 - `top3`
 - `mrr`
 - `quality score`
+- suite coverage and per-repository mode mix
 
 ### Timing Definitions
 
@@ -150,10 +153,15 @@ Today the default suite covers:
 - `developit/mitt`: `28` queries
 - `expressjs/morgan`: `31` queries
 - `pallets-eco/blinker`: `31` queries
+- `go-chi/chi`: `8` queries
+- `sindresorhus/p-queue`: `8` queries
+- `expressjs/cors`: `8` queries
+- `theskumar/python-dotenv`: `8` queries
 
 The cases are a mix of:
 
-- semantic queries
+- explicit `semantic` queries
+- `auto` natural-language queries
 - lexical symbol-name queries
 - paraphrases that hit the same expected `path:line`
 
@@ -168,6 +176,8 @@ Tool: unch (v0.3.0)
 Suite: /.../benchmarks/suites/smoke.json [smoke v1]
 Suite revision: sha256:...
 Environment: darwin/arm64 • Apple M4 • 10 cores
+Suite coverage: 4 repos • 12 queries • auto=8 lexical=4
+Run profile: 1 cold / 3 warm / 5 search repeats • top 10 hits
 Cold index mean: 1.95s
 Warm index mean: 316.68ms
 Warm search mean: 305.57ms
@@ -183,6 +193,9 @@ Interpretation:
 - `top3` shows whether the right answer still stays near the top
 - `mrr` punishes rank drift
 - `quality score` is the compact comparison number, but it should always be read together with the raw metrics
+- `suite coverage` and `run profile` make it explicit how broad the run was and how many repeats were used
+- `latest index snapshot` per repo tells you roughly how much code was indexed in the most recent successful run
+- `top1 misses` and the GitHub summary's `slowest queries` section make it easier to see whether regressions came from ranking drift, latency spikes, or both
 
 The release-tag GitHub Actions benchmark uses the smoke suite with a lighter `1 cold / 1 warm / 1 search repeat` profile so release CI stays reasonably fast. Local runs keep the heavier defaults unless you override them with flags.
 
@@ -195,8 +208,10 @@ The report contains:
 - benchmark environment
 - suite path and suite revision hash
 - suite metadata including `suite_id` and `suite_version`
+- suite coverage including repo count, query count, and mode mix
 - per-repository timing and quality breakdown
-- per-query hits and scoring
+- per-repository query count, mode mix, and latest indexed symbol/file counts
+- per-query hits, top hit, observed rank, and mean search timing
 
 That JSON is the source of truth for comparisons.
 

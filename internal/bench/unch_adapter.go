@@ -21,6 +21,8 @@ var (
 	indexSummaryPattern = regexp.MustCompile(`Indexed\s+(\d+)\s+symbols\s+in\s+(\d+)\s+files`)
 )
 
+const indexUpToDateSummary = "Index already up to date"
+
 type UnchAdapter struct {
 	binaryPath string
 	version    string
@@ -246,20 +248,24 @@ func parseSearchHits(stdout string, combined string) ([]SearchHit, error) {
 
 func parseIndexSummary(output string) (string, int, int, error) {
 	match := indexSummaryPattern.FindStringSubmatch(output)
-	if len(match) != 3 {
-		return "", 0, 0, fmt.Errorf("indexed summary not found in output")
+	if len(match) == 3 {
+		indexedSymbols, err := strconv.Atoi(match[1])
+		if err != nil {
+			return "", 0, 0, fmt.Errorf("parse indexed symbols %q: %w", match[1], err)
+		}
+		indexedFiles, err := strconv.Atoi(match[2])
+		if err != nil {
+			return "", 0, 0, fmt.Errorf("parse indexed files %q: %w", match[2], err)
+		}
+
+		return match[0], indexedSymbols, indexedFiles, nil
 	}
 
-	indexedSymbols, err := strconv.Atoi(match[1])
-	if err != nil {
-		return "", 0, 0, fmt.Errorf("parse indexed symbols %q: %w", match[1], err)
-	}
-	indexedFiles, err := strconv.Atoi(match[2])
-	if err != nil {
-		return "", 0, 0, fmt.Errorf("parse indexed files %q: %w", match[2], err)
+	if strings.Contains(output, indexUpToDateSummary) {
+		return indexUpToDateSummary, 0, 0, nil
 	}
 
-	return match[0], indexedSymbols, indexedFiles, nil
+	return "", 0, 0, fmt.Errorf("indexed summary not found in output")
 }
 
 func writeWarmupProgram(root string) error {

@@ -44,3 +44,18 @@ func TestParseIndexSummary(t *testing.T) {
 		t.Fatalf("parseIndexSummary() = (%d, %d)", indexedSymbols, indexedFiles)
 	}
 }
+
+func TestParseIndexSummaryUpToDate(t *testing.T) {
+	t.Parallel()
+
+	summary, indexedSymbols, indexedFiles, err := parseIndexSummary("Loaded model dim=768\nIndex already up to date\n")
+	if err != nil {
+		t.Fatalf("parseIndexSummary() error: %v", err)
+	}
+	if summary != indexUpToDateSummary {
+		t.Fatalf("parseIndexSummary() summary = %q", summary)
+	}
+	if indexedSymbols != 0 || indexedFiles != 0 {
+		t.Fatalf("parseIndexSummary() = (%d, %d)", indexedSymbols, indexedFiles)
+	}
+}

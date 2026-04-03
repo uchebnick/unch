@@ -68,6 +68,22 @@ func LatestIndexRun(report RepositoryReport) (IndexRunReport, bool) {
 	return IndexRunReport{}, false
 }
 
+func LatestIndexedSnapshot(report RepositoryReport) (IndexRunReport, bool) {
+	for i := len(report.WarmIndexRuns) - 1; i >= 0; i-- {
+		run := report.WarmIndexRuns[i]
+		if run.IndexedSymbols > 0 || run.IndexedFiles > 0 {
+			return run, true
+		}
+	}
+	for i := len(report.ColdIndexRuns) - 1; i >= 0; i-- {
+		run := report.ColdIndexRuns[i]
+		if run.IndexedSymbols > 0 || run.IndexedFiles > 0 {
+			return run, true
+		}
+	}
+	return LatestIndexRun(report)
+}
+
 func FormatModeCounts(counts map[string]int) string {
 	if len(counts) == 0 {
 		return "none"

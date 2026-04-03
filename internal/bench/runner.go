@@ -166,7 +166,7 @@ func benchmarkRepository(ctx context.Context, adapter Adapter, repo CheckedOutRe
 		QueryCount: len(repo.Case.Queries),
 		ModeCounts: RepositoryModeCounts(repo.Case.Queries),
 	}
-	if latestIndexRun, ok := LatestIndexRun(report); ok {
+	if latestIndexRun, ok := LatestIndexedSnapshot(report); ok {
 		report.Stats.LastIndexedSymbols = latestIndexRun.IndexedSymbols
 		report.Stats.LastIndexedFiles = latestIndexRun.IndexedFiles
 	}

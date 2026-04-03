@@ -92,26 +92,25 @@ jobs:
 
       - name: Run benchmark suite
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          $env:CGO_ENABLED = "1"
-          $env:CC = "${{ matrix.cc }}"
-          $resultsDir = Join-Path $env:GITHUB_WORKSPACE "benchmarks\results"
-          $suitePath = Join-Path $env:GITHUB_WORKSPACE "benchmarks\suites\smoke.json"
-          $jsonPath = Join-Path $resultsDir "ci-benchmark.json"
-          $logPath = Join-Path $resultsDir "ci-benchmark.log"
-          New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
-          & go run ./cmd/bench `
-            -suite $suitePath `
-            -bench-root $env:UNCH_BENCH_ROOT `
-            -cold-index-runs 1 `
-            -warm-index-runs 1 `
-            -warm-search-runs 1 `
-            -results-dir $resultsDir `
-            -output $jsonPath 2>&1 | Tee-Object -FilePath $logPath
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
+          set -euo pipefail
+          workspace_dir="$(cygpath -u "$GITHUB_WORKSPACE")"
+          results_dir="${workspace_dir}/benchmarks/results"
+          suite_path="${workspace_dir}/benchmarks/suites/smoke.json"
+          json_path="${results_dir}/ci-benchmark.json"
+          log_path="${results_dir}/ci-benchmark.log"
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
+          mkdir -p "${results_dir}"
+          go run ./cmd/bench \
+            -suite "${suite_path}" \
+            -bench-root "$(cygpath -u "$UNCH_BENCH_ROOT")" \
+            -cold-index-runs 1 \
+            -warm-index-runs 1 \
+            -warm-search-runs 1 \
+            -results-dir "${results_dir}" \
+            -output "${json_path}" 2>&1 | tee "${log_path}"
 
       - name: Render benchmark summary
         if: ${{ always() }}
@@ -209,10 +208,11 @@ jobs:
 
       - name: Build all packages
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          $env:CGO_ENABLED = "1"
-          $env:CC = "${{ matrix.cc }}"
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
           go build ./...
 
       - name: Run portable test suite
@@ -221,18 +221,12 @@ jobs:
 
       - name: Run portable test suite
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          $env:CGO_ENABLED = "1"
-          $env:CC = "${{ matrix.cc }}"
-          $packages = @(
-            "./internal/bench",
-            "./internal/indexing",
-            "./internal/runtime",
-            "./internal/search",
-            "./internal/termui"
-          )
-          go test @packages
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
+          go test $PORTABLE_TEST_PACKAGES
 
   install-smoke:
     name: install-smoke (${{ matrix.label }})

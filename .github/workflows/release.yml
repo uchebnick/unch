@@ -46,13 +46,15 @@ jobs:
             archive_type: zip
             msystem: UCRT64
             msys_pkg: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
           - runner: windows-11-arm
             goos: windows
             goarch: arm64
             asset_name: unch_Windows_arm64.zip
             archive_type: zip
             msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-gcc
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -98,7 +100,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist/build
           export CGO_ENABLED=1
-          export CC=gcc
+          export CC="${{ matrix.cc }}"
           go build -trimpath -o dist/build/unch.exe .
 
       - name: Archive Windows asset

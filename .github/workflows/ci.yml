@@ -32,10 +32,12 @@ jobs:
             label: windows-x86_64
             msystem: UCRT64
             msys_pkg: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
           - os: windows-11-arm
             label: windows-arm64
             msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-gcc
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
 
     env:
       SEMSEARCH_YZMA_VERSION: b8581
@@ -93,7 +95,7 @@ jobs:
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "1"
-          $env:CC = "gcc"
+          $env:CC = "${{ matrix.cc }}"
           $resultsDir = Join-Path $env:GITHUB_WORKSPACE "benchmarks\results"
           $suitePath = Join-Path $env:GITHUB_WORKSPACE "benchmarks\suites\smoke.json"
           $jsonPath = Join-Path $resultsDir "ci-benchmark.json"
@@ -176,10 +178,12 @@ jobs:
             label: windows-x86_64
             msystem: UCRT64
             msys_pkg: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
           - os: windows-11-arm
             label: windows-arm64
             msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-gcc
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
 
     steps:
       - name: Checkout
@@ -208,7 +212,7 @@ jobs:
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "1"
-          $env:CC = "gcc"
+          $env:CC = "${{ matrix.cc }}"
           go build ./...
 
       - name: Run portable test suite
@@ -220,7 +224,7 @@ jobs:
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "1"
-          $env:CC = "gcc"
+          $env:CC = "${{ matrix.cc }}"
           $packages = @(
             "./internal/bench",
             "./internal/indexing",
@@ -252,11 +256,13 @@ jobs:
             asset_name: unch_Windows_x86_64.zip
             msystem: UCRT64
             msys_pkg: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
           - os: windows-11-arm
             label: windows-arm64
             asset_name: unch_Windows_arm64.zip
             msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-gcc
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
 
     steps:
       - name: Checkout
@@ -294,7 +300,7 @@ jobs:
           build_dir="$(cygpath -u "$RUNNER_TEMP")/build"
           mkdir -p "${build_dir}"
           export CGO_ENABLED=1
-          export CC=gcc
+          export CC="${{ matrix.cc }}"
           go build -trimpath -o "${build_dir}/unch.exe" .
 
       - name: Archive local Windows release asset

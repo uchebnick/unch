@@ -28,6 +28,10 @@ jobs:
         include:
           - os: ubuntu-latest
             label: linux
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+          - os: macos-14
+            label: macos
           - os: windows-latest
             label: windows-x86_64
             msystem: UCRT64
@@ -40,6 +44,7 @@ jobs:
             cc: clang
 
     env:
+      BENCHMARK_SUITE: benchmarks/suites/ci.json
       SEMSEARCH_YZMA_VERSION: b8581
       UNCH_BENCH_ROOT: ${{ github.workspace }}/.bench-cache
 
@@ -70,7 +75,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.UNCH_BENCH_ROOT }}/cache
-          key: benchmark-${{ runner.os }}-${{ matrix.label }}-${{ hashFiles('benchmarks/suites/smoke.json', 'go.mod') }}
+          key: benchmark-${{ runner.os }}-${{ matrix.label }}-${{ hashFiles('benchmarks/suites/ci.json', 'go.mod') }}
           restore-keys: |
             benchmark-${{ runner.os }}-${{ matrix.label }}-
 
@@ -81,7 +86,7 @@ jobs:
           set -euo pipefail
           mkdir -p benchmarks/results
           go run ./cmd/bench \
-            -suite "${GITHUB_WORKSPACE}/benchmarks/suites/smoke.json" \
+            -suite "${GITHUB_WORKSPACE}/${BENCHMARK_SUITE}" \
             -bench-root "${UNCH_BENCH_ROOT}" \
             -cold-index-runs 1 \
             -warm-index-runs 1 \
@@ -97,7 +102,7 @@ jobs:
           set -euo pipefail
           workspace_dir="$(cygpath -u "$GITHUB_WORKSPACE")"
           results_dir="${workspace_dir}/benchmarks/results"
-          suite_path="${workspace_dir}/benchmarks/suites/smoke.json"
+          suite_path="${workspace_dir}/${BENCHMARK_SUITE}"
           json_path="${results_dir}/ci-benchmark.json"
           log_path="${results_dir}/ci-benchmark.log"
           export CGO_ENABLED=1
@@ -142,6 +147,34 @@ jobs:
           name: benchmark-report-${{ matrix.label }}
           path: benchmarks/results/
           if-no-files-found: warn
+
+  benchmark-summary:
+    name: benchmark-summary
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
+    needs: benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Download benchmark artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: benchmark-report-*
+          path: benchmarks/summary-artifacts
+
+      - name: Render cross-platform benchmark summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/render_benchmark_matrix_summary.py benchmarks/summary-artifacts >> "$GITHUB_STEP_SUMMARY"
 
   lint:
     name: lint

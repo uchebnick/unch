@@ -1,0 +1,104 @@
+{
+  "suite_id": "ci",
+  "suite_version": 1,
+  "name": "ci",
+  "description": "Cross-platform CI benchmark suite with broader repository coverage and more explicit semantic search cases.",
+  "repositories": [
+    {
+      "id": "gorilla/mux",
+      "url": "https://github.com/gorilla/mux.git",
+      "commit": "db9d1d0073d27a0a2d9a8c1bc52aa0af4374d265",
+      "language": "go",
+      "queries": [
+        { "id": "new-router-semantic", "text": "create a new router", "mode": "semantic", "expected_hits": ["mux.go:32"] },
+        { "id": "vars-auto", "text": "get path variables from a request", "mode": "auto", "expected_hits": ["mux.go:466"] },
+        { "id": "walk-auto", "text": "walk every route in a router", "mode": "auto", "expected_hits": ["mux.go:397"] },
+        { "id": "walk-lexical", "text": "Walk", "mode": "lexical", "expected_hits": ["mux.go:397"] }
+      ]
+    },
+    {
+      "id": "developit/mitt",
+      "url": "https://github.com/developit/mitt.git",
+      "commit": "6b41670516ed8e8b738612f60491995470aa63b3",
+      "language": "typescript",
+      "queries": [
+        { "id": "mitt-semantic", "text": "tiny functional event emitter", "mode": "semantic", "expected_hits": ["src/index.ts:46"] },
+        { "id": "handler-map-auto", "text": "map of event types and their corresponding event handlers", "mode": "auto", "expected_hits": ["src/index.ts:18"] },
+        { "id": "emit-auto", "text": "emit an event to matching and wildcard handlers", "mode": "auto", "expected_hits": ["src/index.ts:103"] },
+        { "id": "emitter-lexical", "text": "Emitter", "mode": "lexical", "expected_hits": ["src/index.ts:23"] }
+      ]
+    },
+    {
+      "id": "expressjs/morgan",
+      "url": "https://github.com/expressjs/morgan.git",
+      "commit": "561b0d70bf4486245b311a02259d32ae45756331",
+      "language": "javascript",
+      "queries": [
+        { "id": "compile-format-semantic", "text": "compile a format string into a function", "mode": "semantic", "expected_hits": ["index.js:401"] },
+        { "id": "lookup-format-auto", "text": "lookup and compile a named format function", "mode": "auto", "expected_hits": ["index.js:475"] },
+        { "id": "record-start-time-auto", "text": "record the start time", "mode": "auto", "expected_hits": ["index.js:535"] },
+        { "id": "record-start-time-lexical", "text": "recordStartTime", "mode": "lexical", "expected_hits": ["index.js:535"] }
+      ]
+    },
+    {
+      "id": "pallets-eco/blinker",
+      "url": "https://github.com/pallets-eco/blinker.git",
+      "commit": "c3364059663df1ddce32799d6b1922af89a345f6",
+      "language": "python",
+      "queries": [
+        { "id": "connect-semantic", "text": "connect a receiver to a signal", "mode": "semantic", "expected_hits": ["src/blinker/base.py:91"] },
+        { "id": "send-async-auto", "text": "await all receivers that are connected to the sender", "mode": "auto", "expected_hits": ["src/blinker/base.py:255"] },
+        { "id": "receivers-for-auto", "text": "yield the live receivers for a sender", "mode": "auto", "expected_hits": ["src/blinker/base.py:326"] },
+        { "id": "signal-lexical", "text": "Signal", "mode": "lexical", "expected_hits": ["src/blinker/base.py:24"] }
+      ]
+    },
+    {
+      "id": "go-chi/chi",
+      "url": "https://github.com/go-chi/chi.git",
+      "commit": "a54874f0e2f12647a19e82ee70dfa8185014100c",
+      "language": "go",
+      "queries": [
+        { "id": "chi-new-router-semantic", "text": "create a new router", "mode": "semantic", "expected_hits": ["chi.go:60"] },
+        { "id": "chi-url-param-semantic", "text": "get a URL parameter from a request", "mode": "semantic", "expected_hits": ["context.go:10"] },
+        { "id": "chi-route-subrouter-auto", "text": "create a subrouter mounted at a pattern", "mode": "auto", "expected_hits": ["mux.go:272"] },
+        { "id": "chi-mount-lexical", "text": "Mount", "mode": "lexical", "expected_hits": ["mux.go:289"] }
+      ]
+    },
+    {
+      "id": "sindresorhus/p-queue",
+      "url": "https://github.com/sindresorhus/p-queue.git",
+      "commit": "9eec7efb433c33f66799d9dec41aa56d43f3435a",
+      "language": "typescript",
+      "queries": [
+        { "id": "pqueue-class-semantic", "text": "promise queue with concurrency control", "mode": "semantic", "expected_hits": ["source/index.ts:16"] },
+        { "id": "pqueue-add-auto", "text": "add a task to the queue", "mode": "auto", "expected_hits": ["source/index.ts:444"] },
+        { "id": "pqueue-on-idle-auto", "text": "wait until the queue becomes idle", "mode": "auto", "expected_hits": ["source/index.ts:682"] },
+        { "id": "pqueue-class-lexical", "text": "PQueue", "mode": "lexical", "expected_hits": ["source/index.ts:16"] }
+      ]
+    },
+    {
+      "id": "expressjs/cors",
+      "url": "https://github.com/expressjs/cors.git",
+      "commit": "ee714bd54ea1f0f7a493bc569fa1e8cfeab7d86c",
+      "language": "javascript",
+      "queries": [
+        { "id": "cors-origin-allowed-semantic", "text": "decide whether an origin is allowed", "mode": "semantic", "expected_hits": ["lib/index.js:19"] },
+        { "id": "cors-methods-auto", "text": "configure Access-Control-Allow-Methods", "mode": "auto", "expected_hits": ["lib/index.js:73"] },
+        { "id": "cors-core-handler-auto", "text": "handle preflight and actual CORS responses", "mode": "auto", "expected_hits": ["lib/index.js:159"] },
+        { "id": "cors-middleware-wrapper-lexical", "text": "middlewareWrapper", "mode": "lexical", "expected_hits": ["lib/index.js:192"] }
+      ]
+    },
+    {
+      "id": "theskumar/python-dotenv",
+      "url": "https://github.com/theskumar/python-dotenv.git",
+      "commit": "fa4e6a90b45428212452afc6ee0d5c8103b9301d",
+      "language": "python",
+      "queries": [
+        { "id": "dotenv-class-semantic", "text": "dotenv reader and loader object", "mode": "semantic", "expected_hits": ["src/dotenv/main.py:42"] },
+        { "id": "dotenv-load-dotenv-auto", "text": "load environment variables from a dotenv file", "mode": "auto", "expected_hits": ["src/dotenv/main.py:383"] },
+        { "id": "dotenv-find-dotenv-auto", "text": "search parent directories for a dotenv file", "mode": "auto", "expected_hits": ["src/dotenv/main.py:332"] },
+        { "id": "dotenv-class-lexical", "text": "DotEnv", "mode": "lexical", "expected_hits": ["src/dotenv/main.py:42"] }
+      ]
+    }
+  ]
+}

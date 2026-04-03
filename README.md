@@ -14,7 +14,7 @@
 `unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal. It is built for the moment when you know what the code does, but do not remember the symbol name, file path, or exact text. By default everything stays local to the repository; GitHub Actions publishing is optional.
 
 <p align="center">
-  <img src="docs/assets/unch-demo.svg" alt="Terminal demo of unch indexing gorilla/mux and returning semantic search matches" width="920">
+  <img src="docs/assets/unch-demo.gif" alt="Terminal demo of unch indexing gorilla/mux and returning semantic search matches" width="920">
 </p>
 
 ## Why `unch`

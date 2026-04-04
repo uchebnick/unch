@@ -70,6 +70,47 @@ detect_arch() {
   esac
 }
 
+has_system_linux_loader() {
+  case "$(detect_arch)" in
+    x86_64) [ -e /lib64/ld-linux-x86-64.so.2 ] ;;
+    arm64) [ -e /lib/ld-linux-aarch64.so.1 ] ;;
+    *) return 1 ;;
+  esac
+}
+
+needs_nix_loader_patch() {
+  [ "$(detect_os)" = "Linux" ] && has_cmd nix && ! has_system_linux_loader
+}
+
+patch_nixos_binary() {
+  binary_path="$1"
+
+  if ! has_cmd nix-shell; then
+    return 1
+  fi
+
+  BINARY_PATH="$binary_path" nix-shell -p patchelf stdenv.cc libffi pkg-config --run '
+      set -eu
+      linker="$(cat "$NIX_CC/nix-support/dynamic-linker")"
+      glibc_dir="$(dirname "$linker")"
+      libgcc_dir="$(dirname "$(cc -print-file-name=libgcc_s.so.1)")"
+      libffi_dir="$(pkg-config --variable=libdir libffi)"
+      patchelf --set-interpreter "$linker" --set-rpath "${glibc_dir}:${libgcc_dir}:${libffi_dir}" "$BINARY_PATH"
+    '
+}
+
+install_unix_binary() {
+  source_path="$1"
+  destination_path="$2"
+
+  install -m 0755 "$source_path" "$destination_path"
+
+  if needs_nix_loader_patch; then
+    say "Detected a Linux environment without a system ELF loader; patching ${destination_path} via nix"
+    patch_nixos_binary "$destination_path"
+  fi
+}
+
 install_release_archive() {
   version="$1"
   os_name="$2"
@@ -116,7 +157,7 @@ install_release_archive() {
   case "$archive_ext" in
     tar.gz)
       tar -xzf "${asset_path}" -C "${tmp_dir}"
-      install -m 0755 "${tmp_dir}/${asset_binary}" "${bin_dir}/${asset_binary}"
+      install_unix_binary "${tmp_dir}/${asset_binary}" "${bin_dir}/${asset_binary}"
       ;;
     zip)
       unzip -q "${asset_path}" -d "${tmp_dir}"

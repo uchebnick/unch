@@ -51,6 +51,8 @@ go install github.com/uchebnick/unch@latest
 
 On Windows, the published installers are the easiest way to get the same cgo-backed parser and SQLite stack that release binaries and CI use. Source installs still work, and the vendored SQLite headers keep `go build` and `go install` to a single command as long as a working cgo toolchain is present.
 
+On Linux, the shell installer is smoke-tested in CI on Ubuntu, Debian, and Arch using published release assets. On NixOS-like environments without the usual system ELF loader path, `install.sh` patches the installed release binary via `nix-shell` so the final `unch` binary runs natively after installation instead of falling back to `go install`.
+
 If you want to hack on the project directly, build it from the current checkout:
 
 ```bash
@@ -63,7 +65,7 @@ Published release archives currently cover:
 - Linux: `arm64`, `x86_64`
 - Windows: `arm64`, `x86_64` (`unch.exe`)
 
-On those supported macOS, Linux, and Windows targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available.
+On those supported macOS, Linux, and Windows targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available. The PowerShell installer is smoke-tested on Windows `arm64` and `x86_64`.
 
 See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the checked-in `smoke`, `ci`, and `default` suites plus the current CI benchmark profile.
 

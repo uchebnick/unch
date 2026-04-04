@@ -380,6 +380,106 @@ jobs:
           .\install\install.ps1 -BinDir $binDir -Version vci-test
           & (Join-Path $binDir "unch.exe") --help | Out-Null
 
+  install-smoke-linux-distros:
+    name: install-smoke-linux (${{ matrix.label }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: ubuntu
+            image: ubuntu:24.04
+            prepare: >-
+              apt-get update &&
+              apt-get install -y --no-install-recommends ca-certificates curl gzip tar
+          - label: debian
+            image: debian:bookworm-slim
+            prepare: >-
+              apt-get update &&
+              apt-get install -y --no-install-recommends ca-certificates curl gzip tar
+          - label: arch
+            image: archlinux:latest
+            prepare: >-
+              pacman -Syu --noconfirm --needed archlinux-keyring &&
+              pacman -S --noconfirm --needed ca-certificates curl gzip tar
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build local Linux release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset_dir="${RUNNER_TEMP}/release-assets"
+          mkdir -p "${asset_dir}" "${RUNNER_TEMP}/build"
+          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" .
+          tar -C "${RUNNER_TEMP}/build" -czf "${asset_dir}/unch_Linux_x86_64.tar.gz" unch
+
+      - name: Install from local asset inside ${{ matrix.label }} container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/src" \
+            -v "${RUNNER_TEMP}/release-assets:/assets" \
+            -w /src \
+            "${{ matrix.image }}" sh -lc '
+              set -eu
+              '"${{ matrix.prepare }}"'
+              export UNCH_INSTALL_ASSET_DIR=/assets
+              ./install.sh -b /tmp/bin -v vci-test
+              /tmp/bin/unch --help >/dev/null
+            '
+
+  install-smoke-nix:
+    name: install-smoke-linux (nix)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build local Linux release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset_dir="${RUNNER_TEMP}/release-assets"
+          mkdir -p "${asset_dir}" "${RUNNER_TEMP}/build"
+          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" .
+          tar -C "${RUNNER_TEMP}/build" -czf "${asset_dir}/unch_Linux_x86_64.tar.gz" unch
+
+      - name: Install from local asset inside nix container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/src" \
+            -v "${RUNNER_TEMP}/release-assets:/assets" \
+            -w /src \
+            nixos/nix:latest sh -lc '
+              set -eu
+              nix --extra-experimental-features "nix-command flakes" \
+                shell nixpkgs#curl nixpkgs#gnutar nixpkgs#gzip nixpkgs#coreutils nixpkgs#cacert \
+                --command sh -lc "
+                  set -eu
+                  export UNCH_INSTALL_ASSET_DIR=/assets
+                  ./install.sh -b /tmp/bin -v vci-test
+                  /tmp/bin/unch --help >/dev/null
+                "
+            '
+
   coverage:
     name: coverage
     runs-on: ubuntu-latest

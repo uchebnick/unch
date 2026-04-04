@@ -186,7 +186,7 @@ fi
 
 if [ "$installed" != "true" ]; then
   say "Could not install unch for ${os_name}/${arch_name}."
-  say "Release archives are currently published for Darwin arm64/x86_64, Linux arm64/x86_64, and Windows x86_64."
+  say "Release archives are currently published for Darwin arm64/x86_64, Linux arm64/x86_64, and Windows arm64/x86_64."
   say "Install Go and rerun this script, or use Homebrew on macOS."
   exit 1
 fi

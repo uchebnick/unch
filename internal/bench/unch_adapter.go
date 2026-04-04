@@ -53,7 +53,7 @@ func (a *UnchAdapter) Prepare(ctx context.Context, env Environment) error {
 		return fmt.Errorf("create warmup dir: %w", err)
 	}
 
-	a.binaryPath = filepath.Join(env.BinDir, "unch")
+	a.binaryPath = filepath.Join(env.BinDir, benchmarkBinaryName(env.OS))
 	if err := a.buildBinary(ctx, env); err != nil {
 		return err
 	}
@@ -266,6 +266,13 @@ func parseIndexSummary(output string) (string, int, int, error) {
 	}
 
 	return "", 0, 0, fmt.Errorf("indexed summary not found in output")
+}
+
+func benchmarkBinaryName(goos string) string {
+	if goos == "windows" {
+		return "unch.exe"
+	}
+	return "unch"
 }
 
 func writeWarmupProgram(root string) error {

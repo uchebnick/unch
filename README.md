@@ -37,7 +37,7 @@ For release-based installs without Homebrew:
 curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh
 ```
 
-On Windows x86_64, use the PowerShell installer:
+On Windows, use the PowerShell installer:
 
 ```powershell
 iwr https://raw.githubusercontent.com/uchebnick/unch/main/install/install.ps1 -useb | iex
@@ -49,6 +49,8 @@ For source-based installation, use the canonical module path:
 go install github.com/uchebnick/unch@latest
 ```
 
+On Windows, the published installers are the easiest way to get the same cgo-backed parser and SQLite stack that release binaries and CI use. Source installs still work, but full parity on Windows assumes a working cgo toolchain.
+
 If you want to hack on the project directly, build it from the current checkout:
 
 ```bash
@@ -59,11 +61,11 @@ Published release archives currently cover:
 
 - macOS: `arm64`, `x86_64`
 - Linux: `arm64`, `x86_64`
-- Windows: `x86_64` (`unch.exe`)
+- Windows: `arm64`, `x86_64` (`unch.exe`)
 
-On those supported macOS, Linux, and Windows x86_64 targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available.
+On those supported macOS, Linux, and Windows targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available.
 
-See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the pinned benchmark suite, score formula, and current sample results.
+See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the checked-in `smoke`, `ci`, and `default` suites plus the current CI benchmark profile.
 
 Model selection accepts either a known model id or a direct `.gguf` path:
 
@@ -176,7 +178,7 @@ unch bind ci https://github.com/uchebnick/unch
 
 After the workflow is committed and runs successfully once, `unch search` can refresh the published index automatically when a newer remote version exists. Use `unch remote sync` when you want to force a refresh before searching.
 
-The benchmark suite runs in CI only on release tags, using the smaller smoke profile so ordinary pushes stay fast while coverage still runs on every push.
+The cross-platform benchmark matrix stays separate from ordinary push CI. It runs on manual `workflow_dispatch` and release-tag pushes, uses the checked-in `ci` suite with a lighter `1 cold / 1 warm / 1 search repeat` profile, and publishes per-platform summaries so Linux, macOS, and Windows runs are easy to compare.
 
 ## Contributing and Feedback
 

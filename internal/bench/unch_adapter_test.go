@@ -59,3 +59,26 @@ func TestParseIndexSummaryUpToDate(t *testing.T) {
 		t.Fatalf("parseIndexSummary() = (%d, %d)", indexedSymbols, indexedFiles)
 	}
 }
+
+func TestBenchmarkBinaryName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		goos string
+		want string
+	}{
+		{goos: "darwin", want: "unch"},
+		{goos: "linux", want: "unch"},
+		{goos: "windows", want: "unch.exe"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.goos, func(t *testing.T) {
+			t.Parallel()
+			if got := benchmarkBinaryName(tt.goos); got != tt.want {
+				t.Fatalf("benchmarkBinaryName(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+		})
+	}
+}

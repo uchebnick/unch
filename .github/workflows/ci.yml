@@ -3,6 +3,7 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,11 +18,33 @@ env:
 
 jobs:
   benchmark:
-    name: benchmark-suite
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-latest
+    name: benchmark-suite (${{ matrix.label }})
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+          - os: macos-14
+            label: macos
+          - os: windows-latest
+            label: windows-x86_64
+            msystem: UCRT64
+            msys_pkg: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-sqlite3
+            cc: gcc
+          - os: windows-11-arm
+            label: windows-arm64
+            msystem: CLANGARM64
+            msys_pkg: mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-sqlite3
+            cc: clang
 
     env:
+      BENCHMARK_SUITE: benchmarks/suites/ci.json
       SEMSEARCH_YZMA_VERSION: b8581
       UNCH_BENCH_ROOT: ${{ github.workspace }}/.bench-cache
 
@@ -34,21 +57,36 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Setup MSYS2 toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          path-type: inherit
+          update: true
+          install: ${{ matrix.msys_pkg }}
+
       - name: Restore benchmark cache
         uses: actions/cache@v5
         with:
           path: ${{ env.UNCH_BENCH_ROOT }}/cache
-          key: benchmark-${{ runner.os }}-${{ hashFiles('benchmarks/suites/smoke.json', 'go.mod') }}
+          key: benchmark-${{ runner.os }}-${{ matrix.label }}-${{ hashFiles('benchmarks/suites/ci.json', 'go.mod') }}
           restore-keys: |
-            benchmark-${{ runner.os }}-
+            benchmark-${{ runner.os }}-${{ matrix.label }}-
 
       - name: Run benchmark suite
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p benchmarks/results
           go run ./cmd/bench \
-            -suite "${GITHUB_WORKSPACE}/benchmarks/suites/smoke.json" \
+            -suite "${GITHUB_WORKSPACE}/${BENCHMARK_SUITE}" \
             -bench-root "${UNCH_BENCH_ROOT}" \
             -cold-index-runs 1 \
             -warm-index-runs 1 \
@@ -57,13 +95,35 @@ jobs:
             -output "${GITHUB_WORKSPACE}/benchmarks/results/ci-benchmark.json" \
             2>&1 | tee "${GITHUB_WORKSPACE}/benchmarks/results/ci-benchmark.log"
 
+      - name: Run benchmark suite
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          workspace_dir="$(cygpath -u "$GITHUB_WORKSPACE")"
+          results_dir="${workspace_dir}/benchmarks/results"
+          suite_path="${workspace_dir}/${BENCHMARK_SUITE}"
+          json_path="${results_dir}/ci-benchmark.json"
+          log_path="${results_dir}/ci-benchmark.log"
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
+          mkdir -p "${results_dir}"
+          go run ./cmd/bench \
+            -suite "${suite_path}" \
+            -bench-root "$(cygpath -u "$UNCH_BENCH_ROOT")" \
+            -cold-index-runs 1 \
+            -warm-index-runs 1 \
+            -warm-search-runs 1 \
+            -results-dir "${results_dir}" \
+            -output "${json_path}" 2>&1 | tee "${log_path}"
+
       - name: Render benchmark summary
         if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
           if [ -f benchmarks/results/ci-benchmark.json ]; then
-            python3 scripts/render_benchmark_summary.py benchmarks/results/ci-benchmark.json >> "$GITHUB_STEP_SUMMARY"
+            python scripts/render_benchmark_summary.py benchmarks/results/ci-benchmark.json >> "$GITHUB_STEP_SUMMARY"
           else
             {
               echo "## Benchmark"
@@ -84,9 +144,37 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: benchmark-report
+          name: benchmark-report-${{ matrix.label }}
           path: benchmarks/results/
           if-no-files-found: warn
+
+  benchmark-summary:
+    name: benchmark-summary
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
+    needs: benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Download benchmark artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: benchmark-report-*
+          path: benchmarks/summary-artifacts
+
+      - name: Render cross-platform benchmark summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/render_benchmark_matrix_summary.py benchmarks/summary-artifacts >> "$GITHUB_STEP_SUMMARY"
 
   lint:
     name: lint
@@ -118,6 +206,16 @@ jobs:
             label: linux
           - os: macos-14
             label: macos
+          - os: windows-latest
+            label: windows-x86_64
+            msystem: UCRT64
+            msys_pkg: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-sqlite3
+            cc: gcc
+          - os: windows-11-arm
+            label: windows-arm64
+            msystem: CLANGARM64
+            msys_pkg: mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-sqlite3
+            cc: clang
 
     steps:
       - name: Checkout
@@ -128,11 +226,40 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup MSYS2 toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          path-type: inherit
+          update: true
+          install: ${{ matrix.msys_pkg }}
+
       - name: Build all packages
+        if: runner.os != 'Windows'
         run: go build ./...
 
+      - name: Build all packages
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
+          go build ./...
+
       - name: Run portable test suite
+        if: runner.os != 'Windows'
         run: go test ${{ env.PORTABLE_TEST_PACKAGES }}
+
+      - name: Run portable test suite
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
+          go test $PORTABLE_TEST_PACKAGES
 
   install-smoke:
     name: install-smoke (${{ matrix.label }})
@@ -152,10 +279,17 @@ jobs:
             label: macos
             asset_name: unch_Darwin_arm64.tar.gz
           - os: windows-latest
-            label: windows
+            label: windows-x86_64
             asset_name: unch_Windows_x86_64.zip
             msystem: UCRT64
-            msys_pkg: mingw-w64-ucrt-x86_64-gcc
+            msys_pkg: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-sqlite3
+            cc: gcc
+          - os: windows-11-arm
+            label: windows-arm64
+            asset_name: unch_Windows_arm64.zip
+            msystem: CLANGARM64
+            msys_pkg: mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-sqlite3
+            cc: clang
 
     steps:
       - name: Checkout
@@ -193,7 +327,7 @@ jobs:
           build_dir="$(cygpath -u "$RUNNER_TEMP")/build"
           mkdir -p "${build_dir}"
           export CGO_ENABLED=1
-          export CC=gcc
+          export CC="${{ matrix.cc }}"
           go build -trimpath -o "${build_dir}/unch.exe" .
 
       - name: Archive local Windows release asset

@@ -134,7 +134,7 @@ if (-not $installed) {
 }
 
 if (-not $installed) {
-    throw "Could not install unch. Windows release archives are currently published for x86_64 only; otherwise install Go and rerun this script."
+    throw "Could not install unch. Install Go and rerun this script, or request a published release archive for your Windows architecture."
 }
 
 Write-Note "Installed unch to $(Join-Path $BinDir 'unch.exe')"

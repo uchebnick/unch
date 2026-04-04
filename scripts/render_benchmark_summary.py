@@ -7,6 +7,14 @@ import sys
 from pathlib import Path
 
 
+def configure_stream_encoding() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        reconfigure(encoding="utf-8", errors="replace")
+
+
 def format_duration_ms(value: float) -> str:
     if value >= 1000:
         return f"{value / 1000:.2f}s"
@@ -168,12 +176,14 @@ def render_summary(report: dict) -> str:
 
 
 def main() -> int:
+    configure_stream_encoding()
+
     if len(sys.argv) != 2:
         print("usage: render_benchmark_summary.py <report.json>", file=sys.stderr)
         return 2
 
     report_path = Path(sys.argv[1])
-    report = json.loads(report_path.read_text())
+    report = json.loads(report_path.read_text(encoding="utf-8"))
     sys.stdout.write(render_summary(report) + "\n")
     return 0
 

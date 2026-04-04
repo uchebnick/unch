@@ -26,7 +26,16 @@ File: [`benchmarks/suites/smoke.json`](../benchmarks/suites/smoke.json)
 - `suite_id`: `smoke`
 - `suite_version`: `1`
 - size: `12` queries
-- purpose: fast validation in CI
+- purpose: the smallest local sanity-check suite and harness smoke run
+
+### CI Suite
+
+File: [`benchmarks/suites/ci.json`](../benchmarks/suites/ci.json)
+
+- `suite_id`: `ci`
+- `suite_version`: `1`
+- size: `32` queries across `8` pinned repositories
+- purpose: cross-platform GitHub Actions benchmarking with balanced `semantic`, `auto`, and `lexical` coverage
 
 ### Default Suite
 
@@ -49,6 +58,12 @@ Run the smaller smoke suite:
 
 ```bash
 go run ./cmd/bench -suite ./benchmarks/suites/smoke.json
+```
+
+Run the checked-in CI suite locally:
+
+```bash
+go run ./cmd/bench -suite ./benchmarks/suites/ci.json
 ```
 
 The shell wrapper forwards directly to the Go runner:
@@ -147,6 +162,24 @@ This score is intentionally strict. It measures exact symbol localization, not v
 
 The source of truth for benchmark cases is the suite JSON itself.
 
+Today the CI suite covers:
+
+- `gorilla/mux`: `4` queries
+- `developit/mitt`: `4` queries
+- `expressjs/morgan`: `4` queries
+- `pallets-eco/blinker`: `4` queries
+- `sindresorhus/p-limit`: `4` queries
+- `sindresorhus/p-queue`: `4` queries
+- `expressjs/cors`: `4` queries
+- `theskumar/python-dotenv`: `4` queries
+
+That smaller matrix is intentionally balanced for CI:
+
+- every repository contributes `4` queries
+- every repository includes at least one exact lexical query
+- the suite mixes `9` explicit `semantic` queries, `15` `auto` queries, and `8` lexical queries
+- the overall footprint is small enough to run cross-platform without turning ordinary release verification into a multi-hour job
+
 Today the default suite covers:
 
 - `gorilla/mux`: `39` queries
@@ -197,7 +230,13 @@ Interpretation:
 - `latest index snapshot` per repo tells you roughly how much code was indexed in the most recent successful run
 - `top1 misses` and the GitHub summary's `slowest queries` section make it easier to see whether regressions came from ranking drift, latency spikes, or both
 
-The release-tag GitHub Actions benchmark uses the smoke suite with a lighter `1 cold / 1 warm / 1 search repeat` profile so release CI stays reasonably fast. Local runs keep the heavier defaults unless you override them with flags.
+The GitHub Actions benchmark matrix runs on manual `workflow_dispatch` and release-tag pushes. It uses the `ci` suite with a lighter `1 cold / 1 warm / 1 search repeat` profile across Linux, Linux arm64, macOS, Windows x86_64, and Windows arm64. Ordinary push CI skips that matrix to keep feedback fast.
+
+When benchmark artifacts are available from multiple platforms, the workflow also renders an aggregated summary with:
+
+- a platform overview table
+- one repository table per platform
+- the same machine-readable per-platform JSON reports uploaded as workflow artifacts
 
 ## Result Files
 

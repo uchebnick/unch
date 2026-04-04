@@ -49,7 +49,7 @@ For source-based installation, use the canonical module path:
 go install github.com/uchebnick/unch@latest
 ```
 
-On Windows, the published installers are the easiest way to get the same cgo-backed parser and SQLite stack that release binaries and CI use. Source installs still work, but full parity on Windows assumes a working cgo toolchain.
+On Windows, the published installers are the easiest way to get the same cgo-backed parser and SQLite stack that release binaries and CI use. Source installs still work, and the vendored SQLite headers keep `go build` and `go install` to a single command as long as a working cgo toolchain is present.
 
 If you want to hack on the project directly, build it from the current checkout:
 

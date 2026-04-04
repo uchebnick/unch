@@ -4,6 +4,8 @@ Go bindings for [`sqlite-vec`](https://github.com/asg017/sqlite-vec) project. In
 
 There are two options when adding `sqlite-vec` to a Go project — A traditional CGO option, and a WASM-based option for the [ncruces/go-sqlite3](https://github.com/ncruces/go-sqlite3) project.
 
+This fork vendors the SQLite header used by the CGO build so `go build` does not depend on a separately installed `sqlite3` development package.
+
 Both are available in this Go module, which can be installed with:
 
 ```bash

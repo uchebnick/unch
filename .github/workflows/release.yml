@@ -45,7 +45,7 @@ jobs:
             asset_name: unch_Windows_x86_64.zip
             archive_type: zip
             msystem: UCRT64
-            msys_pkg: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-sqlite3
+            msys_pkg: mingw-w64-ucrt-x86_64-gcc
             cc: gcc
           - runner: windows-11-arm
             goos: windows
@@ -53,7 +53,7 @@ jobs:
             asset_name: unch_Windows_arm64.zip
             archive_type: zip
             msystem: CLANGARM64
-            msys_pkg: mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-sqlite3
+            msys_pkg: mingw-w64-clang-aarch64-clang
             cc: clang
     runs-on: ${{ matrix.runner }}
 

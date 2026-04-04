@@ -59,14 +59,14 @@ This document describes the current compatibility contract for `unch`.
 | Search modes | Supported | `auto`, `semantic`, `lexical` |
 | Homebrew install | Supported | macOS-first polished install path |
 | `go install` | Supported | Canonical module path is `github.com/uchebnick/unch` |
-| `install.sh` | Supported | Uses release assets on macOS and Linux by default, with Go fallback for unsupported targets |
-| `install/install.ps1` | Supported | Uses release assets on Windows by default, with Go fallback elsewhere |
+| `install.sh` | Supported | Uses release assets on macOS and Linux by default, with Go fallback for unsupported targets; smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like environments |
+| `install/install.ps1` | Supported | Uses release assets on Windows by default, with Go fallback elsewhere; smoke-tested in CI on Windows `arm64` and `x86_64` |
 | Darwin release binaries | Supported | `arm64` and `x86_64` |
 | Linux release binaries | Supported | `arm64` and `x86_64` |
 | Windows release binaries | Supported | `arm64` and `x86_64` (`unch.exe`) |
 | Remote indexing | Supported | GitHub Actions `searcher` workflow |
 
-Published release binaries and CI builds on macOS, Linux, and Windows arm64/x86_64 use the full cgo-backed Tree-sitter and SQLite stack. Source builds on supported cgo toolchains do not require a separately installed SQLite development package because the SQLite header used by the embedded `sqlite-vec` bridge is vendored in-tree. Manual Windows builds without cgo remain a fallback path and should not be treated as identical to the published binaries.
+Published release binaries and CI builds on macOS, Linux, and Windows arm64/x86_64 use the full cgo-backed Tree-sitter and SQLite stack. Source builds on supported cgo toolchains do not require a separately installed SQLite development package because the SQLite header used by the embedded `sqlite-vec` bridge is vendored in-tree. On Linux environments that expose `nix` but not the usual system ELF loader path, `install.sh` patches the installed release binary with `nix-shell`, `patchelf`, and the required runtime library paths so the installed binary can run directly after installation. Manual Windows builds without cgo remain a fallback path and should not be treated as identical to the published binaries.
 
 ## Current Practical Rules
 

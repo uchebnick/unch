@@ -199,6 +199,7 @@ func TestCheckedInSuitesLoad(t *testing.T) {
 	t.Parallel()
 
 	for _, relPath := range []string{
+		filepath.Join("..", "..", "benchmarks", "suites", "ci.json"),
 		filepath.Join("..", "..", "benchmarks", "suites", "smoke.json"),
 		filepath.Join("..", "..", "benchmarks", "suites", "default.json"),
 	} {

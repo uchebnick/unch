@@ -66,6 +66,8 @@ This document describes the current compatibility contract for `unch`.
 | Windows release binaries | Supported | `arm64` and `x86_64` (`unch.exe`) |
 | Remote indexing | Supported | GitHub Actions `searcher` workflow |
 
+Published release binaries and CI builds on macOS, Linux, and Windows arm64/x86_64 use the full cgo-backed Tree-sitter and SQLite stack. Manual Windows builds without cgo remain a fallback path and should not be treated as identical to the published binaries.
+
 ## Current Practical Rules
 
 - If `unch` upgrades but your local search breaks, rebuild with `unch index`.

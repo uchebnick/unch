@@ -70,6 +70,50 @@ detect_arch() {
   esac
 }
 
+detect_linux_distro_id() {
+  if [ ! -r /etc/os-release ]; then
+    printf '\n'
+    return
+  fi
+
+  awk -F= '/^ID=/{gsub(/"/, "", $2); print $2; exit}' /etc/os-release
+}
+
+is_nixos() {
+  [ "$(detect_os)" = "Linux" ] && [ "$(detect_linux_distro_id)" = "nixos" ]
+}
+
+patch_nixos_binary() {
+  binary_path="$1"
+
+  if ! has_cmd nix; then
+    return 1
+  fi
+
+  nix --extra-experimental-features "nix-command flakes" \
+    shell nixpkgs#patchelf nixpkgs#stdenv.cc \
+    --command sh -lc '
+      set -eu
+      binary_path="$1"
+      linker="$(cat "$NIX_CC/nix-support/dynamic-linker")"
+      glibc_dir="$(dirname "$linker")"
+      libgcc_dir="$(dirname "$(cc -print-file-name=libgcc_s.so.1)")"
+      patchelf --set-interpreter "$linker" --set-rpath "${glibc_dir}:${libgcc_dir}" "$binary_path"
+    ' sh "$binary_path"
+}
+
+install_unix_binary() {
+  source_path="$1"
+  destination_path="$2"
+
+  install -m 0755 "$source_path" "$destination_path"
+
+  if is_nixos; then
+    say "Detected NixOS; patching ${destination_path} for native execution"
+    patch_nixos_binary "$destination_path"
+  fi
+}
+
 install_release_archive() {
   version="$1"
   os_name="$2"
@@ -116,7 +160,7 @@ install_release_archive() {
   case "$archive_ext" in
     tar.gz)
       tar -xzf "${asset_path}" -C "${tmp_dir}"
-      install -m 0755 "${tmp_dir}/${asset_binary}" "${bin_dir}/${asset_binary}"
+      install_unix_binary "${tmp_dir}/${asset_binary}" "${bin_dir}/${asset_binary}"
       ;;
     zip)
       unzip -q "${asset_path}" -d "${tmp_dir}"

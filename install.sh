@@ -85,20 +85,17 @@ needs_nix_loader_patch() {
 patch_nixos_binary() {
   binary_path="$1"
 
-  if ! has_cmd nix; then
+  if ! has_cmd nix-shell; then
     return 1
   fi
 
-  nix --extra-experimental-features "nix-command flakes" \
-    shell nixpkgs#patchelf nixpkgs#stdenv.cc \
-    --command sh -lc '
+  BINARY_PATH="$binary_path" nix-shell -p patchelf stdenv.cc --run '
       set -eu
-      binary_path="$1"
       linker="$(cat "$NIX_CC/nix-support/dynamic-linker")"
       glibc_dir="$(dirname "$linker")"
       libgcc_dir="$(dirname "$(cc -print-file-name=libgcc_s.so.1)")"
-      patchelf --set-interpreter "$linker" --set-rpath "${glibc_dir}:${libgcc_dir}" "$binary_path"
-    ' sh "$binary_path"
+      patchelf --set-interpreter "$linker" --set-rpath "${glibc_dir}:${libgcc_dir}" "$BINARY_PATH"
+    '
 }
 
 install_unix_binary() {

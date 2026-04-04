@@ -89,12 +89,13 @@ patch_nixos_binary() {
     return 1
   fi
 
-  BINARY_PATH="$binary_path" nix-shell -p patchelf stdenv.cc --run '
+  BINARY_PATH="$binary_path" nix-shell -p patchelf stdenv.cc libffi pkg-config --run '
       set -eu
       linker="$(cat "$NIX_CC/nix-support/dynamic-linker")"
       glibc_dir="$(dirname "$linker")"
       libgcc_dir="$(dirname "$(cc -print-file-name=libgcc_s.so.1)")"
-      patchelf --set-interpreter "$linker" --set-rpath "${glibc_dir}:${libgcc_dir}" "$BINARY_PATH"
+      libffi_dir="$(pkg-config --variable=libdir libffi)"
+      patchelf --set-interpreter "$linker" --set-rpath "${glibc_dir}:${libgcc_dir}:${libffi_dir}" "$BINARY_PATH"
     '
 }
 

@@ -35,13 +35,11 @@ type Result struct {
 }
 
 type Params struct {
-	QueryText     string
-	CommentPrefix string
-	ContextPrefix string
-	Limit         int
-	Mode          string
-	MaxDistance   float64
-	ModelID       string
+	QueryText   string
+	Limit       int
+	Mode        string
+	MaxDistance float64
+	ModelID     string
 }
 
 type Service struct {

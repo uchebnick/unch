@@ -2,20 +2,13 @@ package indexing
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 type testScanner struct {
 	jobs []FileJob
-}
-
-func (s testScanner) WalkFiles(root string, gitignorePath string, extraPatterns []string, visit func(path string, rel string, source []byte) error) error {
-	for _, job := range s.jobs {
-		if err := visit(job.SourcePath, job.Path, []byte(job.Path)); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s testScanner) CollectJob(path string, rel string, source []byte, commentPrefix string, contextPrefix string) (FileJob, bool, error) {
@@ -118,8 +111,11 @@ func (r *testReporter) CountProgress(label string, current, total int) {
 func TestServiceRunIndexesComments(t *testing.T) {
 	t.Parallel()
 
+	root := t.TempDir()
+	sourcePath := writeServiceTestFile(t, root, "a.go", "package demo\n")
+
 	scanner := testScanner{
-		jobs: []FileJob{{Path: "a.go", SourcePath: "/tmp/a.go", Symbols: []IndexedSymbol{
+		jobs: []FileJob{{Path: "a.go", SourcePath: sourcePath, Symbols: []IndexedSymbol{
 			{Line: 1, Kind: "function", Name: "First", QualifiedName: "First", Documentation: "first", Body: "func A() {}", FileContext: "context"},
 			{Line: 2, Kind: "function", Name: "Second", QualifiedName: "Second", Documentation: "second", Body: "func B() {}", FileContext: "context"},
 		}}},
@@ -139,12 +135,11 @@ func TestServiceRunIndexesComments(t *testing.T) {
 	}
 
 	result, err := service.Run(context.Background(), Params{
-		Root:                 "/tmp",
-		GitignorePath:        "/tmp/.gitignore",
+		Root:                 root,
+		GitignorePath:        filepath.Join(root, ".gitignore"),
 		CommentPrefix:        "@search:",
 		ContextPrefix:        "@filectx:",
 		ModelID:              "qwen3",
-		NextFileHashes:       map[string]string{"a.go": "a.go"},
 		FileHashStateVersion: 1,
 	}, reporter)
 	if err != nil {
@@ -188,19 +183,22 @@ func TestServiceRunIndexesComments(t *testing.T) {
 func TestServiceRunHonorsContextCancellation(t *testing.T) {
 	t.Parallel()
 
+	root := t.TempDir()
+	sourcePath := writeServiceTestFile(t, root, "a.go", "package demo\n")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	service := Service{
 		Scanner: testScanner{
-			jobs: []FileJob{{Path: "/tmp/a.go", Symbols: []IndexedSymbol{{Line: 1, Kind: "function", Name: "A", QualifiedName: "A"}}}},
+			jobs: []FileJob{{Path: "a.go", SourcePath: sourcePath, Symbols: []IndexedSymbol{{Line: 1, Kind: "function", Name: "A", QualifiedName: "A"}}}},
 		},
 		Repo:     &testRepo{snapshotID: 1, existing: map[string]bool{}},
 		Embedder: &testEmbedder{},
 		Hashes:   &testHashStore{},
 	}
 
-	if _, err := service.Run(ctx, Params{}, nil); err == nil {
+	if _, err := service.Run(ctx, Params{Root: root, GitignorePath: filepath.Join(root, ".gitignore")}, nil); err == nil {
 		t.Fatalf("expected context cancellation error")
 	}
 }
@@ -208,12 +206,23 @@ func TestServiceRunHonorsContextCancellation(t *testing.T) {
 func TestServiceRunCopiesUnchangedFilesFromCurrentSnapshot(t *testing.T) {
 	t.Parallel()
 
+	root := t.TempDir()
+	aPath := writeServiceTestFile(t, root, "a.go", "package demo\n")
+	bPath := writeServiceTestFile(t, root, "b.go", "package demo\n")
+	aHash, binary, err := hashSourceFile(aPath)
+	if err != nil {
+		t.Fatalf("hashSourceFile(a.go) error: %v", err)
+	}
+	if binary {
+		t.Fatalf("a.go unexpectedly detected as binary")
+	}
+
 	scanner := testScanner{
 		jobs: []FileJob{
-			{Path: "a.go", SourcePath: "/tmp/a.go", Symbols: []IndexedSymbol{
+			{Path: "a.go", SourcePath: aPath, Symbols: []IndexedSymbol{
 				{Line: 1, Kind: "function", Name: "A", QualifiedName: "A"},
 			}},
-			{Path: "b.go", SourcePath: "/tmp/b.go", Symbols: []IndexedSymbol{
+			{Path: "b.go", SourcePath: bPath, Symbols: []IndexedSymbol{
 				{Line: 2, Kind: "function", Name: "B", QualifiedName: "B"},
 			}},
 		},
@@ -235,13 +244,12 @@ func TestServiceRunCopiesUnchangedFilesFromCurrentSnapshot(t *testing.T) {
 	}
 
 	result, err := service.Run(context.Background(), Params{
-		Root:                 "/tmp",
-		GitignorePath:        "/tmp/.gitignore",
+		Root:                 root,
+		GitignorePath:        filepath.Join(root, ".gitignore"),
 		CommentPrefix:        "@search:",
 		ContextPrefix:        "@filectx:",
 		ModelID:              "embeddinggemma",
-		CurrentFileHashes:    map[string]string{"a.go": "a.go", "b.go": "old"},
-		NextFileHashes:       map[string]string{"a.go": "a.go", "b.go": "b.go"},
+		CurrentFileHashes:    map[string]string{"a.go": aHash, "b.go": "old"},
 		FileHashStateVersion: 2,
 	}, &testReporter{})
 	if err != nil {
@@ -266,4 +274,17 @@ func TestServiceRunCopiesUnchangedFilesFromCurrentSnapshot(t *testing.T) {
 	if hashes.inserted["a.go"] == "" || hashes.inserted["b.go"] == "" {
 		t.Fatalf("expected per-file hashes to be inserted, got %#v", hashes.inserted)
 	}
+}
+
+func writeServiceTestFile(t *testing.T, root string, rel string, content string) string {
+	t.Helper()
+
+	path := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir parent for %s: %v", rel, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", rel, err)
+	}
+	return path
 }

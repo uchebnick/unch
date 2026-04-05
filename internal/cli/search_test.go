@@ -10,18 +10,18 @@ func TestResolveStateTargetDefaultRepoLocalState(t *testing.T) {
 
 	root := t.TempDir()
 
-	paths, dbPath, stateDirOwnsDB, err := resolveStateTarget(root, "", false, "", false)
+	paths, indexPath, stateDirOwnsIndex, err := resolveStateTarget(root, "", false, "", false)
 	if err != nil {
 		t.Fatalf("resolveStateTarget() error: %v", err)
 	}
-	if !stateDirOwnsDB {
-		t.Fatalf("stateDirOwnsDB = false, want true")
+	if !stateDirOwnsIndex {
+		t.Fatalf("stateDirOwnsIndex = false, want true")
 	}
 	if paths.LocalDir != filepath.Join(root, ".semsearch") {
 		t.Fatalf("paths.LocalDir = %q", paths.LocalDir)
 	}
-	if dbPath != filepath.Join(root, ".semsearch", "index.db") {
-		t.Fatalf("dbPath = %q", dbPath)
+	if indexPath != filepath.Join(root, ".semsearch", "index.db") {
+		t.Fatalf("indexPath = %q", indexPath)
 	}
 }
 
@@ -31,18 +31,18 @@ func TestResolveStateTargetExplicitStateDirKeepsStateDirSemantics(t *testing.T) 
 	root := t.TempDir()
 	stateDir := filepath.Join(t.TempDir(), ".semsearch")
 
-	paths, dbPath, stateDirOwnsDB, err := resolveStateTarget(root, stateDir, true, "", false)
+	paths, indexPath, stateDirOwnsIndex, err := resolveStateTarget(root, stateDir, true, "", false)
 	if err != nil {
 		t.Fatalf("resolveStateTarget() error: %v", err)
 	}
-	if !stateDirOwnsDB {
-		t.Fatalf("stateDirOwnsDB = false, want true")
+	if !stateDirOwnsIndex {
+		t.Fatalf("stateDirOwnsIndex = false, want true")
 	}
 	if paths.LocalDir != stateDir {
 		t.Fatalf("paths.LocalDir = %q, want %q", paths.LocalDir, stateDir)
 	}
-	if dbPath != filepath.Join(stateDir, "index.db") {
-		t.Fatalf("dbPath = %q", dbPath)
+	if indexPath != filepath.Join(stateDir, "index.db") {
+		t.Fatalf("indexPath = %q", indexPath)
 	}
 }
 
@@ -50,20 +50,20 @@ func TestResolveStateTargetExplicitIndexDBKeepsStateDirSemantics(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	dbPath := filepath.Join(t.TempDir(), ".semsearch", "index.db")
+	indexPath := filepath.Join(t.TempDir(), ".semsearch", "index.db")
 
-	paths, resolvedDBPath, stateDirOwnsDB, err := resolveStateTarget(root, "", false, dbPath, true)
+	paths, resolvedIndexPath, stateDirOwnsIndex, err := resolveStateTarget(root, "", false, indexPath, true)
 	if err != nil {
 		t.Fatalf("resolveStateTarget() error: %v", err)
 	}
-	if !stateDirOwnsDB {
-		t.Fatalf("stateDirOwnsDB = false, want true")
+	if !stateDirOwnsIndex {
+		t.Fatalf("stateDirOwnsIndex = false, want true")
 	}
-	if paths.LocalDir != filepath.Dir(dbPath) {
-		t.Fatalf("paths.LocalDir = %q, want %q", paths.LocalDir, filepath.Dir(dbPath))
+	if paths.LocalDir != filepath.Dir(indexPath) {
+		t.Fatalf("paths.LocalDir = %q, want %q", paths.LocalDir, filepath.Dir(indexPath))
 	}
-	if resolvedDBPath != dbPath {
-		t.Fatalf("resolvedDBPath = %q, want %q", resolvedDBPath, dbPath)
+	if resolvedIndexPath != indexPath {
+		t.Fatalf("resolvedIndexPath = %q, want %q", resolvedIndexPath, indexPath)
 	}
 }
 
@@ -71,20 +71,20 @@ func TestResolveStateTargetExplicitCustomDBSkipsStateDirSemantics(t *testing.T) 
 	t.Parallel()
 
 	root := t.TempDir()
-	dbPath := filepath.Join(t.TempDir(), "custom", "search.db")
+	indexPath := filepath.Join(t.TempDir(), "custom", "search.db")
 
-	paths, resolvedDBPath, stateDirOwnsDB, err := resolveStateTarget(root, "", false, dbPath, true)
+	paths, resolvedIndexPath, stateDirOwnsIndex, err := resolveStateTarget(root, "", false, indexPath, true)
 	if err != nil {
 		t.Fatalf("resolveStateTarget() error: %v", err)
 	}
-	if stateDirOwnsDB {
-		t.Fatalf("stateDirOwnsDB = true, want false")
+	if stateDirOwnsIndex {
+		t.Fatalf("stateDirOwnsIndex = true, want false")
 	}
-	if paths.LocalDir != filepath.Dir(dbPath) {
-		t.Fatalf("paths.LocalDir = %q, want %q", paths.LocalDir, filepath.Dir(dbPath))
+	if paths.LocalDir != filepath.Dir(indexPath) {
+		t.Fatalf("paths.LocalDir = %q, want %q", paths.LocalDir, filepath.Dir(indexPath))
 	}
-	if resolvedDBPath != dbPath {
-		t.Fatalf("resolvedDBPath = %q, want %q", resolvedDBPath, dbPath)
+	if resolvedIndexPath != indexPath {
+		t.Fatalf("resolvedIndexPath = %q, want %q", resolvedIndexPath, indexPath)
 	}
 }
 

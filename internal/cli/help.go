@@ -135,7 +135,7 @@ func printRootHelp(w io.Writer, program string) error {
 func printCreateHelp(w io.Writer, program string) error {
 	_, err := fmt.Fprintf(
 		w,
-		"Usage:\n  %s create ci [flags]\n\nTargets:\n  ci  Create the remote index workflow file (.github/workflows/searcher.yml) in the target repository\n\nUse `%s create ci --help` for flags.\n",
+		"Usage:\n  %s create ci [flags]\n\nTargets:\n  ci  Create the remote index workflow file (.github/workflows/unch-index.yml) in the target repository\n\nUse `%s create ci --help` for flags.\n",
 		program,
 		program,
 	)
@@ -155,7 +155,7 @@ func printBindHelp(w io.Writer, program string) error {
 func printRemoteHelp(w io.Writer, program string) error {
 	_, err := fmt.Fprintf(
 		w,
-		"Usage:\n  %s remote <subcommand> [flags]\n\nSubcommands:\n  sync      Refresh bound .semsearch state from the latest published remote workflow\n  download  Download one published artifact for a specific commit into local-only state\n  bind      Alias for `bind ci`\n\nUse `%s remote sync --help` or `%s remote download --help` for flags.\n",
+		"Usage:\n  %s remote <subcommand> [flags]\n\nSubcommands:\n  sync      Refresh the local index from a bound remote workflow\n  download  Download the published artifact for a specific commit without binding the repo\n  bind      Alias for `bind ci`\n\nUse `%s remote sync --help` or `%s remote download --help` for flags.\n",
 		program,
 		program,
 		program,

@@ -11,7 +11,6 @@ type Reporter interface {
 }
 
 type Scanner interface {
-	WalkFiles(root string, gitignorePath string, extraPatterns []string, visit func(path string, rel string, source []byte) error) error
 	CollectJob(path string, rel string, source []byte, commentPrefix string, contextPrefix string) (FileJob, bool, error)
 }
 
@@ -44,7 +43,6 @@ type Params struct {
 	CommentPrefix        string
 	ModelID              string
 	CurrentFileHashes    map[string]string
-	NextFileHashes       map[string]string
 	FileHashStateVersion int64
 }
 
@@ -59,6 +57,22 @@ type Service struct {
 	Repo     Repository
 	Embedder Embedder
 	Hashes   FileHashStore
+}
+
+type runState struct {
+	service            Service
+	ctx                context.Context
+	params             Params
+	reporter           Reporter
+	modelID            string
+	currentSnapshotID  int64
+	hasCurrentSnapshot bool
+	snapshotID         int64
+	totalFiles         int
+	processedFiles     int
+	reusedFiles        int
+	reusedSymbols      int
+	result             Result
 }
 
 // Run scans the repository, embeds extracted symbols, and activates the new index version.
@@ -82,111 +96,165 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Res
 		reporter.Logf("snapshot id=%d", snapshotID)
 	}
 
-	totalFiles := len(params.NextFileHashes)
-	if totalFiles == 0 && params.Root != "" {
-		totalFiles = 1
+	state := runState{
+		service:            s,
+		ctx:                ctx,
+		params:             params,
+		reporter:           reporter,
+		modelID:            modelID,
+		currentSnapshotID:  currentSnapshotID,
+		hasCurrentSnapshot: hasCurrentSnapshot,
+		snapshotID:         snapshotID,
+		totalFiles:         len(params.CurrentFileHashes),
+		result:             Result{Version: snapshotID},
 	}
 
-	reusedFiles := 0
-	reusedSymbols := 0
-	result := Result{Version: snapshotID}
-	processedFiles := 0
-
-	err = s.Scanner.WalkFiles(params.Root, params.GitignorePath, params.Excludes, func(path string, rel string, source []byte) error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		contentHash, ok := params.NextFileHashes[rel]
-		if !ok {
-			contentHash = hashSourceBytes(source)
-		}
-		if s.Hashes != nil && params.FileHashStateVersion > 0 {
-			if err := s.Hashes.InsertFileHash(ctx, params.FileHashStateVersion, rel, contentHash); err != nil {
-				return fmt.Errorf("insert file hash for %s: %w", rel, err)
-			}
-		}
-
-		if hasCurrentSnapshot && params.CurrentFileHashes[rel] == contentHash {
-			copiedSymbols, err := s.Repo.CopyPathFromSnapshot(ctx, modelID, currentSnapshotID, snapshotID, rel)
-			if err != nil {
-				return fmt.Errorf("copy unchanged file %s: %w", rel, err)
-			}
-			if copiedSymbols > 0 {
-				reusedFiles++
-				reusedSymbols += copiedSymbols
-				result.IndexedFiles++
-				result.IndexedSymbols += copiedSymbols
-			}
-			processedFiles++
-			if reporter != nil {
-				reporter.CountProgress("Indexing", processedFiles, totalFiles)
-			}
-			return nil
-		}
-
-		job, ok, err := s.Scanner.CollectJob(path, rel, source, params.CommentPrefix, params.ContextPrefix)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			processedFiles++
-			if reporter != nil {
-				reporter.CountProgress("Indexing", processedFiles, totalFiles)
-			}
-			return nil
-		}
-
-		for _, symbol := range job.Symbols {
-			hash := s.Embedder.IndexedSymbolHash(job.Path, symbol)
-
-			exists, err := s.Repo.EmbeddingExists(ctx, modelID, hash)
-			if err != nil {
-				return fmt.Errorf("check embedding exists: %w", err)
-			}
-			if !exists {
-				vec, err := s.Embedder.EmbedIndexedSymbol(job.Path, symbol)
-				if err != nil {
-					return fmt.Errorf("embed symbol at %s:%d: %w", job.Path, symbol.Line, err)
-				}
-				if err := s.Repo.AddEmbedding(ctx, modelID, hash, vec); err != nil {
-					return fmt.Errorf("store embedding: %w", err)
-				}
-			}
-
-			if err := s.Repo.InsertSymbol(ctx, snapshotID, modelID, job.Path, symbol, hash); err != nil {
-				return fmt.Errorf("insert symbol: %w", err)
-			}
-		}
-
-		result.IndexedFiles++
-		result.IndexedSymbols += len(job.Symbols)
-		processedFiles++
-		if reporter != nil {
-			reporter.CountProgress("Indexing", processedFiles, totalFiles)
-		}
-		return nil
-	})
-	if err != nil {
+	if err := state.walk(); err != nil {
+		return Result{}, err
+	}
+	if err := state.finalize(); err != nil {
 		return Result{}, err
 	}
 
-	if err := s.Repo.ActivateSnapshot(ctx, modelID, snapshotID); err != nil {
-		return Result{}, fmt.Errorf("activate snapshot: %w", err)
-	}
-	if err := s.Repo.CleanupInactiveSnapshots(ctx); err != nil {
-		return Result{}, fmt.Errorf("cleanup inactive snapshots: %w", err)
-	}
-	if err := s.Repo.CleanupUnusedEmbeddings(ctx); err != nil {
-		return Result{}, fmt.Errorf("cleanup unused embeddings: %w", err)
-	}
-	if reporter != nil {
-		reporter.Logf("reused files=%d", reusedFiles)
-		reporter.Logf("reused symbols=%d", reusedSymbols)
-		reporter.Logf("indexing completed")
+	return state.result, nil
+}
+
+func (r *runState) walk() error {
+	return walkIndexedPaths(r.params.Root, r.params.GitignorePath, r.params.Excludes, r.handleFile)
+}
+
+func (r *runState) handleFile(path string, rel string) error {
+	select {
+	case <-r.ctx.Done():
+		return r.ctx.Err()
+	default:
 	}
 
-	return result, nil
+	contentHash, binary, err := hashSourceFile(path)
+	if err != nil {
+		return fmt.Errorf("hash source for %s: %w", rel, err)
+	}
+	if binary {
+		return nil
+	}
+
+	if err := r.storeFileHash(rel, contentHash); err != nil {
+		return err
+	}
+	if r.canReuseFile(rel, contentHash) {
+		return r.reuseFile(rel)
+	}
+	return r.reindexFile(path, rel)
+}
+
+func (r *runState) storeFileHash(rel string, contentHash string) error {
+	if r.service.Hashes == nil || r.params.FileHashStateVersion <= 0 {
+		return nil
+	}
+	if err := r.service.Hashes.InsertFileHash(r.ctx, r.params.FileHashStateVersion, rel, contentHash); err != nil {
+		return fmt.Errorf("insert file hash for %s: %w", rel, err)
+	}
+	return nil
+}
+
+func (r *runState) canReuseFile(rel string, contentHash string) bool {
+	return r.hasCurrentSnapshot && r.params.CurrentFileHashes[rel] == contentHash
+}
+
+func (r *runState) reuseFile(rel string) error {
+	copiedSymbols, err := r.service.Repo.CopyPathFromSnapshot(r.ctx, r.modelID, r.currentSnapshotID, r.snapshotID, rel)
+	if err != nil {
+		return fmt.Errorf("copy unchanged file %s: %w", rel, err)
+	}
+	if copiedSymbols > 0 {
+		r.reusedFiles++
+		r.reusedSymbols += copiedSymbols
+		r.result.IndexedFiles++
+		r.result.IndexedSymbols += copiedSymbols
+	}
+	r.advanceProgress()
+	return nil
+}
+
+func (r *runState) reindexFile(path string, rel string) error {
+	source, binary, err := readSourceFile(path)
+	if err != nil {
+		return fmt.Errorf("read source for %s: %w", rel, err)
+	}
+	if binary {
+		return nil
+	}
+
+	job, ok, err := r.service.Scanner.CollectJob(path, rel, source, r.params.CommentPrefix, r.params.ContextPrefix)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		r.advanceProgress()
+		return nil
+	}
+
+	if err := r.indexJob(job); err != nil {
+		return err
+	}
+	r.result.IndexedFiles++
+	r.result.IndexedSymbols += len(job.Symbols)
+	r.advanceProgress()
+	return nil
+}
+
+func (r *runState) indexJob(job FileJob) error {
+	for _, symbol := range job.Symbols {
+		hash := r.service.Embedder.IndexedSymbolHash(job.Path, symbol)
+
+		exists, err := r.service.Repo.EmbeddingExists(r.ctx, r.modelID, hash)
+		if err != nil {
+			return fmt.Errorf("check embedding exists: %w", err)
+		}
+		if !exists {
+			vec, err := r.service.Embedder.EmbedIndexedSymbol(job.Path, symbol)
+			if err != nil {
+				return fmt.Errorf("embed symbol at %s:%d: %w", job.Path, symbol.Line, err)
+			}
+			if err := r.service.Repo.AddEmbedding(r.ctx, r.modelID, hash, vec); err != nil {
+				return fmt.Errorf("store embedding: %w", err)
+			}
+		}
+
+		if err := r.service.Repo.InsertSymbol(r.ctx, r.snapshotID, r.modelID, job.Path, symbol, hash); err != nil {
+			return fmt.Errorf("insert symbol: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *runState) advanceProgress() {
+	r.processedFiles++
+	if r.processedFiles > r.totalFiles {
+		r.totalFiles = r.processedFiles
+	}
+	if r.reporter != nil {
+		r.reporter.CountProgress("Indexing", r.processedFiles, r.totalFiles)
+	}
+}
+
+func (r *runState) finalize() error {
+	if r.processedFiles > 0 && r.reporter != nil {
+		r.reporter.CountProgress("Indexing", r.processedFiles, r.processedFiles)
+	}
+	if err := r.service.Repo.ActivateSnapshot(r.ctx, r.modelID, r.snapshotID); err != nil {
+		return fmt.Errorf("activate snapshot: %w", err)
+	}
+	if err := r.service.Repo.CleanupInactiveSnapshots(r.ctx); err != nil {
+		return fmt.Errorf("cleanup inactive snapshots: %w", err)
+	}
+	if err := r.service.Repo.CleanupUnusedEmbeddings(r.ctx); err != nil {
+		return fmt.Errorf("cleanup unused embeddings: %w", err)
+	}
+	if r.reporter != nil {
+		r.reporter.Logf("reused files=%d", r.reusedFiles)
+		r.reporter.Logf("reused symbols=%d", r.reusedSymbols)
+		r.reporter.Logf("indexing completed")
+	}
+	return nil
 }

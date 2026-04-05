@@ -10,12 +10,42 @@ import (
 
 const fileHashFingerprintVersion = "index-input-v1"
 
-func CollectFileHashes(root string, gitignorePath string, extraPatterns []string) (map[string]string, error) {
+type HashedFile struct {
+	Path        string
+	SourcePath  string
+	ContentHash string
+}
+
+func CollectHashedFiles(root string, gitignorePath string, extraPatterns []string) ([]HashedFile, map[string]string, error) {
+	files := make([]HashedFile, 0)
 	hashes := make(map[string]string)
-	err := walkSourceFiles(root, gitignorePath, extraPatterns, func(_ string, rel string, source []byte) error {
-		hashes[rel] = hashSourceBytes(source)
+
+	err := walkIndexedPaths(root, gitignorePath, extraPatterns, func(path string, rel string) error {
+		contentHash, binary, err := hashSourceFile(path)
+		if err != nil {
+			return err
+		}
+		if binary {
+			return nil
+		}
+
+		files = append(files, HashedFile{
+			Path:        rel,
+			SourcePath:  path,
+			ContentHash: contentHash,
+		})
+		hashes[rel] = contentHash
 		return nil
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return files, hashes, nil
+}
+
+func CollectFileHashes(root string, gitignorePath string, extraPatterns []string) (map[string]string, error) {
+	_, hashes, err := CollectHashedFiles(root, gitignorePath, extraPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -34,8 +64,4 @@ func BuildScannerFingerprint(commentPrefix string, contextPrefix string, exclude
 	}, "\x1f")
 
 	return fmt.Sprintf("%s:%016x", fileHashFingerprintVersion, xxhash.Sum64String(payload))
-}
-
-func hashSourceBytes(source []byte) string {
-	return fmt.Sprintf("%016x", xxhash.Sum64(source))
 }

@@ -135,7 +135,7 @@ jobs:
             golang:1.25-bookworm sh -c '
               set -eu
               export GOPROXY=direct
-              go install "github.com/${GITHUB_REPOSITORY}/cmd/unch@${GITHUB_REF_NAME}"
+              go install -buildvcs=false "github.com/${GITHUB_REPOSITORY}/cmd/unch@${GITHUB_REF_NAME}"
               command -v unch
               unch --help >/dev/null
             '

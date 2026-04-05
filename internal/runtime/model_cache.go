@@ -8,14 +8,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	getter "github.com/hashicorp/go-getter"
-	"github.com/hybridgroup/yzma/pkg/download"
 )
 
 type Reporter interface {
 	Logf(format string, args ...any)
-	ProgressTracker(label string) getter.ProgressTracker
+	ProgressTracker(label string) ProgressTracker
 }
 
 type ModelCache struct{}
@@ -195,12 +192,12 @@ func installEmbeddingModel(ctx context.Context, destPath string, profile knownEm
 		reporter.Logf("downloading %s model from %s to %s", profile.DisplayName, url, destPath)
 	}
 
-	progress := download.ProgressTracker
+	progress := defaultProgressTracker
 	if reporter != nil {
 		progress = reporter.ProgressTracker("Downloading model")
 	}
 
-	if err := download.GetModelWithContext(ctx, url, stagingDir, progress); err != nil {
+	if err := downloadModelWithContext(ctx, url, stagingDir, progress); err != nil {
 		return "", fmt.Errorf("download %s model from %s: %w", profile.DisplayName, url, err)
 	}
 

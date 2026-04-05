@@ -12,16 +12,22 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/hybridgroup/yzma/pkg/download"
 )
 
 const llamaBuilderReleasesAPI = "https://api.github.com/repos/hybridgroup/llama-cpp-builder/releases?per_page=10"
 
 var (
-	llamaLatestVersionFn  = download.LlamaLatestVersion
+	llamaLatestVersionFn  = fetchLatestLlamaVersion
 	recentLlamaVersionsFn = recentLlamaVersions
 	fallbackLlamaVersions = []string{"b8581", "b8580", "b8579", "b8578", "b8576"}
+)
+
+const (
+	processorCPU    = "cpu"
+	processorCUDA   = "cuda"
+	processorMetal  = "metal"
+	processorROCm   = "rocm"
+	processorVulkan = "vulkan"
 )
 
 type YzmaResolver struct{}
@@ -124,12 +130,12 @@ func downloadYzmaLibraries(ctx context.Context, installRoot string, reporter Rep
 			reporter.Logf("downloading yzma libs: dst=%s os=%s arch=%s processor=%s version=%s", stageRoot, runtime.GOOS, runtime.GOARCH, processor, version)
 		}
 
-		progress := download.ProgressTracker
+		progress := defaultProgressTracker
 		if reporter != nil {
 			progress = reporter.ProgressTracker("Downloading runtime")
 		}
 
-		err = download.GetWithContext(ctx, runtime.GOARCH, runtime.GOOS, processor, version, stageRoot, progress)
+		err = downloadYzmaArchive(ctx, runtime.GOARCH, runtime.GOOS, processor, version, stageRoot, progress)
 		if err == nil {
 			if _, ok := detectedYzmaLibDir(stageRoot); !ok {
 				_ = os.RemoveAll(stageRoot)
@@ -145,7 +151,7 @@ func downloadYzmaLibraries(ctx context.Context, installRoot string, reporter Rep
 		}
 
 		_ = os.RemoveAll(stageRoot)
-		if errors.Is(err, download.ErrFileNotFound) {
+		if errors.Is(err, errYzmaArchiveNotFound) {
 			lastErr = err
 			continue
 		}
@@ -167,19 +173,19 @@ func defaultYzmaProcessor() string {
 	switch runtime.GOOS {
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
-			return download.Metal.String()
+			return processorMetal
 		}
-		return download.CPU.String()
+		return processorCPU
 	case "linux":
-		if ok, _ := download.HasCUDA(); ok {
-			return download.CUDA.String()
+		if ok, _ := hasCUDA(); ok {
+			return processorCUDA
 		}
-		if ok, _ := download.HasROCm(); ok {
-			return download.ROCm.String()
+		if ok, _ := hasROCm(); ok {
+			return processorROCm
 		}
-		return download.CPU.String()
+		return processorCPU
 	default:
-		return download.CPU.String()
+		return processorCPU
 	}
 }
 

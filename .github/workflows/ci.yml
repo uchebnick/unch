@@ -508,7 +508,7 @@ jobs:
             -w /src \
             golang:1.25-bookworm sh -c '
               set -eu
-              go install ./cmd/unch
+              go install -buildvcs=false ./cmd/unch
               command -v unch
               unch --help >/dev/null
             '

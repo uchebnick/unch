@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	getter "github.com/hashicorp/go-getter"
+	searchruntime "github.com/uchebnick/unch/internal/runtime"
 )
 
 type Session struct {
@@ -64,7 +64,7 @@ func (s *Session) Logf(format string, args ...any) {
 	}
 }
 
-func (s *Session) ProgressTracker(label string) getter.ProgressTracker {
+func (s *Session) ProgressTracker(label string) searchruntime.ProgressTracker {
 	return &uiProgressTracker{
 		label: label,
 		ui:    s.ui,

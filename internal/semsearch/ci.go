@@ -283,6 +283,7 @@ jobs:
           name: semsearch-index
           path: |
             .semsearch/index.db
+            .semsearch/filehashes.db
             .semsearch/manifest.json
             .semsearch/logs/
           if-no-files-found: warn
@@ -322,6 +323,11 @@ jobs:
           fi
           mkdir -p "$publish_dir/semsearch"
           cp "$artifact_dir/index.db" "$publish_dir/semsearch/index.db"
+          if [ -f "$artifact_dir/filehashes.db" ]; then
+            cp "$artifact_dir/filehashes.db" "$publish_dir/semsearch/filehashes.db"
+          else
+            rm -f "$publish_dir/semsearch/filehashes.db"
+          fi
           cp "$artifact_dir/manifest.json" "$publish_dir/semsearch/manifest.json"
           echo "::group::Publish payload"
           find "$publish_dir/semsearch" -maxdepth 1 -type f | sort
@@ -330,7 +336,7 @@ jobs:
             cd "$publish_dir"
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add semsearch/index.db semsearch/manifest.json
+            git add -A semsearch/index.db semsearch/filehashes.db semsearch/manifest.json
             if git diff --cached --quiet; then
               echo "No gh-pages changes to publish."
             else

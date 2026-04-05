@@ -80,6 +80,7 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 	remoteDBPath := filepath.Join(t.TempDir(), "remote-index.db")
 	remoteHash := writeTestIndexDB(t, remoteDBPath, 2, "/tmp/remote.go", 20, "hash2", []float32{3, 2, 1})
 	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
+	fileHashDBBytes := []byte("file-hash-cache")
 	remoteManifest := Manifest{
 		SchemaVersion: ManifestSchemaVersion,
 		Version:       2,
@@ -95,6 +96,8 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(remoteManifest)
 		case "/acme/widgets/gh-pages/semsearch/index.db":
 			_, _ = w.Write(remoteDB)
+		case "/acme/widgets/gh-pages/semsearch/filehashes.db":
+			_, _ = w.Write(fileHashDBBytes)
 		default:
 			http.NotFound(w, r)
 		}
@@ -127,6 +130,13 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 	}
 	if string(gotDB) != string(remoteDB) {
 		t.Fatalf("synced db = %q, want %q", string(gotDB), string(remoteDB))
+	}
+	gotFileHashDB, err := os.ReadFile(filepath.Join(localDir, "filehashes.db"))
+	if err != nil {
+		t.Fatalf("read synced file hash db: %v", err)
+	}
+	if string(gotFileHashDB) != string(fileHashDBBytes) {
+		t.Fatalf("synced file hash db = %q, want %q", string(gotFileHashDB), string(fileHashDBBytes))
 	}
 
 	reloaded, err := ReadManifest(localDir)
@@ -299,6 +309,7 @@ func TestDownloadIndexArtifactForCommit(t *testing.T) {
 	remoteDBPath := filepath.Join(t.TempDir(), "artifact-index.db")
 	remoteHash := writeTestIndexDB(t, remoteDBPath, 9, "internal/search/service.go", 42, "hash9", []float32{9, 4, 2})
 	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
+	fileHashDBBytes := []byte("artifact-file-hash-cache")
 	artifactManifest := Manifest{
 		SchemaVersion: ManifestSchemaVersion,
 		Version:       9,
@@ -306,7 +317,9 @@ func TestDownloadIndexArtifactForCommit(t *testing.T) {
 		Source:        "remote",
 		Remote:        &Remote{CIURL: ciURL},
 	}
-	artifactZip := buildArtifactArchive(t, artifactManifest, remoteDB)
+	artifactZip := buildArtifactArchiveWithExtraFiles(t, artifactManifest, remoteDB, map[string][]byte{
+		"filehashes.db": fileHashDBBytes,
+	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -377,6 +390,13 @@ func TestDownloadIndexArtifactForCommit(t *testing.T) {
 	}
 	if string(gotDB) != string(remoteDB) {
 		t.Fatalf("downloaded db != artifact db")
+	}
+	gotFileHashDB, err := os.ReadFile(filepath.Join(localDir, "filehashes.db"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(filehashes.db) error: %v", err)
+	}
+	if string(gotFileHashDB) != string(fileHashDBBytes) {
+		t.Fatalf("downloaded file hash db != artifact file hash db")
 	}
 
 	reloaded, err := ReadManifest(localDir)
@@ -601,6 +621,11 @@ func TestWriteDownloadedIndexReplacesExistingDestination(t *testing.T) {
 
 func buildArtifactArchive(t *testing.T, manifest Manifest, indexBytes []byte) []byte {
 	t.Helper()
+	return buildArtifactArchiveWithExtraFiles(t, manifest, indexBytes, nil)
+}
+
+func buildArtifactArchiveWithExtraFiles(t *testing.T, manifest Manifest, indexBytes []byte, extraFiles map[string][]byte) []byte {
+	t.Helper()
 
 	var buf bytes.Buffer
 	writer := zip.NewWriter(&buf)
@@ -611,11 +636,16 @@ func buildArtifactArchive(t *testing.T, manifest Manifest, indexBytes []byte) []
 	}
 	manifestData = append(manifestData, '\n')
 
-	for name, data := range map[string][]byte{
+	files := map[string][]byte{
 		"manifest.json": manifestData,
 		"index.db":      indexBytes,
 		"logs/run.log":  []byte("ok\n"),
-	} {
+	}
+	for name, data := range extraFiles {
+		files[name] = data
+	}
+
+	for name, data := range files {
 		entry, err := writer.Create(name)
 		if err != nil {
 			t.Fatalf("writer.Create(%s) error: %v", name, err)

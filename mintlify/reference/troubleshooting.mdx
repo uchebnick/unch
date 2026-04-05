@@ -3,89 +3,91 @@ title: Troubleshooting
 description: Solutions to common issues with unch.
 ---
 
-## "No active index for model X; run unch index --model X first"
+<AccordionGroup>
+  <Accordion title='No active index for model X; run `unch index --model X` first'>
+    Cause:
 
-Cause:
+    - you searched with a different model than the one used for indexing
 
-- you searched with a different model than the one used for indexing
+    Fix:
 
-Fix:
+    ```bash
+    unch index --model <model-name>
+    unch search --model <model-name> "query"
+    ```
+  </Accordion>
 
-```bash
-unch index --model <model-name>
-unch search --model <model-name> "query"
-```
+  <Accordion title="Search returns no results or poor results">
+    Try:
 
-## Search returns no results or poor results
+    - `--mode semantic`
+    - `--mode lexical`
+    - rephrasing the query in terms of behavior
+    - confirming that `index` and `search` use the same model
 
-Try:
+    ```bash
+    unch search --mode semantic "parse query parameters"
+    unch search --mode lexical "ParseQuery"
+    ```
+  </Accordion>
 
-- `--mode semantic`
-- `--mode lexical`
-- rephrasing the query in terms of behavior
-- confirming that `index` and `search` use the same model
+  <Accordion title="First run is slow">
+    That is usually expected. The first run may download:
 
-```bash
-unch search --mode semantic "parse query parameters"
-unch search --mode lexical "ParseQuery"
-```
+    - the GGUF embedding model
+    - the local `yzma` runtime libraries
 
-## First run is slow
+    Later runs reuse those caches.
+  </Accordion>
 
-That is usually expected. The first run may download:
+  <Accordion title="Remote sync fails with an incompatible schema error">
+    Rerun the repository remote index workflow so it republishes compatible state:
 
-- the GGUF embedding model
-- the local `yzma` runtime libraries
+    - `index.db`
+    - `manifest.json`
+    - `filehashes.db`
 
-Later runs reuse those caches.
+    Then run:
 
-## Remote sync fails with an incompatible schema error
+    ```bash
+    unch remote sync
+    ```
+  </Accordion>
 
-Rerun the repository remote index workflow so it republishes compatible state:
+  <Accordion title="Local search breaks after upgrading unch">
+    Rebuild the local index:
 
-- `index.db`
-- `manifest.json`
-- `filehashes.db`
+    ```bash
+    unch index
+    ```
+  </Accordion>
 
-Then run:
+  <Accordion title="Mintlify site does not refresh after a docs push">
+    Confirm that Mintlify is connected to the `unch-docs` repository and not the main `unch` code repository.
+  </Accordion>
 
-```bash
-unch remote sync
-```
+  <Accordion title="bind ci requires exactly one GitHub repository or workflow URL">
+    Pass exactly one URL:
 
-## Local search breaks after upgrading unch
+    ```bash
+    unch bind ci https://github.com/owner/repo
+    unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
+    ```
+  </Accordion>
 
-Rebuild the local index:
+  <Accordion title="Local reindex canceled; remote CI binding preserved">
+    You tried to run `unch index` on a checkout bound to remote CI and declined the detach prompt.
 
-```bash
-unch index
-```
+    If you want a local rebuild:
 
-## Mintlify site does not refresh after a docs push
+    1. run `unch index` again
+    2. confirm the prompt
+    3. rebind afterwards if you still want remote sync for that checkout
 
-Confirm that Mintlify is connected to the `unch-docs` repository and not the main `unch` code repository.
+    If you only want the latest published state instead:
 
-## bind ci requires exactly one GitHub repository or workflow URL
-
-Pass exactly one URL:
-
-```bash
-unch bind ci https://github.com/owner/repo
-unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
-```
-
-## local reindex canceled; remote CI binding preserved
-
-You tried to run `unch index` on a checkout bound to remote CI and declined the detach prompt.
-
-If you want a local rebuild:
-
-1. run `unch index` again
-2. confirm the prompt
-3. rebind afterwards if you still want remote sync for that checkout
-
-If you only want the latest published state instead:
-
-```bash
-unch remote sync
-```
+    ```bash
+    unch remote sync
+    ```
+  </Accordion>
+</AccordionGroup>

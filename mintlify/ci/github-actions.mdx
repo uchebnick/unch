@@ -3,52 +3,52 @@ title: GitHub Actions
 description: Step-by-step guide to setting up the unch remote index workflow in your repository.
 ---
 
-## Setup
+<Steps>
+  <Step title="Create the workflow file">
+    ```bash
+    unch create ci
+    ```
 
-### 1. Create the workflow file
+    This writes `.github/workflows/unch-index.yml`.
 
-```bash
-unch create ci
-```
+    To scaffold into another repository:
 
-This writes `.github/workflows/unch-index.yml`.
+    ```bash
+    unch create ci --root ../other-repo
+    ```
+  </Step>
 
-To scaffold into another repository:
+  <Step title="Commit the workflow">
+    ```bash
+    git add .github/workflows/unch-index.yml
+    git commit -m "Add unch remote index workflow"
+    ```
+  </Step>
 
-```bash
-unch create ci --root ../other-repo
-```
+  <Step title="Bind the local manifest">
+    ```bash
+    unch bind ci https://github.com/owner/repo
+    ```
 
-### 2. Commit the workflow
+    You can also bind directly to a workflow URL:
 
-```bash
-git add .github/workflows/unch-index.yml
-git commit -m "Add unch remote index workflow"
-```
+    ```bash
+    unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
+    ```
+  </Step>
 
-### 3. Bind the local manifest
+  <Step title="Push and verify">
+    Push the commit and confirm that the workflow succeeds in the repository Actions tab.
+  </Step>
 
-```bash
-unch bind ci https://github.com/owner/repo
-```
+  <Step title="Force sync if needed">
+    ```bash
+    unch remote sync
+    ```
 
-You can also bind directly to a workflow URL:
-
-```bash
-unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
-```
-
-### 4. Push and verify
-
-Push the commit and confirm that the workflow succeeds in the repository Actions tab.
-
-### 5. Force sync if needed
-
-```bash
-unch remote sync
-```
-
-After the first successful publish, `unch search` can auto-refresh from remote when a newer version exists.
+    After the first successful publish, `unch search` can auto-refresh from remote when a newer version exists.
+  </Step>
+</Steps>
 
 ## Workflow inputs
 
@@ -59,6 +59,19 @@ The generated workflow supports manual `workflow_dispatch` inputs:
 - `skip_publish`
 
 These are useful for bootstrap flows, debugging, and controlled republish runs.
+
+<Tabs>
+  <Tab title="Repository URL bind">
+    ```bash
+    unch bind ci https://github.com/owner/repo
+    ```
+  </Tab>
+  <Tab title="Workflow URL bind">
+    ```bash
+    unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
+    ```
+  </Tab>
+</Tabs>
 
 ## Bootstrap flows
 
@@ -77,3 +90,19 @@ When a release changes indexing or storage compatibility:
 1. rerun the repository’s `unch-index.yml` workflow
 2. let CI republish a compatible `index.db`, `manifest.json`, and `filehashes.db`
 3. run `unch remote sync` or just search again locally
+
+<AccordionGroup>
+  <Accordion title="What does the workflow publish?">
+    The generated workflow publishes `index.db`, `manifest.json`, and `filehashes.db`.
+
+    That gives later restores both the active index and the warm file-hash cache.
+  </Accordion>
+  <Accordion title="What if no remote artifact exists yet?">
+    Use `unch remote sync --allow-missing` during bootstrap or first-run CI flows.
+
+    That way a missing artifact does not fail the entire flow before the first publish exists.
+  </Accordion>
+  <Accordion title="What should I rerun after an incompatible release?">
+    Rerun `.github/workflows/unch-index.yml` so the repository republishes state compatible with the upgraded binary.
+  </Accordion>
+</AccordionGroup>

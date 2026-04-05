@@ -9,6 +9,36 @@ description: Build or refresh the local search index for a repository.
 unch index [flags]
 ```
 
+<CardGroup cols={3}>
+  <Card title="Default state" icon="folder-tree">
+    `unch index --root .` builds or refreshes `./.semsearch`.
+  </Card>
+  <Card title="Custom state dir" icon="folder-open">
+    Use `--state-dir` when you want the index somewhere other than `<root>/.semsearch`.
+  </Card>
+  <Card title="Model-aware snapshots" icon="brain">
+    Each embedding model keeps its own active snapshot.
+  </Card>
+</CardGroup>
+
+## Common flow
+
+<Steps>
+  <Step title="Pick a repository root">
+    ```bash
+    unch index --root .
+    ```
+  </Step>
+  <Step title="Optionally pick a model or external state dir">
+    ```bash
+    unch index --model qwen3 --state-dir /tmp/project.semsearch
+    ```
+  </Step>
+  <Step title="Reuse warm state when possible">
+    Unchanged files reuse the existing file-hash cache and indexed snapshot data instead of rebuilding everything from scratch.
+  </Step>
+</Steps>
+
 ## Flags
 
 ### `--root`
@@ -73,8 +103,44 @@ unch index --model ~/.semsearch/models/Qwen3-Embedding-0.6B-Q8_0.gguf
 unch index --state-dir /tmp/project.semsearch
 ```
 
+<Tabs>
+  <Tab title="Default repo-local state">
+    ```bash
+    unch index --root .
+    ```
+  </Tab>
+  <Tab title="Custom state directory">
+    ```bash
+    unch index --root . --state-dir /tmp/project.semsearch
+    ```
+  </Tab>
+  <Tab title="Different model">
+    ```bash
+    unch index --root . --model qwen3
+    ```
+  </Tab>
+</Tabs>
+
 ## Notes
 
 - The first run may download the default embedding model and local `yzma` runtime libraries.
 - If the repository is currently bound to remote CI, a local reindex detaches that binding and returns the manifest to local mode.
 - Use the same model family for `index` and `search`, otherwise ranking quality will be wrong.
+
+<AccordionGroup>
+  <Accordion title="Why is --db deprecated?">
+    `unch` state is no longer just one database file.
+
+    The full `.semsearch` directory contains `index.db`, `manifest.json`, `filehashes.db`, and related runtime state, so `--state-dir` is the more honest interface.
+  </Accordion>
+  <Accordion title="When do legacy prefix flags matter?">
+    `--comment-prefix` and `--context-prefix` only matter in fallback indexing paths for unsupported files or parser failures.
+
+    They are not part of the normal Tree-sitter-based flow for supported languages.
+  </Accordion>
+  <Accordion title="What happens to remote binding after a local reindex?">
+    A local reindex switches the manifest back to local-only mode.
+
+    Rebind with `unch bind ci ...` afterwards if you want that checkout to follow remote updates again.
+  </Accordion>
+</AccordionGroup>

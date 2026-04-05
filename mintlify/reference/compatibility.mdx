@@ -56,6 +56,29 @@ description: Support matrix, upgrade rules, and versioning contract for unch.
 
 Published release binaries and CI builds on macOS, Linux, and Windows arm64/x86_64 use the full cgo-backed Tree-sitter and SQLite stack. Manual Windows builds without cgo remain a fallback path and should not be treated as identical to the published binaries.
 
+<AccordionGroup>
+  <Accordion title="CLI stability">
+    Existing commands and flags are expected to stay stable across patch releases.
+
+    Breaking CLI changes should only happen in minor releases, and new flags should be additive.
+  </Accordion>
+  <Accordion title="Manifest and index state">
+    Local repository state lives in `.semsearch/manifest.json`.
+
+    `schema_version` governs manifest compatibility, while `index.db` remains a rebuildable cache artifact rather than a durable user database.
+  </Accordion>
+  <Accordion title="Remote and CI state">
+    Remote sync only trusts published state when it is compatible with the local binary.
+
+    If a published remote index uses an older incompatible schema, local search should keep using a compatible local cache when available.
+  </Accordion>
+  <Accordion title="Practical upgrade rule">
+    If `unch` upgrades and local search breaks, rerun `unch index`.
+
+    If remote sync reports an incompatible published schema, rerun `.github/workflows/unch-index.yml`.
+  </Accordion>
+</AccordionGroup>
+
 ## Practical upgrade rules
 
 - If `unch` upgrades and local search breaks, rerun `unch index`

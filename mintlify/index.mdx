@@ -3,24 +3,82 @@ title: unch
 description: Local-first semantic code search for code symbols and docs.
 ---
 
-`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal.
+`unch` lets you find functions, methods, types, classes, interfaces, and attached docs by describing what the code does, not by remembering the exact name or file path.
 
-It is useful when you know what the code does, but not the symbol name or file path. Local indexing is the default. Remote publishing is optional.
+Everything stays local by default. Remote publishing is optional.
+
+<Tip>
+  If you only want the docs site in Mintlify, connect `unch-docs` rather than the main `unch` code repository.
+</Tip>
 
 <CardGroup cols={2}>
-  <Card title="Install unch" icon="download" href="/installation">
-    Pick Homebrew, shell installer, PowerShell, or source install.
+  <Card title="Installation" icon="download" href="/installation">
+    Install via Homebrew, shell installer, PowerShell, or `go install`.
   </Card>
   <Card title="Quick Start" icon="rocket" href="/quickstart">
-    Index a repository and run your first semantic search.
+    Index a repo and run your first search in under a minute.
   </Card>
   <Card title="Commands" icon="terminal" href="/commands">
-    See the main CLI flows for local indexing, search, and remote sync.
+    Full reference for `index`, `search`, and `remote`.
   </Card>
-  <Card title="CI & Remote Indexing" icon="github" href="/ci/overview">
+  <Card title="CI & Remote" icon="cloud-arrow-down" href="/ci/overview">
     Publish and reuse indexes through GitHub Actions when you need shared state.
   </Card>
 </CardGroup>
+
+## Pick a workflow
+
+<Tabs>
+  <Tab title="Local-first">
+    ```bash
+    unch index --root .
+    unch search "create a new router"
+    unch search --details "get path variables from a request"
+    ```
+  </Tab>
+  <Tab title="Shared via CI">
+    ```bash
+    unch create ci
+    unch bind ci https://github.com/owner/repo
+    unch remote sync
+    unch search "create a new router"
+    ```
+  </Tab>
+</Tabs>
+
+## What you get
+
+<CardGroup cols={2}>
+  <Card title="Symbol-aware indexing" icon="brackets-curly">
+    Index top-level API objects and attached docs instead of raw lines only.
+  </Card>
+  <Card title="Local-first by default" icon="laptop">
+    Keep indexing and search on your machine unless you explicitly publish remote state.
+  </Card>
+  <Card title="Semantic and lexical retrieval" icon="magnifying-glass">
+    Use `auto`, `semantic`, or `lexical` mode depending on how specific the query is.
+  </Card>
+  <Card title="Optional remote reuse" icon="github">
+    Publish through `.github/workflows/unch-index.yml` when you want a shared cache.
+  </Card>
+</CardGroup>
+
+## Typical flow
+
+<Steps>
+  <Step title="Install unch">
+    Start with [Installation](/installation).
+  </Step>
+  <Step title="Index a repository">
+    Run `unch index --root .` inside the project you want to search.
+  </Step>
+  <Step title="Search by behavior">
+    Describe what the code does instead of typing the exact symbol name.
+  </Step>
+  <Step title="Inspect details when needed">
+    Add `--details` to show kind, signature, docs, and body context.
+  </Step>
+</Steps>
 
 ## Start here
 
@@ -28,21 +86,3 @@ It is useful when you know what the code does, but not the symbol name or file p
 - [Quick Start](/quickstart)
 - [Commands](/commands)
 - [CI & Remote Indexing](/ci/overview)
-
-## What you get
-
-- Local-first search over top-level API objects and attached docs
-- Tree-sitter extraction for Go, TypeScript, JavaScript, and Python
-- `auto`, `semantic`, and `lexical` search modes
-- Optional GitHub Actions publishing through `.github/workflows/unch-index.yml`
-
-## Typical flow
-
-1. Install `unch`.
-2. Run `unch index --root .` in a repository.
-3. Run `unch search "create a new router"`.
-4. Add `--details` when you want signatures and docs in the output.
-
-<Tip>
-  If you only want the docs repo in Mintlify, connect `unch-docs` rather than the main `unch` code repository.
-</Tip>

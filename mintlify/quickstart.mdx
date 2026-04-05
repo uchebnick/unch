@@ -3,47 +3,75 @@ title: Quick Start
 description: Index a repository and run your first search in under a minute.
 ---
 
-## Index a repository
+<Steps>
+  <Step title="Index a repository">
+    ```bash
+    cd path/to/repo
+    unch index --root .
+    ```
 
-```bash
-cd path/to/repo
-unch index --root .
-```
+    Real output from indexing [`gorilla/mux`](https://github.com/gorilla/mux):
 
-Real output from indexing [`gorilla/mux`](https://github.com/gorilla/mux):
+    ```text
+    $ unch index --root .
+    Loaded model       dim=768
+    Indexed 278 symbols in 16 files
+    ```
+  </Step>
 
-```text
-$ unch index --root .
-Loaded model       dim=768
-Indexed 278 symbols in 16 files
-```
+  <Step title="Run your first search">
+    ```bash
+    unch search "create a new router"
+    ```
 
-## Run your first search
+    ```text
+    $ unch search "create a new router"
+    1. mux.go:32  0.7747
+    2. mux.go:314 0.8135
+    ```
+  </Step>
 
-```bash
-unch search "create a new router"
-```
+  <Step title="Add details when you want richer output">
+    ```bash
+    unch search --details "get path variables from a request"
+    ```
 
-```text
-$ unch search "create a new router"
-1. mux.go:32  0.7747
-2. mux.go:314 0.8135
-```
+    ```text
+    $ unch search --details "get path variables from a request"
+    1. mux.go:466  0.7991
+       kind: function
+       name: Vars
+       signature: func Vars(r *http.Request) map[string]string
+       docs: Vars returns the route variables for the current request, if any.
+    ```
+  </Step>
+</Steps>
 
-Add `--details` for richer output:
+## Search modes in practice
 
-```bash
-unch search --details "get path variables from a request"
-```
+<Tabs>
+  <Tab title="Auto">
+    Best default for natural-language queries.
 
-```text
-$ unch search --details "get path variables from a request"
-1. mux.go:466  0.7991
-   kind: function
-   name: Vars
-   signature: func Vars(r *http.Request) map[string]string
-   docs: Vars returns the route variables for the current request, if any.
-```
+    ```bash
+    unch search "create a new router"
+    ```
+  </Tab>
+  <Tab title="Semantic">
+    Use when you want embedding-driven matches only.
+
+    ```bash
+    unch search --mode semantic "parse query parameters"
+    ```
+  </Tab>
+  <Tab title="Lexical">
+    Use when you already know the exact identifier or string.
+
+    ```bash
+    unch search --mode lexical "ParseQuery"
+    ```
+  </Tab>
+</Tabs>
 
 ## What happens on first run
 
@@ -54,6 +82,10 @@ The first `unch index` may:
 - create `./.semsearch/`
 
 Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
+
+<Tip>
+  If you want to keep state somewhere other than `./.semsearch`, use `--state-dir`.
+</Tip>
 
 ## Next steps
 

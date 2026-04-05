@@ -3,6 +3,18 @@ title: Installation
 description: Install unch with Homebrew, shell installer, PowerShell, go install, or build from source.
 ---
 
+<CardGroup cols={3}>
+  <Card title="Fastest path" icon="bolt">
+    Use Homebrew on macOS or the shell and PowerShell installers on release-supported targets.
+  </Card>
+  <Card title="Most flexible" icon="sliders">
+    Use `go install` or build from source when you want a local checkout or custom toolchain flow.
+  </Card>
+  <Card title="Release coverage" icon="box-archive">
+    Published archives cover macOS, Linux, and Windows on both `arm64` and `x86_64`.
+  </Card>
+</CardGroup>
+
 ## Requirements
 
 On supported release targets, the installers use published archives by default, so Go is not required.
@@ -99,18 +111,6 @@ On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an eq
   </Tab>
 </Tabs>
 
-<CardGroup cols={3}>
-  <Card title="Fastest path" icon="bolt">
-    Use Homebrew on macOS or the shell/PowerShell installer on release-supported targets.
-  </Card>
-  <Card title="Most flexible" icon="sliders">
-    Use `go install` or build from source when you want a local checkout or custom toolchain flow.
-  </Card>
-  <Card title="No Go required" icon="box-archive">
-    Published release archives cover macOS, Linux, and Windows on both `arm64` and `x86_64`.
-  </Card>
-</CardGroup>
-
 ## Published release archives
 
 | Platform | Architectures | Status |
@@ -125,6 +125,22 @@ On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an eq
 unch --help
 ```
 
+<AccordionGroup>
+  <Accordion title="When should I prefer release installers?">
+    Prefer the release installers when your platform has a matching published archive and you just want a working binary quickly.
+
+    That path does not require Go and is the one covered by install smoke checks in CI.
+  </Accordion>
+  <Accordion title="When should I use go install or build from source?">
+    Use source-based install when you want to work from a checkout, pin your own toolchain, or run on a target without a matching release archive.
+  </Accordion>
+  <Accordion title="What is special about Windows source builds?">
+    Windows source builds need a working C toolchain.
+
+    In practice that means MSYS2, MinGW, or an equivalent environment that can build the Tree-sitter and SQLite dependencies.
+  </Accordion>
+</AccordionGroup>
+
 <Tip>
-  If Mintlify is connected to the separate docs repository, keep product docs changes in `unch-docs` so deploys stay isolated from code changes.
+  If `unch` is installed but not found, make sure the installer destination is on your `PATH`.
 </Tip>

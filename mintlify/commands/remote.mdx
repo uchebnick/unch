@@ -7,12 +7,45 @@ Remote indexing is optional. Use it when you want GitHub Actions to build and pu
 
 The generated workflow file is `.github/workflows/unch-index.yml`.
 
+<CardGroup cols={2}>
+  <Card title="Create CI scaffold" icon="wand-magic-sparkles" href="#unch-create-ci">
+    Generate the workflow file for remote indexing.
+  </Card>
+  <Card title="Bind local state" icon="link" href="#unch-bind-ci">
+    Connect the current checkout to a repo or workflow URL.
+  </Card>
+  <Card title="Sync latest remote state" icon="arrows-rotate" href="#unch-remote-sync">
+    Restore the newest published index into your local `.semsearch`.
+  </Card>
+  <Card title="Download by commit" icon="download" href="#unch-remote-download">
+    Fetch a specific published artifact without rebinding to latest.
+  </Card>
+</CardGroup>
+
 ## Typical setup flow
 
 1. Run `unch create ci`.
 2. Run `unch bind ci <github-repo-or-workflow-url>`.
 3. Commit and push the workflow.
 4. After the workflow succeeds once, `unch search` and `unch remote sync` can restore the published state.
+
+<Tabs>
+  <Tab title="Bootstrap shared search">
+    ```bash
+    unch create ci
+    unch bind ci https://github.com/owner/repo
+    git add .github/workflows/unch-index.yml
+    git commit -m "ci: add unch remote indexing"
+    git push
+    ```
+  </Tab>
+  <Tab title="Pin to one commit">
+    ```bash
+    unch remote download --commit abc123 https://github.com/owner/repo
+    unch search --state-dir .semsearch "router middleware"
+    ```
+  </Tab>
+</Tabs>
 
 ## `unch create ci`
 
@@ -55,3 +88,7 @@ unch remote download --commit abc123 https://github.com/uchebnick/unch/actions/w
 ```
 
 The downloaded manifest is activated as local-only state so future searches do not auto-sync to the latest remote artifact by accident.
+
+<Tip>
+  Published remote state includes `index.db`, `manifest.json`, and `filehashes.db`, so warm reindex flows can reuse the file hash cache too.
+</Tip>

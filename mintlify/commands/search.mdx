@@ -11,6 +11,43 @@ unch search [flags] <query>
 
 The query can be passed positionally or with `--query`. When both are present, `--query` wins.
 
+<CardGroup cols={3}>
+  <Card title="Auto mode" icon="sparkles">
+    Best default for natural-language queries about behavior.
+  </Card>
+  <Card title="Semantic mode" icon="brain">
+    Force embedding-only retrieval when you want conceptual matches.
+  </Card>
+  <Card title="Lexical mode" icon="binary">
+    Force exact-term retrieval when you already know the identifier or string.
+  </Card>
+</CardGroup>
+
+## Common search patterns
+
+<Tabs>
+  <Tab title="Behavior query">
+    ```bash
+    unch search "create a new router"
+    ```
+  </Tab>
+  <Tab title="Exact symbol">
+    ```bash
+    unch search --mode lexical "ParseQuery"
+    ```
+  </Tab>
+  <Tab title="Detailed inspection">
+    ```bash
+    unch search --details "get path variables from a request"
+    ```
+  </Tab>
+  <Tab title="External state dir">
+    ```bash
+    unch search --state-dir /tmp/project.semsearch "router middleware"
+    ```
+  </Tab>
+</Tabs>
+
 ## Flags
 
 ### `--query`
@@ -84,3 +121,17 @@ unch search --state-dir /tmp/project.semsearch "router middleware"
 - `auto` stays semantic-first for natural-language queries.
 - If the manifest is bound to remote CI, `unch search` can refresh from remote automatically before running the query.
 - If no active snapshot exists for the requested model, `unch` tells you to run `unch index --model <model>` first.
+
+<AccordionGroup>
+  <Accordion title="When should I force lexical mode?">
+    Force lexical mode when you already know the identifier, string literal, or exact term you want to match.
+  </Accordion>
+  <Accordion title="When should I force semantic mode?">
+    Force semantic mode when the query is about behavior or intent and exact string overlap is weak.
+  </Accordion>
+  <Accordion title="Why should index and search use the same model?">
+    Ranking quality depends on query and document embeddings living in the same model space.
+
+    If you indexed with one model and search with another, the results may degrade or fail entirely.
+  </Accordion>
+</AccordionGroup>

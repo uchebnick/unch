@@ -28,6 +28,8 @@ jobs:
         include:
           - os: ubuntu-latest
             label: linux
+          - os: macos-14
+            label: macos
           - os: windows-latest
             label: windows-x86_64
             msystem: UCRT64
@@ -79,7 +81,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.UNCH_BENCH_ROOT }}/cache
-          key: benchmark-${{ runner.os }}-${{ matrix.label }}-${{ hashFiles('benchmarks/suites/smoke.json', 'go.mod') }}
+          key: benchmark-${{ runner.os }}-${{ matrix.label }}-${{ hashFiles('benchmarks/suites/ci.json', 'go.mod') }}
           restore-keys: |
             benchmark-${{ runner.os }}-${{ matrix.label }}-
 
@@ -106,7 +108,7 @@ jobs:
           set -euo pipefail
           workspace_dir="$(cygpath -u "$GITHUB_WORKSPACE")"
           results_dir="${workspace_dir}/benchmarks/results"
-          suite_path="${workspace_dir}/benchmarks/suites/smoke.json"
+          suite_path="${workspace_dir}/${BENCHMARK_SUITE}"
           json_path="${results_dir}/ci-benchmark.json"
           log_path="${results_dir}/ci-benchmark.log"
           export CGO_ENABLED=1

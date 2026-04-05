@@ -78,6 +78,33 @@ func detectCPUInfo() string {
 				}
 			}
 		}
+	case "windows":
+		cpuName := runBestEffortCommand(
+			"powershell.exe",
+			"-NoProfile",
+			"-Command",
+			"(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)",
+		)
+		systemType := runBestEffortCommand(
+			"powershell.exe",
+			"-NoProfile",
+			"-Command",
+			"(Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty SystemType)",
+		)
+		switch {
+		case cpuName != "" && systemType != "":
+			return fmt.Sprintf("%s (%s)", cpuName, systemType)
+		case cpuName != "":
+			return cpuName
+		case systemType != "":
+			return systemType
+		}
+		if arch := strings.TrimSpace(os.Getenv("PROCESSOR_ARCHITEW6432")); arch != "" {
+			return arch
+		}
+		if arch := strings.TrimSpace(os.Getenv("PROCESSOR_ARCHITECTURE")); arch != "" {
+			return arch
+		}
 	}
 
 	return strings.TrimSpace(runBestEffortCommand("uname", "-m"))

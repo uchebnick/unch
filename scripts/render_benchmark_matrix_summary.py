@@ -80,6 +80,19 @@ def render_repository_table(report: dict) -> list[str]:
     return lines
 
 
+def render_platform_summary(report: dict) -> str:
+    env = report["environment"]
+    timing = report["timing"]
+    metrics = report["metrics"]
+    return (
+        f"<code>{env['os']}/{env['arch']}</code> • "
+        f"{env.get('cpu_info') or 'unknown CPU'} • "
+        f"cold {format_duration_ms(timing['cold_index_mean_ms'])} • "
+        f"warm {format_duration_ms(timing['warm_search_mean_ms'])} • "
+        f"score {metrics['quality_score']}/100"
+    )
+
+
 def render_matrix_summary(reports: list[dict]) -> str:
     lines: list[str] = ["## Benchmark Matrix", ""]
 
@@ -125,7 +138,8 @@ def render_matrix_summary(reports: list[dict]) -> str:
         timing = report["timing"]
         metrics = report["metrics"]
         lines.append("")
-        lines.append(f"### `{env['os']}/{env['arch']}`")
+        lines.append("<details>")
+        lines.append(f"<summary>{render_platform_summary(report)}</summary>")
         lines.append("")
         lines.append(f"- Tool: `{report['tool']}` (`{env['tool_version']}`)")
         lines.append(f"- CPU: `{env.get('cpu_info') or 'unknown CPU'}` • `{env['num_cpu']}` cores")
@@ -140,6 +154,8 @@ def render_matrix_summary(reports: list[dict]) -> str:
         )
         lines.append("")
         lines.extend(render_repository_table(report))
+        lines.append("")
+        lines.append("</details>")
 
     lines.append("")
     return "\n".join(lines)

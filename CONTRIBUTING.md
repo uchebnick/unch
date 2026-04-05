@@ -24,7 +24,7 @@ First run may download the default embedding model, fetch local `yzma` runtime l
 - prefer repo-relative behavior over machine-specific paths
 - run `go test ./...`
 
-If you touch the generated searcher workflow or its template, make sure the checked-in workflow and the generated scaffold still match current behavior.
+If you touch the generated remote index workflow or its template, make sure the checked-in workflow and the generated scaffold still match current behavior.
 
 ## Reporting Issues
 

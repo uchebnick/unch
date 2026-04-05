@@ -1,4 +1,4 @@
-name: searcher-reusable
+name: unch-index-reusable
 
 on:
   workflow_call:
@@ -26,7 +26,7 @@ on:
       unch_ref:
         description: Git ref from the unch repository used to build the CLI
         required: false
-        default: v0.2.2
+        default: v0.3.6
         type: string
 
 permissions:

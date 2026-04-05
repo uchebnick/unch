@@ -32,7 +32,7 @@ func TestRunCreateCI(t *testing.T) {
 	}
 
 	content := string(data)
-	if !strings.Contains(content, "name: searcher") {
+	if !strings.Contains(content, "name: unch-index") {
 		t.Fatalf("generated workflow missing name: %s", content)
 	}
 	if !strings.Contains(content, "workflow_dispatch:\n    inputs:") {
@@ -41,13 +41,13 @@ func TestRunCreateCI(t *testing.T) {
 	if !strings.Contains(content, "permissions:\n  contents: write") {
 		t.Fatalf("generated workflow missing write permissions for gh-pages publish: %s", content)
 	}
-	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/searcher-reusable.yml@v0.2.2") {
+	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/searcher-reusable.yml@v0.3.6") {
 		t.Fatalf("generated workflow missing reusable workflow reference: %s", content)
 	}
 	if !strings.Contains(content, "unch_repository: uchebnick/unch") {
 		t.Fatalf("generated workflow missing pinned reusable repository: %s", content)
 	}
-	if !strings.Contains(content, "unch_ref: v0.2.2") {
+	if !strings.Contains(content, "unch_ref: v0.3.6") {
 		t.Fatalf("generated workflow missing pinned reusable ref: %s", content)
 	}
 	if !strings.Contains(content, "secrets: inherit") {

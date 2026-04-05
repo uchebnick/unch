@@ -35,14 +35,14 @@ func runCreateCI(program string, args []string) error {
 	fs.SetOutput(nil)
 	fs.Usage = func() {}
 
-	rootFlag := fs.String("root", ".", "root directory where .github/workflows/searcher.yml will be created")
+	rootFlag := fs.String("root", ".", "root directory where the remote index workflow (.github/workflows/searcher.yml) will be created")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return printFlagSetHelp(
 				os.Stdout,
 				fs,
 				cliName(program)+" create ci [flags]",
-				"Create the searcher GitHub Actions workflow in the target repository.",
+				"Create the remote index GitHub Actions workflow in the target repository.",
 				[]string{
 					cliName(program) + " create ci",
 					cliName(program) + " create ci --root ../other-repo",

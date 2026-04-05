@@ -23,6 +23,8 @@ var (
 
 const indexUpToDateSummary = "Index already up to date"
 
+const unchBuildPackage = "./cmd/unch"
+
 type UnchAdapter struct {
 	binaryPath string
 	version    string
@@ -159,7 +161,7 @@ func (a *UnchAdapter) Search(ctx context.Context, repo CheckedOutRepo, query Que
 }
 
 func (a *UnchAdapter) buildBinary(ctx context.Context, env Environment) error {
-	cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", a.binaryPath, ".")
+	cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", a.binaryPath, unchBuildPackage)
 	cmd.Dir = env.RepoRoot
 	cmd.Env = a.commandEnv(env)
 
@@ -223,7 +225,7 @@ func parseSearchHits(stdout string, combined string) ([]SearchHit, error) {
 		if strings.Contains(combined, "No matches found") {
 			return nil, nil
 		}
-		return nil, nil
+		return nil, fmt.Errorf("unexpected search output: %q", strings.TrimSpace(stdout))
 	}
 
 	hits := make([]SearchHit, 0, len(matches))

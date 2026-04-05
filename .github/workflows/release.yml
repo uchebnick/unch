@@ -196,11 +196,62 @@ jobs:
             echo "Telegram secrets are not set; skipping notification"
             exit 0
           fi
-          curl --fail --silent --show-error \
-            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+          telegram_api="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
+          telegram_chat_id="${TELEGRAM_CHAT_ID}"
+
+          probe_chat() {
+            local candidate="$1"
+            local response_file
+            response_file="$(mktemp)"
+            local status
+            status="$(curl --silent --show-error \
+              --output "${response_file}" \
+              --write-out "%{http_code}" \
+              -X POST "${telegram_api}/getChat" \
+              --data-urlencode "chat_id=${candidate}")"
+            local response
+            response="$(cat "${response_file}")"
+            rm -f "${response_file}"
+            if [ "${status}" = "200" ]; then
+              printf '%s\n' "${candidate}"
+              return 0
+            fi
+            printf '%s\n' "${response}" >&2
+            return 1
+          }
+
+          if ! resolved_chat_id="$(probe_chat "${telegram_chat_id}")"; then
+            if [[ "${telegram_chat_id}" =~ ^[0-9]+$ ]]; then
+              fallback_chat_id="-100${telegram_chat_id}"
+              if resolved_chat_id="$(probe_chat "${fallback_chat_id}")"; then
+                telegram_chat_id="${resolved_chat_id}"
+              else
+                echo "Telegram channel lookup failed for both raw and -100-prefixed chat ids" >&2
+                exit 1
+              fi
+            else
+              echo "Telegram chat lookup failed for the configured chat target" >&2
+              exit 1
+            fi
+          else
+            telegram_chat_id="${resolved_chat_id}"
+          fi
+
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error \
+            --output "${response_file}" \
+            --write-out "%{http_code}" \
+            -X POST "${telegram_api}/sendMessage" \
+            --data-urlencode "chat_id=${telegram_chat_id}" \
             --data-urlencode "text@dist/release-announcement.txt" \
-            --data-urlencode "disable_web_page_preview=true"
+            --data-urlencode "disable_web_page_preview=true")"
+          if [ "${status}" != "200" ]; then
+            cat "${response_file}" >&2
+            rm -f "${response_file}"
+            exit 1
+          fi
+          cat "${response_file}"
+          rm -f "${response_file}"
 
   publish-homebrew:
     name: publish-homebrew

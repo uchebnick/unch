@@ -81,7 +81,7 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		return fmt.Errorf("resolve root: %w", err)
 	}
 
-	targetPaths, resolvedDBPath, stateDirOwnsDB, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
+	targetPaths, resolvedIndexPath, _, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
 	}
@@ -144,40 +144,17 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		_ = hashStore.Close()
 	}()
 
-	fileHashes, err := indexing.CollectFileHashes(rootAbs, resolvedGitignore, excludes)
-	if err != nil {
-		return fmt.Errorf("collect file hashes: %w", err)
-	}
 	scannerFingerprint := indexing.BuildScannerFingerprint(*commentPrefix, *contextPrefix, excludes)
 
-	s.Logf("file_hashes=%d", len(fileHashes))
 	s.Logf("scanner_fingerprint=%s", scannerFingerprint)
 
 	var currentFileHashes map[string]string
-	skipped, err := maybeSkipUnchangedIndex(
-		ctx,
-		targetPaths,
-		resolvedDBPath,
-		currentManifest,
-		hashStore,
-		modelID,
-		scannerFingerprint,
-		fileHashes,
-		stateDirOwnsDB,
-		s,
-	)
-	if err != nil {
-		return err
-	}
-	if skipped {
-		return nil
-	}
-
 	if currentState, ok, err := hashStore.Current(ctx, modelID); err != nil {
 		return fmt.Errorf("read current file hash state: %w", err)
 	} else if ok && currentState.ScannerFingerprint == scannerFingerprint {
 		currentFileHashes = currentState.Files
 	}
+	s.Logf("current_file_hashes=%d", len(currentFileHashes))
 
 	fileHashStateVersion, err := hashStore.BeginState(ctx, modelID, scannerFingerprint)
 	if err != nil {
@@ -210,7 +187,8 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		resolvedBatchSize = defaultBatchSize(resolvedModelPath)
 	}
 
-	s.Logf("db=%s", resolvedDBPath)
+	s.Logf("state_dir=%s", targetPaths.LocalDir)
+	s.Logf("index_db=%s", resolvedIndexPath)
 	s.Logf("lib=%s", resolvedLibPath)
 	s.Logf("model=%s", resolvedModelPath)
 	s.Logf("model_id=%s", modelID)
@@ -231,7 +209,7 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	}
 	defer embedder.Close()
 
-	repo, err := indexdb.Open(ctx, resolvedDBPath, embedder.Dim())
+	repo, err := indexdb.Open(ctx, resolvedIndexPath, embedder.Dim())
 	if err != nil {
 		return err
 	}
@@ -254,14 +232,13 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		CommentPrefix:        *commentPrefix,
 		ModelID:              modelID,
 		CurrentFileHashes:    currentFileHashes,
-		NextFileHashes:       fileHashes,
 		FileHashStateVersion: fileHashStateVersion,
 	}, s)
 	if err != nil {
 		return err
 	}
 
-	manifest, err := semsearch.UpdateIndexManifest(targetPaths.LocalDir, resolvedDBPath, result.Version)
+	manifest, err := semsearch.UpdateIndexManifest(targetPaths.LocalDir, resolvedIndexPath, result.Version)
 	if err != nil {
 		return fmt.Errorf("update manifest: %w", err)
 	}
@@ -282,44 +259,4 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 
 	s.Finish(fmt.Sprintf("Indexed %d symbols in %d files", result.IndexedSymbols, result.IndexedFiles))
 	return nil
-}
-
-func maybeSkipUnchangedIndex(
-	ctx context.Context,
-	paths semsearch.Paths,
-	resolvedDBPath string,
-	currentManifest semsearch.Manifest,
-	hashStore *filehashdb.Store,
-	modelID string,
-	scannerFingerprint string,
-	fileHashes map[string]string,
-	stateDirOwnsDB bool,
-	s *termui.Session,
-) (bool, error) {
-	if !stateDirOwnsDB || resolvedDBPath != filepath.Join(paths.LocalDir, "index.db") {
-		return false, nil
-	}
-	if currentManifest.Version <= 0 || semsearch.HasRemoteBinding(currentManifest) {
-		return false, nil
-	}
-	if _, err := os.Stat(resolvedDBPath); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("stat current index db: %w", err)
-	}
-
-	match, fileHashStateVersion, err := hashStore.Matches(ctx, modelID, scannerFingerprint, fileHashes)
-	if err != nil {
-		return false, fmt.Errorf("compare file hash state: %w", err)
-	}
-	if !match {
-		return false, nil
-	}
-
-	if s != nil {
-		s.Logf("file_hash_state_version=%d", fileHashStateVersion)
-		s.Finish("Index already up to date")
-	}
-	return true, nil
 }

@@ -100,12 +100,12 @@ func TestCollectJobsSkipsNoiseAndRespectsGitignore(t *testing.T) {
 		}
 	}
 
-	jobs, total, err := (FileScanner{}).CollectJobs(root, filepath.Join(root, ".gitignore"), nil, "@search:", "@filectx:")
+	jobs, total, err := collectJobsForTest(root, filepath.Join(root, ".gitignore"), nil, "@search:", "@filectx:")
 	if err != nil {
-		t.Fatalf("CollectJobs() error: %v", err)
+		t.Fatalf("collectJobsForTest() error: %v", err)
 	}
 	if total != 1 || len(jobs) != 1 {
-		t.Fatalf("CollectJobs() = jobs=%v total=%d", jobs, total)
+		t.Fatalf("collectJobsForTest() = jobs=%v total=%d", jobs, total)
 	}
 	if jobs[0].Path != "keep.go" {
 		t.Fatalf("unexpected stored job path %q", jobs[0].Path)
@@ -174,6 +174,45 @@ func TestCollectFileHashesSkipsNoiseAndRespectsGitignore(t *testing.T) {
 	}
 }
 
+func TestCollectHashedFilesReturnsStableFileList(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("ignored.go\n"), 0o644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+
+	files := map[string]string{
+		"keep.go":    "package demo\n\nfunc Keep() {}\n",
+		"notes.txt":  "plain text note\n",
+		"ignored.go": "package demo\n\nfunc Ignored() {}\n",
+	}
+	for rel, content := range files {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir parent for %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	hashedFiles, hashes, err := CollectHashedFiles(root, filepath.Join(root, ".gitignore"), nil)
+	if err != nil {
+		t.Fatalf("CollectHashedFiles() error: %v", err)
+	}
+
+	if len(hashedFiles) != 3 {
+		t.Fatalf("CollectHashedFiles() returned %d files, want 3", len(hashedFiles))
+	}
+	if hashedFiles[0].Path != ".gitignore" || hashedFiles[1].Path != "keep.go" || hashedFiles[2].Path != "notes.txt" {
+		t.Fatalf("unexpected hashed file order/content: %#v", hashedFiles)
+	}
+	if hashedFiles[1].ContentHash != hashes["keep.go"] {
+		t.Fatalf("keep.go hash mismatch: file=%q map=%q", hashedFiles[1].ContentHash, hashes["keep.go"])
+	}
+}
+
 func TestBuildScannerFingerprintStableAcrossExcludeOrder(t *testing.T) {
 	t.Parallel()
 
@@ -187,6 +226,30 @@ func TestBuildScannerFingerprintStableAcrossExcludeOrder(t *testing.T) {
 	if a == c {
 		t.Fatalf("fingerprints should differ when scanner inputs change: %q == %q", a, c)
 	}
+}
+
+func collectJobsForTest(root string, gitignorePath string, extraPatterns []string, commentPrefix string, contextPrefix string) ([]FileJob, int, error) {
+	var jobs []FileJob
+	totalSymbols := 0
+
+	err := walkSourceFiles(root, gitignorePath, extraPatterns, func(path string, rel string, source []byte) error {
+		job, ok, err := FileScanner{}.CollectJob(path, rel, source, commentPrefix, contextPrefix)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		jobs = append(jobs, job)
+		totalSymbols += len(job.Symbols)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return jobs, totalSymbols, nil
 }
 
 func TestLooksLikeBinaryFile(t *testing.T) {

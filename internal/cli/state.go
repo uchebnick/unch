@@ -26,7 +26,7 @@ func resolveStateTarget(rootAbs string, stateDirInput string, stateDirWasExplici
 		return resolveExplicitStateDirTarget(stateDirInput)
 	}
 	if dbWasExplicit {
-		return resolveLegacyDBTarget(dbInput)
+		return resolveLegacyIndexTarget(dbInput)
 	}
 
 	paths, err := semsearch.PreparePaths(rootAbs)
@@ -49,39 +49,39 @@ func resolveExplicitStateDirTarget(stateDirInput string) (semsearch.Paths, strin
 	return paths, filepath.Join(paths.LocalDir, "index.db"), true, nil
 }
 
-func resolveLegacyDBTarget(dbInput string) (semsearch.Paths, string, bool, error) {
+func resolveLegacyIndexTarget(dbInput string) (semsearch.Paths, string, bool, error) {
 	resolvedInput, err := filepath.Abs(strings.TrimSpace(dbInput))
 	if err != nil {
-		return semsearch.Paths{}, "", false, fmt.Errorf("resolve db path: %w", err)
+		return semsearch.Paths{}, "", false, fmt.Errorf("resolve legacy index path: %w", err)
 	}
 
 	info, statErr := os.Stat(resolvedInput)
 	localDir := ""
-	resolvedDBPath := resolvedInput
-	stateDirOwnsDB := false
+	resolvedIndexPath := resolvedInput
+	stateDirOwnsIndex := false
 
 	switch {
 	case statErr == nil && info.IsDir():
 		localDir = resolvedInput
-		resolvedDBPath = filepath.Join(localDir, "index.db")
-		stateDirOwnsDB = true
+		resolvedIndexPath = filepath.Join(localDir, "index.db")
+		stateDirOwnsIndex = true
 	case statErr == nil:
 		localDir = filepath.Dir(resolvedInput)
-		stateDirOwnsDB = strings.EqualFold(filepath.Base(resolvedInput), "index.db")
+		stateDirOwnsIndex = strings.EqualFold(filepath.Base(resolvedInput), "index.db")
 	case os.IsNotExist(statErr) && strings.EqualFold(filepath.Base(resolvedInput), ".semsearch"):
 		localDir = resolvedInput
-		resolvedDBPath = filepath.Join(localDir, "index.db")
-		stateDirOwnsDB = true
+		resolvedIndexPath = filepath.Join(localDir, "index.db")
+		stateDirOwnsIndex = true
 	case os.IsNotExist(statErr):
 		localDir = filepath.Dir(resolvedInput)
-		stateDirOwnsDB = strings.EqualFold(filepath.Base(resolvedInput), "index.db")
+		stateDirOwnsIndex = strings.EqualFold(filepath.Base(resolvedInput), "index.db")
 	default:
-		return semsearch.Paths{}, "", false, fmt.Errorf("stat db path: %w", statErr)
+		return semsearch.Paths{}, "", false, fmt.Errorf("stat legacy index path: %w", statErr)
 	}
 
 	paths, err := semsearch.PathsForLocalDir(localDir)
 	if err != nil {
 		return semsearch.Paths{}, "", false, err
 	}
-	return paths, resolvedDBPath, stateDirOwnsDB, nil
+	return paths, resolvedIndexPath, stateDirOwnsIndex, nil
 }

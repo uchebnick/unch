@@ -31,8 +31,6 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	modelPath := fs.String("model", defaultModelPath, "path to GGUF embedding model, or a known model id such as embeddinggemma or qwen3")
 	libPath := fs.String("lib", "", "path to yzma library directory, or to one of its shared library files")
 	queryFlag := fs.String("query", "", "search query; if empty, remaining args are joined")
-	commentPrefix := fs.String("comment-prefix", "@search:", "legacy comment prefix used only by fallback indexers")
-	contextPrefix := fs.String("context-prefix", "@filectx:", "legacy file context prefix used only by fallback indexers")
 	contextSize := fs.Int("ctx-size", 0, "llama context size; 0 uses the selected model default")
 	batchSize := fs.Int("batch-size", 0, "llama batch size; 0 uses the selected model default")
 	limit := fs.Int("limit", 10, "max number of search results")
@@ -96,7 +94,7 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 		return fmt.Errorf("resolve root: %w", err)
 	}
 
-	targetPaths, resolvedDBPath, shouldSyncRemote, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
+	targetPaths, resolvedIndexPath, shouldSyncRemote, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
 	}
@@ -164,7 +162,7 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 		resolvedBatchSize = defaultBatchSize(resolvedModelPath)
 	}
 
-	s.Logf("db=%s", resolvedDBPath)
+	s.Logf("index_db=%s", resolvedIndexPath)
 	s.Logf("state_dir=%s", targetPaths.LocalDir)
 	s.Logf("lib=%s", resolvedLibPath)
 	s.Logf("model=%s", resolvedModelPath)
@@ -190,7 +188,7 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	}
 	defer embedder.Close()
 
-	repo, err := indexdb.Open(ctx, resolvedDBPath, embedder.Dim())
+	repo, err := indexdb.Open(ctx, resolvedIndexPath, embedder.Dim())
 	if err != nil {
 		return err
 	}
@@ -210,13 +208,11 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	}
 
 	results, err := service.Run(ctx, appsearch.Params{
-		QueryText:     queryText,
-		CommentPrefix: *commentPrefix,
-		ContextPrefix: *contextPrefix,
-		Limit:         *limit,
-		Mode:          searchMode,
-		MaxDistance:   *maxDistance,
-		ModelID:       modelID,
+		QueryText:   queryText,
+		Limit:       *limit,
+		Mode:        searchMode,
+		MaxDistance: *maxDistance,
+		ModelID:     modelID,
 	}, s)
 	if err != nil {
 		if errors.Is(err, indexdb.ErrNoActiveSnapshot) {

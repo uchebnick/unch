@@ -165,7 +165,7 @@ func TestUpdateIndexManifest(t *testing.T) {
 	localDir := t.TempDir()
 	dbPath := filepath.Join(localDir, "index.db")
 	writeTestIndexDB(t, dbPath, 3, "/tmp/a.go", 10, "hash1", []float32{1, 2, 3})
-	if _, err := BindRemoteManifest(localDir, "https://github.com/acme/widgets/actions/workflows/searcher.yml"); err != nil {
+	if _, err := BindRemoteManifest(localDir, "https://github.com/acme/widgets/actions/workflows/unch-index.yml"); err != nil {
 		t.Fatalf("BindRemoteManifest() error: %v", err)
 	}
 

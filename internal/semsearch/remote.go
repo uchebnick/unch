@@ -27,7 +27,7 @@ const (
 	defaultGitHubContentBaseURL  = "https://raw.githubusercontent.com"
 	gitHubPagesBranch            = "gh-pages"
 	gitHubPagesSemsearchDir      = "semsearch"
-	defaultCIWorkflowFile        = "searcher.yml"
+	defaultCIWorkflowFile        = "unch-index.yml"
 	searchIndexArtifactName      = "semsearch-index"
 )
 
@@ -179,8 +179,8 @@ func (w GitHubWorkflowRef) PublishedIndexURL() (string, error) {
 	return joinURLPath(gitHubContentBaseURL, w.Owner, w.Repo, gitHubPagesBranch, gitHubPagesSemsearchDir, "index.db")
 }
 
-// PublishedFileHashDBURL returns the raw gh-pages file hash cache URL for this workflow.
-func (w GitHubWorkflowRef) PublishedFileHashDBURL() (string, error) {
+// PublishedFileHashesURL returns the raw gh-pages file-hash cache URL for this workflow.
+func (w GitHubWorkflowRef) PublishedFileHashesURL() (string, error) {
 	return joinURLPath(gitHubContentBaseURL, w.Owner, w.Repo, gitHubPagesBranch, gitHubPagesSemsearchDir, "filehashes.db")
 }
 
@@ -211,18 +211,20 @@ func SyncRemoteIndex(ctx context.Context, localDir string) (RemoteSyncResult, er
 	remoteManifest = normalizePublishedManifest(remoteManifest, manifest.Remote.CIURL)
 
 	dbPath := filepath.Join(localDir, "index.db")
-	fileHashDBPath := filepath.Join(localDir, "filehashes.db")
+	fileHashesPath := filepath.Join(localDir, "filehashes.db")
 	dbExists := fileExists(dbPath)
 	needsDownload := !dbExists ||
 		manifest.Version != remoteManifest.Version ||
 		manifest.IndexingHash != remoteManifest.IndexingHash
 
 	if !needsDownload {
-		_ = downloadPublishedFileHashDB(ctx, workflow, fileHashDBPath)
 		if !manifestsEqual(manifest, remoteManifest) {
 			if err := WriteManifest(localDir, remoteManifest); err != nil {
 				return RemoteSyncResult{}, fmt.Errorf("write refreshed manifest: %w", err)
 			}
+		}
+		if !fileExists(fileHashesPath) {
+			_, _ = downloadPublishedFileHashes(ctx, workflow, fileHashesPath)
 		}
 		return RemoteSyncResult{
 			Checked:  true,
@@ -246,7 +248,12 @@ func SyncRemoteIndex(ctx context.Context, localDir string) (RemoteSyncResult, er
 		}
 		return RemoteSyncResult{}, fmt.Errorf("download remote index: %w", err)
 	}
-	_ = downloadPublishedFileHashDB(ctx, workflow, fileHashDBPath)
+	downloadedFileHashes, err := downloadPublishedFileHashes(ctx, workflow, fileHashesPath)
+	if err != nil || !downloadedFileHashes {
+		if removeErr := removeIfExists(fileHashesPath); removeErr != nil {
+			return RemoteSyncResult{}, fmt.Errorf("reset remote file hash cache: %w", removeErr)
+		}
+	}
 	if err := WriteManifest(localDir, remoteManifest); err != nil {
 		return RemoteSyncResult{}, fmt.Errorf("write downloaded manifest: %w", err)
 	}
@@ -285,7 +292,7 @@ func DownloadIndexArtifactForCommit(ctx context.Context, localDir string, ciTarg
 		return ArtifactDownloadResult{}, err
 	}
 
-	downloadedManifest, indexBytes, fileHashDBBytes, err := extractIndexArtifactPayload(artifactZip)
+	downloadedManifest, indexBytes, fileHashesBytes, err := extractIndexArtifactPayload(artifactZip)
 	if err != nil {
 		return ArtifactDownloadResult{}, err
 	}
@@ -295,11 +302,13 @@ func DownloadIndexArtifactForCommit(ctx context.Context, localDir string, ciTarg
 	if err := writeDownloadedIndex(dbPath, indexBytes, downloadedManifest.IndexingHash); err != nil {
 		return ArtifactDownloadResult{}, fmt.Errorf("activate artifact index: %w", err)
 	}
-	if len(fileHashDBBytes) > 0 {
-		fileHashDBPath := filepath.Join(localDir, "filehashes.db")
-		if err := writeDownloadedFile(fileHashDBPath, fileHashDBBytes); err != nil {
+	fileHashesPath := filepath.Join(localDir, "filehashes.db")
+	if len(fileHashesBytes) > 0 {
+		if err := writeDownloadedFile(fileHashesPath, fileHashesBytes); err != nil {
 			return ArtifactDownloadResult{}, fmt.Errorf("activate artifact file hash cache: %w", err)
 		}
+	} else if err := removeIfExists(fileHashesPath); err != nil {
+		return ArtifactDownloadResult{}, fmt.Errorf("reset artifact file hash cache: %w", err)
 	}
 	if err := WriteManifest(localDir, localManifest); err != nil {
 		return ArtifactDownloadResult{}, fmt.Errorf("write downloaded manifest: %w", err)
@@ -377,6 +386,25 @@ func downloadPublishedIndex(ctx context.Context, workflow GitHubWorkflowRef, des
 	return activateDownloadedIndex(ctx, tmpPath, destPath, expectedHash)
 }
 
+func downloadPublishedFileHashes(ctx context.Context, workflow GitHubWorkflowRef, destPath string) (bool, error) {
+	fileHashesURL, err := workflow.PublishedFileHashesURL()
+	if err != nil {
+		return false, err
+	}
+
+	data, err := fetchRemoteBytes(ctx, fileHashesURL)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := writeDownloadedFile(destPath, data); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func writeDownloadedIndex(destPath string, data []byte, expectedHash string) error {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Dir(destPath), err)
@@ -429,18 +457,11 @@ func activateDownloadedIndex(ctx context.Context, tmpPath string, destPath strin
 	return nil
 }
 
-func downloadPublishedFileHashDB(ctx context.Context, workflow GitHubWorkflowRef, destPath string) error {
-	fileHashURL, err := workflow.PublishedFileHashDBURL()
-	if err != nil {
+func removeIfExists(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-
-	data, err := fetchRemoteBytes(ctx, fileHashURL)
-	if err != nil {
-		return nil
-	}
-
-	return writeDownloadedFile(destPath, data)
+	return nil
 }
 
 type gitHubWorkflowRunsResponse struct {
@@ -572,7 +593,7 @@ func extractIndexArtifactPayload(archive []byte) (Manifest, []byte, []byte, erro
 
 	var manifestBytes []byte
 	var indexBytes []byte
-	var fileHashDBBytes []byte
+	var fileHashesBytes []byte
 	for _, file := range reader.File {
 		switch path.Base(file.Name) {
 		case "manifest.json":
@@ -580,7 +601,7 @@ func extractIndexArtifactPayload(archive []byte) (Manifest, []byte, []byte, erro
 		case "index.db":
 			indexBytes, err = readZipFile(file)
 		case "filehashes.db":
-			fileHashDBBytes, err = readZipFile(file)
+			fileHashesBytes, err = readZipFile(file)
 		default:
 			continue
 		}
@@ -604,7 +625,7 @@ func extractIndexArtifactPayload(archive []byte) (Manifest, []byte, []byte, erro
 	if err := manifest.Validate(); err != nil {
 		return Manifest{}, nil, nil, fmt.Errorf("validate artifact manifest: %w", err)
 	}
-	return manifest, indexBytes, fileHashDBBytes, nil
+	return manifest, indexBytes, fileHashesBytes, nil
 }
 
 func readZipFile(file *zip.File) ([]byte, error) {

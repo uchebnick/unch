@@ -26,8 +26,8 @@ permissions:
   contents: write
 
 jobs:
-  searcher:
-    uses: ./.github/workflows/searcher-reusable.yml
+  index:
+    uses: ./.github/workflows/unch-index-reusable.yml
     with:
       force_rebuild: ${{ github.event.inputs.force_rebuild == 'true' }}
       skip_remote_restore: ${{ github.event.inputs.skip_remote_restore == 'true' }}

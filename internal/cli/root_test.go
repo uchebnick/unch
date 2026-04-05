@@ -13,7 +13,7 @@ func TestDetectCommand(t *testing.T) {
 	}{
 		{name: "default index", args: nil, want: "index"},
 		{name: "create command", args: []string{"create", "ci"}, want: "create"},
-		{name: "bind command", args: []string{"bind", "ci", "https://github.com/acme/widgets/actions/workflows/searcher.yml"}, want: "bind"},
+		{name: "bind command", args: []string{"bind", "ci", "https://github.com/acme/widgets/actions/workflows/unch-index.yml"}, want: "bind"},
 		{name: "init command", args: []string{"init"}, want: "init"},
 		{name: "index command", args: []string{"index", "--root", "."}, want: "index"},
 		{name: "remote command", args: []string{"remote", "sync"}, want: "remote"},

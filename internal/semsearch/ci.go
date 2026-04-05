@@ -10,7 +10,10 @@ const (
 	// DefaultCIWorkflowRepository is the upstream repository that hosts the reusable remote-index workflow.
 	DefaultCIWorkflowRepository = "uchebnick/unch"
 	// DefaultCIWorkflowRef pins generated workflows to the matching reusable workflow release.
-	DefaultCIWorkflowRef = "v0.3.6"
+	DefaultCIWorkflowRef          = "v0.3.6"
+	defaultCIWorkflowPath         = ".github/workflows/unch-index.yml"
+	legacyCIWorkflowPath          = ".github/workflows/searcher.yml"
+	defaultReusableCIWorkflowPath = ".github/workflows/unch-index-reusable.yml"
 )
 
 const defaultCIWorkflowTemplate = `name: unch-index
@@ -41,8 +44,8 @@ permissions:
   contents: write
 
 jobs:
-  searcher:
-    uses: %s/.github/workflows/searcher-reusable.yml@%s
+  index:
+    uses: %s/.github/workflows/unch-index-reusable.yml@%s
     with:
       force_rebuild: ${{ github.event.inputs.force_rebuild == 'true' }}
       skip_remote_restore: ${{ github.event.inputs.skip_remote_restore == 'true' }}
@@ -90,8 +93,8 @@ permissions:
   contents: write
 
 jobs:
-  searcher:
-    uses: ./.github/workflows/searcher-reusable.yml
+  index:
+    uses: ./.github/workflows/unch-index-reusable.yml
     with:
       force_rebuild: ${{ github.event.inputs.force_rebuild == 'true' }}
       skip_remote_restore: ${{ github.event.inputs.skip_remote_restore == 'true' }}
@@ -192,7 +195,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ci_url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/searcher.yml"
+          ci_url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/unch-index.yml"
           mkdir -p .semsearch/logs
           echo "::group::Bind CI manifest"
           unch bind ci --root . "$ci_url"
@@ -228,10 +231,10 @@ jobs:
           unch init --root .
           echo "::endgroup::"
           echo "::group::unch index"
-          unch index --root . 2>&1 | tee .semsearch/logs/searcher-index.log
+          unch index --root . 2>&1 | tee .semsearch/logs/unch-index.log
           echo "::endgroup::"
           echo "::group::Bind remote manifest"
-          ci_url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/searcher.yml"
+          ci_url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/unch-index.yml"
           unch bind ci --root . "$ci_url"
           cat .semsearch/manifest.json
           echo "::endgroup::"
@@ -266,12 +269,12 @@ jobs:
               echo "{}"
             fi
             echo '</pre>'
-            if [ -f .semsearch/logs/searcher-index.log ]; then
+            if [ -f .semsearch/logs/unch-index.log ]; then
               echo
               echo "### Index log tail"
               echo
               echo '<pre>'
-              tail -n 80 .semsearch/logs/searcher-index.log
+              tail -n 80 .semsearch/logs/unch-index.log
               echo '</pre>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
@@ -336,7 +339,10 @@ jobs:
             cd "$publish_dir"
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A semsearch/index.db semsearch/filehashes.db semsearch/manifest.json
+            git add semsearch/index.db semsearch/manifest.json
+            if [ -f semsearch/filehashes.db ]; then
+              git add semsearch/filehashes.db
+            fi
             if git diff --cached --quiet; then
               echo "No gh-pages changes to publish."
             else
@@ -348,7 +354,11 @@ jobs:
 
 // CIWorkflowPath returns the generated workflow location under .github/workflows.
 func CIWorkflowPath(root string) string {
-	return filepath.Join(root, ".github", "workflows", "searcher.yml")
+	return filepath.Join(root, defaultCIWorkflowPath)
+}
+
+func legacyCIWorkflowAbsPath(root string) string {
+	return filepath.Join(root, legacyCIWorkflowPath)
 }
 
 // EnsureCIWorkflow writes the default search-index workflow without overwriting an existing file.
@@ -358,6 +368,13 @@ func EnsureCIWorkflow(root string) (string, bool, error) {
 		return path, false, nil
 	} else if !os.IsNotExist(err) {
 		return "", false, fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	legacyPath := legacyCIWorkflowAbsPath(root)
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath, false, nil
+	} else if !os.IsNotExist(err) {
+		return "", false, fmt.Errorf("stat %s: %w", legacyPath, err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

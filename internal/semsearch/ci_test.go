@@ -41,7 +41,7 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	if !strings.Contains(content, "name: unch-index") {
 		t.Fatalf("workflow missing unch-index name")
 	}
-	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/searcher-reusable.yml@v0.3.6") {
+	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/unch-index-reusable.yml@v0.3.6") {
 		t.Fatalf("workflow missing reusable workflow reference")
 	}
 	if !strings.Contains(content, "unch_repository: uchebnick/unch") {
@@ -59,7 +59,7 @@ func TestEnsureCIWorkflow(t *testing.T) {
 	if strings.Contains(content, "actions/checkout@v4") {
 		t.Fatalf("delegating workflow should not inline reusable workflow steps")
 	}
-	if !strings.Contains(content, ".github/workflows") && !strings.HasSuffix(path, "searcher.yml") {
+	if !strings.Contains(content, ".github/workflows") && !strings.HasSuffix(path, "unch-index.yml") {
 		t.Fatalf("unexpected workflow path: %s", path)
 	}
 }
@@ -77,7 +77,7 @@ func TestEnsureCIWorkflowDoesNotOverwrite(t *testing.T) {
 		t.Fatalf("expected first call to create workflow")
 	}
 
-	const customWorkflow = "name: custom-searcher\n"
+	const customWorkflow = "name: custom-unch-index\n"
 	if err := os.WriteFile(path, []byte(customWorkflow), 0o644); err != nil {
 		t.Fatalf("write custom workflow: %v", err)
 	}
@@ -102,10 +102,10 @@ func TestEnsureCIWorkflowDoesNotOverwrite(t *testing.T) {
 	}
 }
 
-func TestTrackedSearcherWorkflowMatchesLocalWrapper(t *testing.T) {
+func TestTrackedUnchIndexWorkflowMatchesLocalWrapper(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join("..", "..", ".github", "workflows", "searcher.yml")
+	path := filepath.Join("..", "..", ".github", "workflows", "unch-index.yml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read tracked wrapper workflow: %v", err)
@@ -115,15 +115,39 @@ func TestTrackedSearcherWorkflowMatchesLocalWrapper(t *testing.T) {
 	}
 }
 
-func TestTrackedSearcherReusableWorkflowMatchesTemplate(t *testing.T) {
+func TestTrackedUnchIndexReusableWorkflowMatchesTemplate(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join("..", "..", ".github", "workflows", "searcher-reusable.yml")
+	path := filepath.Join("..", "..", ".github", "workflows", "unch-index-reusable.yml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read tracked reusable workflow: %v", err)
 	}
 	if string(data) != ReusableCIWorkflow {
 		t.Fatalf("tracked reusable workflow drifted from ReusableCIWorkflow")
+	}
+}
+
+func TestEnsureCIWorkflowHonorsLegacySearcherWorkflow(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	legacyPath := filepath.Join(root, ".github", "workflows", "searcher.yml")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("mkdir legacy workflow dir: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("name: legacy-searcher\n"), 0o644); err != nil {
+		t.Fatalf("write legacy workflow: %v", err)
+	}
+
+	path, created, err := EnsureCIWorkflow(root)
+	if err != nil {
+		t.Fatalf("EnsureCIWorkflow() error: %v", err)
+	}
+	if created {
+		t.Fatalf("expected legacy workflow to be preserved")
+	}
+	if path != legacyPath {
+		t.Fatalf("EnsureCIWorkflow() path = %q, want %q", path, legacyPath)
 	}
 }

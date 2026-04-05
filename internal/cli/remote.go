@@ -47,15 +47,13 @@ func runRemoteSync(ctx context.Context, program string, args []string) error {
 				os.Stdout,
 				fs,
 				cliName(program)+" remote sync [flags] [root]",
-				"Refresh the local .semsearch state from the latest published remote workflow.",
+				"Refresh the local index from a bound remote GitHub Actions workflow.",
 				[]string{
 					cliName(program) + " remote sync",
 					cliName(program) + " remote sync --root ../repo --allow-missing",
 				},
 				[]string{
 					"If the manifest is not bound, this command reports that and exits cleanly.",
-					"Use sync for the normal remote-backed flow when the repository should follow the latest published state.",
-					"When available, sync restores index.db, manifest.json, and filehashes.db together.",
 					"Use --allow-missing in CI bootstrap flows so older or unpublished remote indexes do not fail the run.",
 				},
 			)
@@ -117,15 +115,13 @@ func runRemoteDownload(ctx context.Context, program string, args []string) error
 				os.Stdout,
 				fs,
 				cliName(program)+" remote download [flags] --commit <sha> <github-repo-or-workflow-url>",
-				"Download one published search artifact for a specific commit into local-only .semsearch state.",
+				"Download a published search artifact for a specific commit without binding the repository to remote sync.",
 				[]string{
 					cliName(program) + " remote download --commit abc123 https://github.com/uchebnick/unch",
-					cliName(program) + " remote download --commit abc123 https://github.com/uchebnick/unch/actions/workflows/searcher.yml",
+					cliName(program) + " remote download --commit abc123 https://github.com/uchebnick/unch/actions/workflows/unch-index.yml",
 				},
 				[]string{
-					"Use download for debugging, benchmarking, or reproducing one commit without binding to the latest remote state.",
 					"The downloaded manifest is activated as local-only state, so future searches do not auto-sync to latest remote by accident.",
-					"When present, the downloaded artifact also restores filehashes.db for faster warm reindex runs.",
 				},
 			)
 		}
@@ -159,6 +155,6 @@ func runRemoteDownload(ctx context.Context, program string, args []string) error
 	if result.Note != "" {
 		_, _ = fmt.Fprintln(os.Stdout, result.Note)
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "Activated local search state at %s\n", paths.LocalDir)
+	_, _ = fmt.Fprintf(os.Stdout, "Activated local search index at %s\n", filepath.Join(paths.LocalDir, "index.db"))
 	return nil
 }

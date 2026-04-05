@@ -25,7 +25,7 @@ func TestRunCreateCI(t *testing.T) {
 		t.Fatalf("runCreate() error: %v", err)
 	}
 
-	path := filepath.Join(root, ".github", "workflows", "searcher.yml")
+	path := filepath.Join(root, ".github", "workflows", "unch-index.yml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read generated workflow: %v", err)
@@ -41,7 +41,7 @@ func TestRunCreateCI(t *testing.T) {
 	if !strings.Contains(content, "permissions:\n  contents: write") {
 		t.Fatalf("generated workflow missing write permissions for gh-pages publish: %s", content)
 	}
-	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/searcher-reusable.yml@v0.3.6") {
+	if !strings.Contains(content, "uses: uchebnick/unch/.github/workflows/unch-index-reusable.yml@v0.3.6") {
 		t.Fatalf("generated workflow missing reusable workflow reference: %s", content)
 	}
 	if !strings.Contains(content, "unch_repository: uchebnick/unch") {
@@ -69,7 +69,7 @@ func TestRunBindCI(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("SEMSEARCH_HOME", filepath.Join(root, "global"))
 	repoURL := "https://github.com/acme/widgets"
-	wantCIURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	wantCIURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 
 	output := captureStdout(t, func() {
 		if err := runBind(context.Background(), "unch", []string{"ci", "--root", root, repoURL}, root); err != nil {

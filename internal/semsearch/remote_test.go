@@ -17,11 +17,11 @@ import (
 func TestParseGitHubWorkflowURL(t *testing.T) {
 	t.Parallel()
 
-	got, err := ParseGitHubWorkflowURL("https://github.com/acme/widgets/actions/workflows/searcher.yml")
+	got, err := ParseGitHubWorkflowURL("https://github.com/acme/widgets/actions/workflows/unch-index.yml")
 	if err != nil {
 		t.Fatalf("ParseGitHubWorkflowURL() error: %v", err)
 	}
-	if got.Owner != "acme" || got.Repo != "widgets" || got.WorkflowFile != "searcher.yml" {
+	if got.Owner != "acme" || got.Repo != "widgets" || got.WorkflowFile != "unch-index.yml" {
 		t.Fatalf("ParseGitHubWorkflowURL() = %+v", got)
 	}
 }
@@ -33,7 +33,7 @@ func TestResolveGitHubCIURLFromRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveGitHubCIURL() error: %v", err)
 	}
-	want := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	want := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 	if got != want {
 		t.Fatalf("ResolveGitHubCIURL() = %q, want %q", got, want)
 	}
@@ -51,14 +51,14 @@ func TestBindRemoteManifest(t *testing.T) {
 	if manifest.Source != "remote" {
 		t.Fatalf("manifest.Source = %q, want remote", manifest.Source)
 	}
-	if manifest.Remote == nil || manifest.Remote.CIURL != "https://github.com/acme/widgets/actions/workflows/searcher.yml" {
+	if manifest.Remote == nil || manifest.Remote.CIURL != "https://github.com/acme/widgets/actions/workflows/unch-index.yml" {
 		t.Fatalf("manifest.Remote = %+v", manifest.Remote)
 	}
 }
 
 func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 	localDir := t.TempDir()
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 	if _, err := BindRemoteManifest(localDir, ciURL); err != nil {
 		t.Fatalf("BindRemoteManifest() error: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 	remoteDBPath := filepath.Join(t.TempDir(), "remote-index.db")
 	remoteHash := writeTestIndexDB(t, remoteDBPath, 2, "/tmp/remote.go", 20, "hash2", []float32{3, 2, 1})
 	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
-	fileHashDBBytes := []byte("file-hash-cache")
+	remoteFileHashes := []byte("remote-file-hash-cache\n")
 	remoteManifest := Manifest{
 		SchemaVersion: ManifestSchemaVersion,
 		Version:       2,
@@ -97,7 +97,7 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 		case "/acme/widgets/gh-pages/semsearch/index.db":
 			_, _ = w.Write(remoteDB)
 		case "/acme/widgets/gh-pages/semsearch/filehashes.db":
-			_, _ = w.Write(fileHashDBBytes)
+			_, _ = w.Write(remoteFileHashes)
 		default:
 			http.NotFound(w, r)
 		}
@@ -131,12 +131,12 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 	if string(gotDB) != string(remoteDB) {
 		t.Fatalf("synced db = %q, want %q", string(gotDB), string(remoteDB))
 	}
-	gotFileHashDB, err := os.ReadFile(filepath.Join(localDir, "filehashes.db"))
+	gotFileHashes, err := os.ReadFile(filepath.Join(localDir, "filehashes.db"))
 	if err != nil {
-		t.Fatalf("read synced file hash db: %v", err)
+		t.Fatalf("read synced file hash cache: %v", err)
 	}
-	if string(gotFileHashDB) != string(fileHashDBBytes) {
-		t.Fatalf("synced file hash db = %q, want %q", string(gotFileHashDB), string(fileHashDBBytes))
+	if string(gotFileHashes) != string(remoteFileHashes) {
+		t.Fatalf("synced filehashes.db = %q, want %q", string(gotFileHashes), string(remoteFileHashes))
 	}
 
 	reloaded, err := ReadManifest(localDir)
@@ -150,7 +150,7 @@ func TestSyncRemoteIndexDownloadsNewVersion(t *testing.T) {
 
 func TestSyncRemoteIndexFailsWhenRemoteIsMissingAndNoLocalDB(t *testing.T) {
 	localDir := t.TempDir()
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 	if _, err := BindRemoteManifest(localDir, ciURL); err != nil {
 		t.Fatalf("BindRemoteManifest() error: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestSyncRemoteIndexFailsWhenRemoteIsMissingAndNoLocalDB(t *testing.T) {
 
 func TestSyncRemoteIndexFailsWhenRemoteSchemaIsIncompatibleAndNoLocalDB(t *testing.T) {
 	localDir := t.TempDir()
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 	if _, err := BindRemoteManifest(localDir, ciURL); err != nil {
 		t.Fatalf("BindRemoteManifest() error: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestSyncRemoteIndexFailsWhenRemoteSchemaIsIncompatibleAndNoLocalDB(t *testi
 
 func TestSyncRemoteIndexSeedsNextCIVersion(t *testing.T) {
 	localDir := t.TempDir()
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 	if _, err := BindRemoteManifest(localDir, ciURL); err != nil {
 		t.Fatalf("BindRemoteManifest() error: %v", err)
 	}
@@ -304,12 +304,12 @@ func TestSyncRemoteIndexSeedsNextCIVersion(t *testing.T) {
 func TestDownloadIndexArtifactForCommit(t *testing.T) {
 	localDir := t.TempDir()
 	commitSHA := "8dfac53123456789abcdef1234567890abcdef12"
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 
 	remoteDBPath := filepath.Join(t.TempDir(), "artifact-index.db")
 	remoteHash := writeTestIndexDB(t, remoteDBPath, 9, "internal/search/service.go", 42, "hash9", []float32{9, 4, 2})
 	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
-	fileHashDBBytes := []byte("artifact-file-hash-cache")
+	remoteFileHashes := []byte("artifact-file-hash-cache\n")
 	artifactManifest := Manifest{
 		SchemaVersion: ManifestSchemaVersion,
 		Version:       9,
@@ -318,12 +318,12 @@ func TestDownloadIndexArtifactForCommit(t *testing.T) {
 		Remote:        &Remote{CIURL: ciURL},
 	}
 	artifactZip := buildArtifactArchiveWithExtraFiles(t, artifactManifest, remoteDB, map[string][]byte{
-		"filehashes.db": fileHashDBBytes,
+		"filehashes.db": remoteFileHashes,
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+		case "/repos/acme/widgets/actions/workflows/unch-index.yml/runs":
 			if got := r.URL.Query().Get("head_sha"); got != commitSHA {
 				t.Fatalf("runs head_sha = %q, want %q", got, commitSHA)
 			}
@@ -391,12 +391,12 @@ func TestDownloadIndexArtifactForCommit(t *testing.T) {
 	if string(gotDB) != string(remoteDB) {
 		t.Fatalf("downloaded db != artifact db")
 	}
-	gotFileHashDB, err := os.ReadFile(filepath.Join(localDir, "filehashes.db"))
+	gotFileHashes, err := os.ReadFile(filepath.Join(localDir, "filehashes.db"))
 	if err != nil {
 		t.Fatalf("os.ReadFile(filehashes.db) error: %v", err)
 	}
-	if string(gotFileHashDB) != string(fileHashDBBytes) {
-		t.Fatalf("downloaded file hash db != artifact file hash db")
+	if string(gotFileHashes) != string(remoteFileHashes) {
+		t.Fatalf("downloaded filehashes.db != artifact file hash cache")
 	}
 
 	reloaded, err := ReadManifest(localDir)
@@ -414,7 +414,7 @@ func TestDownloadIndexArtifactForCommitReturnsNotPublishedWhenRunMissing(t *test
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+		case "/repos/acme/widgets/actions/workflows/unch-index.yml/runs":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"workflow_runs": []map[string]any{},
@@ -443,7 +443,7 @@ func TestDownloadIndexArtifactForCommitReturnsNotPublishedWhenRunMissing(t *test
 func TestDownloadIndexArtifactForCommitRejectsIncompatibleIndex(t *testing.T) {
 	localDir := t.TempDir()
 	commitSHA := "beadfeed12345678"
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 
 	legacyDBPath := filepath.Join(t.TempDir(), "legacy-index.db")
 	writeLegacyTestIndexDB(t, legacyDBPath, 11)
@@ -459,7 +459,7 @@ func TestDownloadIndexArtifactForCommitRejectsIncompatibleIndex(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+		case "/repos/acme/widgets/actions/workflows/unch-index.yml/runs":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"workflow_runs": []map[string]any{
@@ -512,7 +512,7 @@ func TestDownloadIndexArtifactForCommitRejectsIncompatibleIndex(t *testing.T) {
 func TestDownloadIndexArtifactForCommitPaginatesWorkflowRuns(t *testing.T) {
 	localDir := t.TempDir()
 	commitSHA := "11223344556677889900aabbccddeeff00112233"
-	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/unch-index.yml"
 
 	remoteDBPath := filepath.Join(t.TempDir(), "artifact-index.db")
 	remoteHash := writeTestIndexDB(t, remoteDBPath, 10, "internal/search/service.go", 7, "hash10", []float32{1, 0, 1})
@@ -528,7 +528,7 @@ func TestDownloadIndexArtifactForCommitPaginatesWorkflowRuns(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+		case "/repos/acme/widgets/actions/workflows/unch-index.yml/runs":
 			page := r.URL.Query().Get("page")
 			w.Header().Set("Content-Type", "application/json")
 			switch page {
@@ -620,7 +620,6 @@ func TestWriteDownloadedIndexReplacesExistingDestination(t *testing.T) {
 }
 
 func buildArtifactArchive(t *testing.T, manifest Manifest, indexBytes []byte) []byte {
-	t.Helper()
 	return buildArtifactArchiveWithExtraFiles(t, manifest, indexBytes, nil)
 }
 
@@ -644,7 +643,6 @@ func buildArtifactArchiveWithExtraFiles(t *testing.T, manifest Manifest, indexBy
 	for name, data := range extraFiles {
 		files[name] = data
 	}
-
 	for name, data := range files {
 		entry, err := writer.Create(name)
 		if err != nil {

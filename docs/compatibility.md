@@ -7,7 +7,7 @@ This document describes the current compatibility contract for `unch`.
 ### Module Path Compatibility
 
 - The canonical Go module path is `github.com/uchebnick/unch`.
-- New source-based installs should use `go install github.com/uchebnick/unch@latest`.
+- New source-based CLI installs should use `go install github.com/uchebnick/unch/cmd/unch@latest`.
 - Older references to `github.com/uchebnick/unch-searcher` should be treated as legacy and updated rather than relied on through repository redirects.
 
 ### CLI Compatibility
@@ -58,7 +58,7 @@ This document describes the current compatibility contract for `unch`.
 | Other languages | Limited | Legacy prefix fallback only |
 | Search modes | Supported | `auto`, `semantic`, `lexical` |
 | Homebrew install | Supported | macOS-first polished install path |
-| `go install` | Supported | Canonical module path is `github.com/uchebnick/unch` |
+| `go install` | Supported | CLI package path is `github.com/uchebnick/unch/cmd/unch` |
 | `install.sh` | Supported | Uses release assets on macOS and Linux by default, with Go fallback for unsupported targets; smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like environments |
 | `install/install.ps1` | Supported | Uses release assets on Windows by default, with Go fallback elsewhere; smoke-tested in CI on Windows `arm64` and `x86_64` |
 | Darwin release binaries | Supported | `arm64` and `x86_64` |
@@ -72,4 +72,4 @@ Published release binaries and CI builds on macOS, Linux, and Windows arm64/x86_
 
 - If `unch` upgrades but your local search breaks, rebuild with `unch index`.
 - If remote sync reports an incompatible published schema, rerun the repository’s `searcher` workflow.
-- If you automate installation from source, use `go install github.com/uchebnick/unch@latest`.
+- If you automate installation from source, use `go install github.com/uchebnick/unch/cmd/unch@latest`.

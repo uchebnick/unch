@@ -11,9 +11,9 @@
 [![Telegram News](https://img.shields.io/badge/Telegram-News-26A5E4?logo=telegram&logoColor=white)](https://t.me/unchnews)
 [![Telegram Chat](https://img.shields.io/badge/Telegram-Chat-26A5E4?logo=telegram&logoColor=white)](https://t.me/unchchat)
 
-**Local-first semantic code search for real code objects.**
+**Semantic code search for code symbols and docs.**
 
-`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal. It is built for the moment when you know what the code does, but do not remember the symbol name, file path, or exact text. By default everything stays local to the repository; GitHub Actions publishing is optional.
+`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal. It is useful when you know what the code does, but not the symbol name or file path. Local indexing is the default; remote publishing is optional.
 
 <p align="center">
   <img src="docs/assets/unch-demo.gif" alt="Terminal demo of unch indexing gorilla/mux and returning semantic search matches" width="920">
@@ -21,55 +21,51 @@
 
 ## Why `unch`
 
-- **Local-first by default.** The index, model cache, and search flow stay on your machine unless you explicitly publish a remote index.
-- **Symbol-aware search.** `unch` indexes top-level API and attached docs for `Go`, `TypeScript`, `JavaScript`, and `Python` instead of relying on manual inline prefixes.
-- **Terminal-native workflow.** Index once, search from the CLI, and optionally keep a repo-wide index fresh through GitHub Actions.
+- **Indexes symbols, not just lines.** `unch` stores top-level API objects and attached docs for `Go`, `TypeScript`, `JavaScript`, and `Python`.
+- **Keeps the local workflow simple.** Build an index once, search from the CLI, and keep everything on your machine unless you explicitly publish a remote index.
+- **Still works with CI.** If you want a shared index, GitHub Actions publishing is available, but it is not required for the normal local flow.
 
 ## Install
 
-Homebrew is still the most polished install path on macOS:
+Homebrew on macOS:
 
 ```bash
 brew install uchebnick/tap/unch
 ```
 
-For release-based installs without Homebrew:
+Release installer on macOS and Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh
 ```
 
-On Windows, use the PowerShell installer:
+PowerShell installer on Windows:
 
 ```powershell
 iwr https://raw.githubusercontent.com/uchebnick/unch/main/install/install.ps1 -useb | iex
 ```
 
-For source-based installation, use the canonical module path:
+Source install:
 
 ```bash
-go install github.com/uchebnick/unch@latest
+go install github.com/uchebnick/unch/cmd/unch@latest
 ```
 
-On Windows, the published installers are the easiest way to get the same cgo-backed parser and SQLite stack that release binaries and CI use. Source installs still work, and the vendored SQLite headers keep `go build` and `go install` to a single command as long as a working cgo toolchain is present.
-
-On Linux, the shell installer is smoke-tested in CI on Ubuntu, Debian, and Arch using published release assets. On NixOS-like environments without the usual system ELF loader path, `install.sh` patches the installed release binary via `nix-shell` so the final `unch` binary runs natively after installation instead of falling back to `go install`.
-
-If you want to hack on the project directly, build it from the current checkout:
+If you want to build from the current checkout:
 
 ```bash
-go build -o unch .
+go build -o unch ./cmd/unch
 ```
 
-Published release archives currently cover:
+Published release archives:
 
 - macOS: `arm64`, `x86_64`
 - Linux: `arm64`, `x86_64`
 - Windows: `arm64`, `x86_64` (`unch.exe`)
 
-On those supported macOS, Linux, and Windows targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when a matching release archive is not available. The PowerShell installer is smoke-tested on Windows `arm64` and `x86_64`.
+On those targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when no matching archive is available. `install.sh` is smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like environments; the PowerShell installer is smoke-tested on Windows `arm64` and `x86_64`.
 
-See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the checked-in `smoke`, `ci`, and `default` suites plus the current CI benchmark profile.
+See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the checked-in `smoke`, `ci`, and `default` suites.
 
 Model selection accepts either a known model id or a direct `.gguf` path:
 
@@ -79,7 +75,7 @@ unch index --model qwen3
 unch search --model qwen3 "create a new router"
 ```
 
-## 30-Second Path
+## Quick Start
 
 ```bash
 cd path/to/repo
@@ -107,7 +103,7 @@ $ unch search --details "get path variables from a request"
    docs: Vars returns the route variables for the current request, if any.
 ```
 
-First run may download the default embedding model, download local `yzma` runtime libraries, and create `./.semsearch/`.
+The first run may download the default embedding model, fetch local `yzma` runtime libraries, and create `./.semsearch/`.
 
 Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
 
@@ -118,18 +114,6 @@ Each model keeps its own active index snapshot. Rebuilding `qwen3` does not repl
 - Local indexing and search first, optional remote publishing through GitHub Actions
 - `auto`, `semantic`, and `lexical` search modes
 - Legacy `--comment-prefix` and `--context-prefix` only as fallback for unsupported files or parser failures
-
-## When `unch` Helps
-
-- You know the behavior you want, but not the exact symbol name.
-- You want documentation and API surface searchable together.
-- You want semantic search over a repo without sending code to a hosted service.
-
-## Use Something Else When
-
-- `grep` or `rg` is better for exact strings, literals, or known filenames.
-- LSP or IDE navigation is better when you already know the symbol family and want jump-to-definition or refactors.
-- Hosted code search is better when you need cross-repository search across an entire organization.
 
 ## Core Commands
 
@@ -166,7 +150,7 @@ Useful flags:
 
 ## Remote / CI
 
-Remote indexing is optional and stays secondary to the local workflow. Use it when you want GitHub Actions to publish an index for the repository.
+Remote indexing is optional. Use it when you want GitHub Actions to publish an index for a repository.
 
 Create the workflow scaffold:
 
@@ -182,7 +166,7 @@ unch bind ci https://github.com/uchebnick/unch
 
 After the workflow is committed and runs successfully once, `unch search` can refresh the published index automatically when a newer remote version exists. Use `unch remote sync` when you want to force a refresh before searching.
 
-The cross-platform benchmark matrix stays separate from ordinary push CI. It runs on manual `workflow_dispatch` and release-tag pushes, uses the checked-in `ci` suite with a lighter `1 cold / 1 warm / 1 search repeat` profile, and publishes per-platform summaries so Linux, macOS, and Windows runs are easy to compare.
+The cross-platform benchmark matrix stays separate from ordinary push CI. It runs on release-tag pushes and manual `workflow_dispatch`, uses the checked-in `ci` suite with a lighter `1 cold / 1 warm / 1 search repeat` profile, and publishes per-platform summaries for Linux, macOS, and Windows.
 
 ## Contributing and Feedback
 

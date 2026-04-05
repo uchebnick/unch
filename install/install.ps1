@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Repo = "uchebnick/unch"
+$SourcePackage = "github.com/uchebnick/unch/cmd/unch"
 
 function Write-Note {
     param([string]$Message)
@@ -111,10 +112,10 @@ function Install-WithGo {
         $pkgVersion = "@$ResolvedVersion"
     }
 
-    Write-Note "Installing via go install github.com/$Repo$pkgVersion"
+    Write-Note "Installing via go install $SourcePackage$pkgVersion"
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     $env:GOBIN = $Destination
-    & go install "github.com/$Repo$pkgVersion"
+    & go install "$SourcePackage$pkgVersion"
     return $LASTEXITCODE -eq 0
 }
 

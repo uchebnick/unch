@@ -1,24 +1,22 @@
 # Contributing
 
-Thanks for taking a look at `unch`.
-
 ## Local Setup
 
 `unch` is a Go project. The normal local loop is:
 
 ```bash
 go test ./...
-go build -o unch .
+go build -o unch ./cmd/unch
 ```
 
 For an end-to-end smoke test against the current checkout:
 
 ```bash
-go run . index --root .
-go run . search --root . "command dispatch"
+go run ./cmd/unch index --root .
+go run ./cmd/unch search --root . "command dispatch"
 ```
 
-First run may download the default embedding model, download local `yzma` runtime libraries, and create `./.semsearch/`.
+First run may download the default embedding model, fetch local `yzma` runtime libraries, and create `./.semsearch/`.
 
 ## Before Opening a Change
 

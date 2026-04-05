@@ -165,7 +165,7 @@ jobs:
           rm -rf "$tool_dir" "$bin_dir" "$probe_dir"
           mkdir -p "$bin_dir"
           if [ "${UNCH_REPOSITORY}" = "${GITHUB_REPOSITORY}" ] && [ "${UNCH_REF}" = "${GITHUB_SHA}" ]; then
-            go build -trimpath -o "$bin_dir/unch" .
+            go build -trimpath -o "$bin_dir/unch" ./cmd/unch
           else
             mkdir -p "$tool_dir"
             (
@@ -174,7 +174,7 @@ jobs:
               git remote add origin "https://github.com/${UNCH_REPOSITORY}.git"
               git fetch --depth 1 origin "${UNCH_REF}"
               git checkout --detach FETCH_HEAD
-              go build -trimpath -o "$bin_dir/unch" .
+              go build -trimpath -o "$bin_dir/unch" ./cmd/unch
             )
           fi
           export PATH="$bin_dir:$PATH"

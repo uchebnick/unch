@@ -3,6 +3,7 @@
 set -eu
 
 repo="uchebnick/unch"
+source_pkg="github.com/${repo}/cmd/unch"
 bin_dir="${HOME}/.local/bin"
 requested_version=""
 
@@ -182,8 +183,8 @@ install_with_go() {
     pkg_version="@${version}"
   fi
 
-  say "Installing via go install github.com/${repo}${pkg_version}"
-  GOBIN="${bin_dir}" go install "github.com/${repo}${pkg_version}"
+  say "Installing via go install ${source_pkg}${pkg_version}"
+  GOBIN="${bin_dir}" go install "${source_pkg}${pkg_version}"
 }
 
 while getopts "b:v:h" opt; do

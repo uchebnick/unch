@@ -267,6 +267,9 @@ func TestRunRemoteHelp(t *testing.T) {
 	if !strings.Contains(output, "remote download") {
 		t.Fatalf("Run(remote --help) output = %q, want download subcommand", output)
 	}
+	if !strings.Contains(output, "specific commit") {
+		t.Fatalf("Run(remote --help) output = %q, want commit-oriented download guidance", output)
+	}
 }
 
 func TestRunSearchRequiresQuery(t *testing.T) {

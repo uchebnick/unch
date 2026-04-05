@@ -3,8 +3,8 @@
 package indexdb
 
 import (
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
+	sqlite_vec "github.com/uchebnick/unch/third_party/sqlite-vec-go-bindings/cgo"
 )
 
 func registerSQLiteVec() {

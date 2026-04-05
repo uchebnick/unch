@@ -195,6 +195,15 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify root go.mod has no replace directives
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -nE '^[[:space:]]*replace[[:space:]]+' go.mod; then
+            echo "root go.mod must not contain replace directives because they break go install github.com/...@version" >&2
+            exit 1
+          fi
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
@@ -480,6 +489,28 @@ jobs:
                   ./install.sh -b /tmp/bin -v vci-test
                   /tmp/bin/unch --help >/dev/null
                 "
+            '
+
+  go-install-smoke:
+    name: go-install-smoke (bookworm)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build and run with go install inside official Go container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/src" \
+            -w /src \
+            golang:1.25-bookworm sh -c '
+              set -eu
+              go install ./cmd/unch
+              command -v unch
+              unch --help >/dev/null
             '
 
   coverage:

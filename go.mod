@@ -2,10 +2,7 @@ module github.com/uchebnick/unch
 
 go 1.25.3
 
-replace github.com/asg017/sqlite-vec-go-bindings => ./third_party/sqlite-vec-go-bindings
-
 require (
-	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/hashicorp/go-getter v1.8.3
 	github.com/hybridgroup/yzma v1.11.1

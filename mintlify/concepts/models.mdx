@@ -1,0 +1,52 @@
+---
+title: Embedding models
+description: How unch uses local GGUF embedding models and which built-in profiles are available.
+---
+
+`unch` computes embeddings locally from GGUF models. The model used for `index` and `search` must match.
+
+## Known model ids
+
+### `embeddinggemma`
+
+- default model id
+- downloaded automatically when `--model` is omitted
+- mean-pooling profile
+
+### `qwen3`
+
+- built-in known model id
+- auto-download profile
+- last-token pooling profile
+
+## Supported ways to select a model
+
+```bash
+unch index --model embeddinggemma
+unch index --model qwen3
+unch search --model qwen3 "create a new router"
+unch index --model /path/to/model.gguf
+```
+
+## Model-scoped snapshots
+
+Each model keeps its own active snapshot in the local index state.
+
+That means:
+
+- rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot
+- switching models does require a matching reindex before search
+
+## Default cache location
+
+If `SEMSEARCH_HOME` is set, models live under:
+
+```text
+$SEMSEARCH_HOME/models
+```
+
+Otherwise `unch` uses the system user cache directory for the current platform.
+
+## Practical rule
+
+Always use the same model family for both `unch index` and `unch search`. If they differ, ranking quality will be wrong.

@@ -1,0 +1,130 @@
+---
+title: Installation
+description: Install unch with Homebrew, shell installer, PowerShell, go install, or build from source.
+---
+
+## Requirements
+
+On supported release targets, the installers use published archives by default, so Go is not required.
+
+If you install with `go install`, build from source, or install on a target without a matching release archive, you need:
+
+- Go 1.25+
+- a working C toolchain
+
+On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an equivalent setup.
+
+## Choose an install path
+
+<Tabs>
+  <Tab title="Homebrew (macOS)">
+    ```bash
+    brew install uchebnick/tap/unch
+    ```
+
+    Upgrade later with:
+
+    ```bash
+    brew upgrade unch
+    ```
+  </Tab>
+
+  <Tab title="Shell installer (macOS/Linux)">
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh
+    ```
+
+    Or with `wget`:
+
+    ```bash
+    wget -qO- https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh
+    ```
+
+    Default install location:
+
+    ```text
+    $HOME/.local/bin
+    ```
+
+    Pin a version or choose a destination:
+
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh -s -- -b /usr/local/bin
+    curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sh -s -- -v v0.3.6
+    ```
+
+    `install.sh` is smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like Linux environments.
+  </Tab>
+
+  <Tab title="PowerShell (Windows)">
+    ```powershell
+    iwr https://raw.githubusercontent.com/uchebnick/unch/main/install/install.ps1 -useb | iex
+    ```
+
+    Default install location:
+
+    ```text
+    $HOME\AppData\Local\Programs\unch\bin
+    ```
+
+    After downloading the script locally, you can override the target or pin a version:
+
+    ```powershell
+    .\install\install.ps1 -BinDir "C:\Tools\unch\bin" -Version v0.3.6
+    ```
+
+    The PowerShell installer is smoke-tested in CI on Windows `x86_64` and `arm64`.
+  </Tab>
+
+  <Tab title="go install">
+    ```bash
+    go install github.com/uchebnick/unch/cmd/unch@latest
+    ```
+
+    Older references to `github.com/uchebnick/unch-searcher` should be treated as legacy.
+  </Tab>
+
+  <Tab title="Build from source">
+    ```bash
+    git clone https://github.com/uchebnick/unch.git
+    cd unch
+    go build -o unch ./cmd/unch
+    ```
+
+    On Windows:
+
+    ```powershell
+    go build -o unch.exe ./cmd/unch
+    ```
+  </Tab>
+</Tabs>
+
+<CardGroup cols={3}>
+  <Card title="Fastest path" icon="bolt">
+    Use Homebrew on macOS or the shell/PowerShell installer on release-supported targets.
+  </Card>
+  <Card title="Most flexible" icon="sliders">
+    Use `go install` or build from source when you want a local checkout or custom toolchain flow.
+  </Card>
+  <Card title="No Go required" icon="box-archive">
+    Published release archives cover macOS, Linux, and Windows on both `arm64` and `x86_64`.
+  </Card>
+</CardGroup>
+
+## Published release archives
+
+| Platform | Architectures | Status |
+| --- | --- | --- |
+| macOS | `arm64`, `x86_64` | Supported |
+| Linux | `arm64`, `x86_64` | Supported |
+| Windows | `arm64`, `x86_64` | Supported |
+
+## Verify the install
+
+```bash
+unch --help
+```
+
+<Tip>
+  If Mintlify is connected to the separate docs repository, keep product docs changes in `unch-docs` so deploys stay isolated from code changes.
+</Tip>

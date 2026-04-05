@@ -1,0 +1,86 @@
+---
+title: search
+description: Query the local index with semantic, lexical, or mixed retrieval.
+---
+
+## Usage
+
+```bash
+unch search [flags] <query>
+```
+
+The query can be passed positionally or with `--query`. When both are present, `--query` wins.
+
+## Flags
+
+### `--query`
+
+Explicit search query text.
+
+### `--mode`
+
+Accepted values:
+
+- `auto`
+- `semantic`
+- `lexical`
+
+### `--limit`
+
+Maximum number of results to return.
+
+### `--max-distance`
+
+Maximum semantic distance kept in `auto` and `semantic` modes. Set `0` or a negative value to disable filtering.
+
+### `--details`
+
+Show symbol kind, name, signature, docs, and body context for each result.
+
+### `--model`
+
+Query embedding model. Must match the model used when the index was built.
+
+### `--root`
+
+Root directory used to render result paths relative to the repository.
+
+### `--state-dir`
+
+Path to a custom `.semsearch` directory. This is the preferred way to search external state.
+
+### `--db`
+
+Deprecated alias for the index location. Prefer `--state-dir`.
+
+### `--lib`
+
+Path to a `yzma` library directory, or one of its shared library files.
+
+### `--ctx-size`
+
+llama context size. `0` uses the selected model default.
+
+### `--batch-size`
+
+llama batch size. `0` uses the selected model default.
+
+### `--verbose`
+
+Enable verbose `yzma` logging.
+
+## Examples
+
+```bash
+unch search "sqlite schema"
+unch search --mode lexical "Run"
+unch search --details "get path variables from a request"
+unch search --model qwen3 "search query"
+unch search --state-dir /tmp/project.semsearch "router middleware"
+```
+
+## Notes
+
+- `auto` stays semantic-first for natural-language queries.
+- If the manifest is bound to remote CI, `unch search` can refresh from remote automatically before running the query.
+- If no active snapshot exists for the requested model, `unch` tells you to run `unch index --model <model>` first.

@@ -1,0 +1,63 @@
+---
+title: Quick Start
+description: Index a repository and run your first search in under a minute.
+---
+
+## Index a repository
+
+```bash
+cd path/to/repo
+unch index --root .
+```
+
+Real output from indexing [`gorilla/mux`](https://github.com/gorilla/mux):
+
+```text
+$ unch index --root .
+Loaded model       dim=768
+Indexed 278 symbols in 16 files
+```
+
+## Run your first search
+
+```bash
+unch search "create a new router"
+```
+
+```text
+$ unch search "create a new router"
+1. mux.go:32  0.7747
+2. mux.go:314 0.8135
+```
+
+Add `--details` for richer output:
+
+```bash
+unch search --details "get path variables from a request"
+```
+
+```text
+$ unch search --details "get path variables from a request"
+1. mux.go:466  0.7991
+   kind: function
+   name: Vars
+   signature: func Vars(r *http.Request) map[string]string
+   docs: Vars returns the route variables for the current request, if any.
+```
+
+## What happens on first run
+
+The first `unch index` may:
+
+- download the default embedding model
+- fetch local `yzma` runtime libraries
+- create `./.semsearch/`
+
+Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
+
+## Next steps
+
+- [Index command reference](/commands/index)
+- [Search command reference](/commands/search)
+- [Embedding models](/concepts/models)
+- [Remote indexing](/ci/overview)

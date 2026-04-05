@@ -1,0 +1,48 @@
+---
+title: unch
+description: Local-first semantic code search for code symbols and docs.
+---
+
+`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal.
+
+It is useful when you know what the code does, but not the symbol name or file path. Local indexing is the default. Remote publishing is optional.
+
+<CardGroup cols={2}>
+  <Card title="Install unch" icon="download" href="/installation">
+    Pick Homebrew, shell installer, PowerShell, or source install.
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Index a repository and run your first semantic search.
+  </Card>
+  <Card title="Commands" icon="terminal" href="/commands">
+    See the main CLI flows for local indexing, search, and remote sync.
+  </Card>
+  <Card title="CI & Remote Indexing" icon="github" href="/ci/overview">
+    Publish and reuse indexes through GitHub Actions when you need shared state.
+  </Card>
+</CardGroup>
+
+## Start here
+
+- [Installation](/installation)
+- [Quick Start](/quickstart)
+- [Commands](/commands)
+- [CI & Remote Indexing](/ci/overview)
+
+## What you get
+
+- Local-first search over top-level API objects and attached docs
+- Tree-sitter extraction for Go, TypeScript, JavaScript, and Python
+- `auto`, `semantic`, and `lexical` search modes
+- Optional GitHub Actions publishing through `.github/workflows/unch-index.yml`
+
+## Typical flow
+
+1. Install `unch`.
+2. Run `unch index --root .` in a repository.
+3. Run `unch search "create a new router"`.
+4. Add `--details` when you want signatures and docs in the output.
+
+<Tip>
+  If you only want the docs repo in Mintlify, connect `unch-docs` rather than the main `unch` code repository.
+</Tip>

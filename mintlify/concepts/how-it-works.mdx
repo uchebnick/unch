@@ -1,0 +1,54 @@
+---
+title: How it works
+description: A conceptual overview of how unch parses, indexes, and searches code symbols.
+---
+
+## 1. File discovery
+
+`unch index` walks the repository, applies `.gitignore` plus explicit `--exclude` patterns, and decides which source files should be processed.
+
+## 2. File hashing
+
+Each candidate file is hashed. The active file-hash state in `.semsearch/filehashes.db` is used to decide whether the file can be reused or needs to be reindexed.
+
+## 3. Symbol extraction
+
+For supported languages, `unch` uses Tree-sitter to extract top-level symbols and attached docs.
+
+That currently covers:
+
+- Go
+- TypeScript
+- JavaScript
+- Python
+
+For unsupported files or parser failures, `index` can still use the legacy prefix fallback.
+
+## 4. Embedding generation
+
+Each extracted symbol is flattened into an indexed document and embedded locally with a GGUF model through `yzma`.
+
+Known model ids today:
+
+- `embeddinggemma`
+- `qwen3`
+
+## 5. Snapshot activation
+
+Embeddings and symbols are written into model-scoped snapshots in `.semsearch/index.db`.
+
+When indexing succeeds, the new snapshot becomes active for that model. Other model snapshots are left untouched.
+
+## 6. Search
+
+`unch search` supports:
+
+- `semantic`
+- `lexical`
+- `auto`
+
+`auto` stays semantic-first, but can prefer lexical results when the query looks more like a symbol name or code fragment.
+
+## 7. Optional remote restore
+
+If the manifest is bound to remote CI, `unch search` can restore the latest compatible published state before executing the query.

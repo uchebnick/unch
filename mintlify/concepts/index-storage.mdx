@@ -1,0 +1,53 @@
+---
+title: Index storage
+description: What unch writes locally and how .semsearch state is structured.
+---
+
+By default, local state lives under:
+
+```text
+<repo>/.semsearch
+```
+
+You can override that with `--state-dir`.
+
+## Files in `.semsearch`
+
+### `index.db`
+
+The local search index. This is a rebuildable cache artifact, not durable user data.
+
+### `manifest.json`
+
+Tracks local state metadata, schema versioning, and optional remote binding.
+
+### `filehashes.db`
+
+Stores file-hash state used to skip unchanged files on warm reindex runs.
+
+### `file_weights.json`
+
+Local path weighting configuration used during ranking.
+
+### `yzma/`
+
+Local runtime libraries used for embedding inference.
+
+## State-dir vs db-path
+
+The CLI now treats the state directory as the primary unit:
+
+- `--state-dir` is the preferred flag
+- `--db` is a deprecated compatibility alias
+
+That matches the real storage model better, because `index.db` is only one piece of the full local state.
+
+## Remote-published state
+
+Remote CI publishes:
+
+- `index.db`
+- `manifest.json`
+- `filehashes.db`
+
+That allows published state to restore both the active search snapshot and the file-hash cache used by warm reindex scenarios.

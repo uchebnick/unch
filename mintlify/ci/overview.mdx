@@ -1,0 +1,35 @@
+---
+title: CI overview
+description: Publish a shared search index via GitHub Actions so your team always has an up-to-date index.
+---
+
+By default, `unch` is entirely local. Remote indexing through GitHub Actions is an optional layer on top.
+
+## When remote indexing helps
+
+- Multiple people search the same repository
+- You want the shared index to stay current without manual local reindexing
+- You want CI to publish one canonical snapshot for the repo state
+
+## How the workflow works
+
+1. `unch create ci` writes `.github/workflows/unch-index.yml`
+2. `unch bind ci <github-repo-url>` records the remote workflow in the local manifest
+3. GitHub Actions builds and publishes the search state
+4. `unch search` and `unch remote sync` restore the latest compatible published state when needed
+
+## What gets published
+
+The remote workflow publishes:
+
+- `index.db`
+- `manifest.json`
+- `filehashes.db`
+
+That lets warm restore and warm reindex paths reuse the same file-hash cache instead of starting from scratch every time.
+
+## Local reindex behavior
+
+Running `unch index` locally on a repository that is bound to remote CI detaches the manifest from remote mode and switches it back to local-only state.
+
+After a local reindex, run `unch bind ci <github-repo-url>` again if you want that checkout to follow remote updates.

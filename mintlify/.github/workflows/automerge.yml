@@ -1,0 +1,44 @@
+name: automerge
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to merge
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate pull request target
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --json number,isDraft,baseRefName,url \
+            --jq 'if .isDraft then error("draft PRs cannot be auto-merged") elif .baseRefName != "main" then error("PR must target main") else .url end'
+
+      - name: Merge pull request
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash --delete-branch --admin
+
+      - name: Show resulting PR state
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --json reviewDecision,mergeStateStatus,autoMergeRequest,url

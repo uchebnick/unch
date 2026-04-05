@@ -1,0 +1,57 @@
+---
+title: Commands
+description: Overview of the main unch CLI commands.
+---
+
+`unch` is centered around three main command families:
+
+- [`unch index`](/commands/index) to build or refresh a local index
+- [`unch search`](/commands/search) to query the current index
+- [`unch remote`](/commands/remote) to sync or download published remote state
+
+<CardGroup cols={3}>
+  <Card title="Index" icon="database" href="/commands/index">
+    Build or refresh `.semsearch` for a repository.
+  </Card>
+  <Card title="Search" icon="magnifying-glass" href="/commands/search">
+    Query the active index with semantic, lexical, or auto mode.
+  </Card>
+  <Card title="Remote" icon="cloud-arrow-down" href="/commands/remote">
+    Reuse published CI state or download an index for a specific commit.
+  </Card>
+</CardGroup>
+
+## Typical local flow
+
+```bash
+unch index --root .
+unch search "sqlite schema"
+unch search --details "get path variables from a request"
+```
+
+<Tabs>
+  <Tab title="Local first">
+    ```bash
+    unch index --root .
+    unch search "create a new router"
+    ```
+  </Tab>
+  <Tab title="Remote state">
+    ```bash
+    unch create ci
+    unch bind ci https://github.com/owner/repo
+    unch remote sync
+    unch search "create a new router"
+    ```
+  </Tab>
+</Tabs>
+
+## Typical remote flow
+
+```bash
+unch create ci
+unch bind ci https://github.com/owner/repo
+unch remote sync
+```
+
+Use the command pages for the full flag reference and behavior notes.

@@ -113,7 +113,7 @@ Each model keeps its own active index snapshot. Rebuilding `qwen3` does not repl
 - Top-level API objects and attached documentation
 - Local indexing and search first, optional remote publishing through GitHub Actions
 - `auto`, `semantic`, and `lexical` search modes
-- Legacy `--comment-prefix` and `--context-prefix` only as fallback for unsupported files or parser failures
+- Legacy `--comment-prefix` and `--context-prefix` only for `index` fallback on unsupported files or parser failures
 
 ## Core Commands
 
@@ -130,6 +130,7 @@ Useful flags:
 - `--exclude` to skip generated, vendor, or irrelevant paths
 - `--model` to use `embeddinggemma`, `qwen3`, or a custom `.gguf` path
 - `--lib` to use an existing `yzma` runtime directory
+- `--state-dir` to keep index state in a custom `.semsearch` directory
 
 ### `search`
 
@@ -146,11 +147,12 @@ Useful flags:
 - `--limit` to control result count
 - `--max-distance` to narrow semantic matches
 - `--model` to search with `embeddinggemma`, `qwen3`, or a custom `.gguf` path
+- `--state-dir` to search against a custom `.semsearch` directory
 - `--details` to print symbol metadata, signature, docs, and body context for each match
 
 ## Remote / CI
 
-Remote indexing is optional. Use it when you want GitHub Actions to publish an index for a repository.
+Remote indexing is optional. Use it when you want GitHub Actions to publish an index for a repository. The generated workflow file is `.github/workflows/unch-index.yml`.
 
 Create the workflow scaffold:
 

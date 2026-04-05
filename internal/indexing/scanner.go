@@ -200,7 +200,7 @@ func shouldSkipIndexedPath(rel string) bool {
 	}
 
 	base := strings.ToLower(strings.TrimSpace(filepath.Base(rel)))
-	if strings.HasPrefix(base, "readme") {
+	if base == "readme" || strings.HasPrefix(base, "readme.") {
 		return true
 	}
 

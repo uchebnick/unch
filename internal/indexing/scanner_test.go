@@ -16,6 +16,9 @@ func TestShouldSkipIndexedPath(t *testing.T) {
 		{path: "README.md", want: true},
 		{path: "docs/README.dev.md", want: true},
 		{path: "guides/readme.txt", want: true},
+		{path: "internal/READMEParser.go", want: false},
+		{path: "pkg/readme_utils.py", want: false},
+		{path: "web/ReadmeClient.ts", want: false},
 	}
 
 	for _, tt := range tests {

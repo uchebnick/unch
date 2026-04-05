@@ -489,6 +489,116 @@ func TestDownloadIndexArtifactForCommitRejectsIncompatibleIndex(t *testing.T) {
 	}
 }
 
+func TestDownloadIndexArtifactForCommitPaginatesWorkflowRuns(t *testing.T) {
+	localDir := t.TempDir()
+	commitSHA := "11223344556677889900aabbccddeeff00112233"
+	ciURL := "https://github.com/acme/widgets/actions/workflows/searcher.yml"
+
+	remoteDBPath := filepath.Join(t.TempDir(), "artifact-index.db")
+	remoteHash := writeTestIndexDB(t, remoteDBPath, 10, "internal/search/service.go", 7, "hash10", []float32{1, 0, 1})
+	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
+	artifactManifest := Manifest{
+		SchemaVersion: ManifestSchemaVersion,
+		Version:       10,
+		IndexingHash:  remoteHash,
+		Source:        "remote",
+		Remote:        &Remote{CIURL: ciURL},
+	}
+	artifactZip := buildArtifactArchive(t, artifactManifest, remoteDB)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/widgets/actions/workflows/searcher.yml/runs":
+			page := r.URL.Query().Get("page")
+			w.Header().Set("Content-Type", "application/json")
+			switch page {
+			case "1":
+				runs := make([]map[string]any, 0, gitHubAPIPerPage)
+				for i := 0; i < gitHubAPIPerPage; i++ {
+					runs = append(runs, map[string]any{
+						"id":         i + 1,
+						"head_sha":   "ffffffffffffffffffffffffffffffffffffffff",
+						"status":     "completed",
+						"conclusion": "success",
+					})
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": runs})
+			case "2":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"workflow_runs": []map[string]any{
+						{
+							"id":         999,
+							"head_sha":   commitSHA,
+							"status":     "completed",
+							"conclusion": "success",
+						},
+					},
+				})
+			default:
+				_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": []map[string]any{}})
+			}
+		case "/repos/acme/widgets/actions/runs/999/artifacts":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"artifacts": []map[string]any{
+					{
+						"id":      456,
+						"name":    searchIndexArtifactName,
+						"expired": false,
+					},
+				},
+			})
+		case "/repos/acme/widgets/actions/artifacts/456/zip":
+			w.Header().Set("Content-Type", "application/zip")
+			_, _ = w.Write(artifactZip)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	originalAPIBaseURL := gitHubAPIBaseURL
+	originalClient := remoteManifestHTTPClient
+	gitHubAPIBaseURL = server.URL
+	remoteManifestHTTPClient = server.Client()
+	t.Cleanup(func() {
+		gitHubAPIBaseURL = originalAPIBaseURL
+		remoteManifestHTTPClient = originalClient
+	})
+
+	result, err := DownloadIndexArtifactForCommit(context.Background(), localDir, "https://github.com/acme/widgets", commitSHA)
+	if err != nil {
+		t.Fatalf("DownloadIndexArtifactForCommit() error: %v", err)
+	}
+	if !result.Downloaded {
+		t.Fatalf("result.Downloaded = false, want true")
+	}
+}
+
+func TestWriteDownloadedIndexReplacesExistingDestination(t *testing.T) {
+	localDir := t.TempDir()
+	destPath := filepath.Join(localDir, "index.db")
+	if err := os.WriteFile(destPath, []byte("old-index"), 0o644); err != nil {
+		t.Fatalf("write old destination: %v", err)
+	}
+
+	remoteDBPath := filepath.Join(t.TempDir(), "replacement-index.db")
+	remoteHash := writeTestIndexDB(t, remoteDBPath, 3, "internal/search/service.go", 8, "hash3", []float32{3, 3, 3})
+	remoteDB := readTestIndexDBBytes(t, remoteDBPath)
+
+	if err := writeDownloadedIndex(destPath, remoteDB, remoteHash); err != nil {
+		t.Fatalf("writeDownloadedIndex() error: %v", err)
+	}
+
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("read replaced destination: %v", err)
+	}
+	if string(got) != string(remoteDB) {
+		t.Fatalf("replaced destination does not match downloaded db")
+	}
+}
+
 func buildArtifactArchive(t *testing.T, manifest Manifest, indexBytes []byte) []byte {
 	t.Helper()
 

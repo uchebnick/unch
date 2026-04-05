@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -31,8 +32,8 @@ const (
 )
 
 var (
-	ErrRemoteIndexNotPublished = errors.New("remote index is not published yet; run the searcher GitHub Actions workflow once to publish it")
-	ErrRemoteIndexIncompatible = errors.New("remote index uses an incompatible schema; rerun the searcher GitHub Actions workflow to publish a compatible index")
+	ErrRemoteIndexNotPublished = errors.New("remote index is not published yet; run the remote index workflow once to publish it")
+	ErrRemoteIndexIncompatible = errors.New("remote index uses an incompatible schema; rerun the remote index workflow to publish a compatible index")
 	gitHubAPIBaseURL           = defaultGitHubAPIBaseURL
 	gitHubContentBaseURL       = defaultGitHubContentBaseURL
 	remoteManifestHTTPClient   = &http.Client{Timeout: 20 * time.Second}
@@ -229,7 +230,7 @@ func SyncRemoteIndex(ctx context.Context, localDir string) (RemoteSyncResult, er
 				return RemoteSyncResult{
 					Checked:  true,
 					Manifest: manifest,
-					Note:     "Published remote index uses an older schema; using the local cache until the searcher workflow republishes it",
+					Note:     "Published remote index uses an older schema; using the local cache until the remote index workflow republishes it",
 				}, nil
 			}
 			if err := WriteManifest(localDir, remoteManifest); err != nil {
@@ -391,7 +392,7 @@ func activateDownloadedIndex(ctx context.Context, tmpPath string, destPath strin
 		}
 	}
 
-	if err := os.Rename(tmpPath, destPath); err != nil {
+	if err := replaceFile(tmpPath, destPath); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("activate %s: %w", destPath, err)
 	}
@@ -401,6 +402,8 @@ func activateDownloadedIndex(ctx context.Context, tmpPath string, destPath strin
 type gitHubWorkflowRunsResponse struct {
 	WorkflowRuns []gitHubWorkflowRun `json:"workflow_runs"`
 }
+
+const gitHubAPIPerPage = 100
 
 type gitHubWorkflowRun struct {
 	ID         int64  `json:"id"`
@@ -446,24 +449,32 @@ func findSearchArtifactForCommit(ctx context.Context, workflow GitHubWorkflowRef
 }
 
 func listWorkflowRuns(ctx context.Context, workflow GitHubWorkflowRef, commitSHA string) ([]gitHubWorkflowRun, error) {
-	runsURL, err := workflowRunsAPIURL(workflow, commitSHA)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := fetchRemoteBytes(ctx, runsURL)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%w for commit %s", ErrRemoteIndexNotPublished, shortenCommitSHA(commitSHA))
+	allRuns := make([]gitHubWorkflowRun, 0, gitHubAPIPerPage)
+	for page := 1; ; page++ {
+		runsURL, err := workflowRunsAPIURL(workflow, commitSHA, page)
+		if err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("list workflow runs: %w", err)
+
+		data, err := fetchRemoteBytes(ctx, runsURL)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil, fmt.Errorf("%w for commit %s", ErrRemoteIndexNotPublished, shortenCommitSHA(commitSHA))
+			}
+			return nil, fmt.Errorf("list workflow runs: %w", err)
+		}
+
+		var payload gitHubWorkflowRunsResponse
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return nil, fmt.Errorf("decode workflow runs: %w", err)
+		}
+		allRuns = append(allRuns, payload.WorkflowRuns...)
+		if len(payload.WorkflowRuns) < gitHubAPIPerPage {
+			break
+		}
 	}
 
-	var payload gitHubWorkflowRunsResponse
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, fmt.Errorf("decode workflow runs: %w", err)
-	}
-	return payload.WorkflowRuns, nil
+	return allRuns, nil
 }
 
 func findRunArtifact(ctx context.Context, workflow GitHubWorkflowRef, runID int64) (int64, bool, error) {
@@ -610,7 +621,7 @@ func handleRemoteManifestFetchError(fetchErr error, localDir string, manifest Ma
 			return RemoteSyncResult{
 				Checked:  true,
 				Manifest: manifest,
-				Note:     "Remote index is not published yet; using the local cache until the searcher workflow publishes it",
+				Note:     "Remote index is not published yet; using the local cache until the remote index workflow publishes it",
 			}, nil
 		}
 		return RemoteSyncResult{}, ErrRemoteIndexNotPublished
@@ -703,7 +714,7 @@ func joinURLPath(base string, elems ...string) (string, error) {
 	return parsed.String(), nil
 }
 
-func workflowRunsAPIURL(workflow GitHubWorkflowRef, commitSHA string) (string, error) {
+func workflowRunsAPIURL(workflow GitHubWorkflowRef, commitSHA string, page int) (string, error) {
 	base, err := joinURLPath(gitHubAPIBaseURL, "repos", workflow.Owner, workflow.Repo, "actions", "workflows", workflow.WorkflowFile, "runs")
 	if err != nil {
 		return "", err
@@ -714,9 +725,28 @@ func workflowRunsAPIURL(workflow GitHubWorkflowRef, commitSHA string) (string, e
 	}
 	query := parsed.Query()
 	query.Set("head_sha", strings.TrimSpace(commitSHA))
-	query.Set("per_page", "100")
+	query.Set("per_page", fmt.Sprintf("%d", gitHubAPIPerPage))
+	query.Set("page", fmt.Sprintf("%d", page))
 	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil
+}
+
+func replaceFile(srcPath string, destPath string) error {
+	if err := os.Rename(srcPath, destPath); err == nil {
+		return nil
+	}
+
+	if runtime.GOOS != "windows" {
+		return os.Rename(srcPath, destPath)
+	}
+
+	if removeErr := os.Remove(destPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return fmt.Errorf("remove existing destination: %w", removeErr)
+	}
+	if err := os.Rename(srcPath, destPath); err != nil {
+		return err
+	}
+	return nil
 }
 
 func runArtifactsAPIURL(workflow GitHubWorkflowRef, runID int64) (string, error) {

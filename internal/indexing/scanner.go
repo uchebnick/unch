@@ -8,16 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cespare/xxhash/v2"
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
 // FileScanner walks repository files and extracts symbols into index jobs.
 type FileScanner struct {
 	Root string
-}
-
-func (FileScanner) WalkFiles(root string, gitignorePath string, extraPatterns []string, visit func(path string, rel string, source []byte) error) error {
-	return walkSourceFiles(root, gitignorePath, extraPatterns, visit)
 }
 
 func (FileScanner) CollectJob(path string, rel string, source []byte, commentPrefix string, contextPrefix string) (FileJob, bool, error) {
@@ -31,32 +28,6 @@ func (FileScanner) CollectJob(path string, rel string, source []byte, commentPre
 		Symbols:    symbols,
 	}
 	return job, len(symbols) > 0, nil
-}
-
-// CollectJobs walks the repository, applies ignore rules, extracts symbols from
-// source files, and returns only files that produced indexable output.
-func (FileScanner) CollectJobs(root string, gitignorePath string, extraPatterns []string, commentPrefix string, contextPrefix string) ([]FileJob, int, error) {
-	var jobs []FileJob
-	totalSymbols := 0
-
-	err := walkSourceFiles(root, gitignorePath, extraPatterns, func(path string, rel string, source []byte) error {
-		job, ok, err := FileScanner{}.CollectJob(path, rel, source, commentPrefix, contextPrefix)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-
-		jobs = append(jobs, job)
-		totalSymbols += len(job.Symbols)
-		return nil
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return jobs, totalSymbols, nil
 }
 
 func extractSymbolsForSource(path string, source []byte, commentPrefix string, contextPrefix string) ([]IndexedSymbol, error) {
@@ -79,7 +50,7 @@ func extractSymbolsForPath(path string, commentPrefix string, contextPrefix stri
 	return extractSymbolsForSource(path, source, commentPrefix, contextPrefix)
 }
 
-func walkSourceFiles(root string, gitignorePath string, extraPatterns []string, visit func(path string, rel string, source []byte) error) error {
+func walkIndexedPaths(root string, gitignorePath string, extraPatterns []string, handleFile func(path string, rel string) error) error {
 	matcher, err := buildIgnoreMatcher(gitignorePath, extraPatterns)
 	if err != nil {
 		return fmt.Errorf("build ignore matcher: %w", err)
@@ -118,6 +89,12 @@ func walkSourceFiles(root string, gitignorePath string, extraPatterns []string, 
 			return nil
 		}
 
+		return handleFile(path, rel)
+	})
+}
+
+func walkSourceFiles(root string, gitignorePath string, extraPatterns []string, visit func(path string, rel string, source []byte) error) error {
+	return walkIndexedPaths(root, gitignorePath, extraPatterns, func(path string, rel string) error {
 		source, binary, err := readSourceFile(path)
 		if err != nil {
 			return err
@@ -153,6 +130,31 @@ func readSourceFile(path string) ([]byte, bool, error) {
 	}
 
 	return data, false, nil
+}
+
+func hashSourceFile(path string) (string, bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	binary, err := looksLikeBinaryFile(file)
+	if err != nil {
+		return "", false, err
+	}
+	if binary {
+		return "", true, nil
+	}
+
+	hasher := xxhash.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", false, fmt.Errorf("hash %s: %w", path, err)
+	}
+
+	return fmt.Sprintf("%016x", hasher.Sum64()), false, nil
 }
 
 // ResolveGitignorePath expands an optional gitignore path relative to the
@@ -200,7 +202,7 @@ func shouldSkipIndexedPath(rel string) bool {
 	}
 
 	base := strings.ToLower(strings.TrimSpace(filepath.Base(rel)))
-	if strings.HasPrefix(base, "readme") {
+	if base == "readme" || strings.HasPrefix(base, "readme.") {
 		return true
 	}
 

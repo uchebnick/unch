@@ -15,15 +15,22 @@ type Paths struct {
 	ModelsDir    string
 }
 
-// PreparePaths creates the local and global directories used by unch for
-// repository state, manifests, and shared model storage.
-func PreparePaths(root string) (Paths, error) {
-	localDir := filepath.Join(root, ".semsearch")
+// DefaultModelsDir resolves the shared model cache directory used by unch.
+func DefaultModelsDir() (string, error) {
 	globalDir, err := globalSemsearchDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(globalDir, "models"), nil
+}
+
+// PathsForLocalDir creates the local and global directories used by unch for
+// repository state, manifests, and shared model storage.
+func PathsForLocalDir(localDir string) (Paths, error) {
+	modelsDir, err := DefaultModelsDir()
 	if err != nil {
 		return Paths{}, err
 	}
-	modelsDir := filepath.Join(globalDir, "models")
 
 	if err := os.MkdirAll(localDir, 0o755); err != nil {
 		return Paths{}, fmt.Errorf("create local dir: %w", err)
@@ -38,6 +45,12 @@ func PreparePaths(root string) (Paths, error) {
 		FileHashDB:   filepath.Join(localDir, "filehashes.db"),
 		ModelsDir:    modelsDir,
 	}, nil
+}
+
+// PreparePaths creates the local and global directories used by unch for
+// repository state, manifests, and shared model storage.
+func PreparePaths(root string) (Paths, error) {
+	return PathsForLocalDir(filepath.Join(root, ".semsearch"))
 }
 
 func globalSemsearchDir() (string, error) {

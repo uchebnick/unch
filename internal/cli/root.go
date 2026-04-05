@@ -9,8 +9,6 @@ import (
 
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/runtime"
-	"github.com/uchebnick/unch/internal/semsearch"
-	"github.com/uchebnick/unch/internal/termui"
 )
 
 // Run initializes the CLI runtime and dispatches to the selected subcommand.
@@ -43,35 +41,15 @@ func Run(program string, args []string) (err error) {
 		return runRemote(ctx, program, commandArgs, cwd)
 	}
 
-	paths, err := semsearch.PreparePaths(cwd)
-	if err != nil {
-		return err
-	}
-
-	s, err := termui.NewSession(paths.LocalDir)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			s.Logf("fatal error: %v", err)
-		}
-		_ = s.Close()
-	}()
-	s.Logf("program=%s", program)
-	s.Logf("args=%q", args)
-	s.Logf("cwd=%s", cwd)
-
 	scanner := indexing.FileScanner{}
 	models := runtime.ModelCache{}
 	runtimes := runtime.YzmaResolver{}
-	s.Logf("command=%s", command)
 
 	switch command {
 	case "search":
-		return runSearch(ctx, program, commandArgs, paths, s, scanner, runtimes, models)
+		return runSearch(ctx, program, commandArgs, cwd, scanner, runtimes, models)
 	default:
-		return runIndex(ctx, program, commandArgs, paths, s, scanner, runtimes, models)
+		return runIndex(ctx, program, commandArgs, cwd, scanner, runtimes, models)
 	}
 }
 

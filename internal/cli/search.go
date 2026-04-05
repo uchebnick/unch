@@ -18,21 +18,19 @@ import (
 	"github.com/uchebnick/unch/internal/termui"
 )
 
-func runSearch(ctx context.Context, program string, args []string, paths semsearch.Paths, s *termui.Session, _ indexing.FileScanner, runtimes runtime.YzmaResolver, models runtime.ModelCache) error {
-	defaultDBPath := filepath.Join(paths.LocalDir, "index.db")
-	defaultModelPath := runtime.DefaultModelPath(paths.ModelsDir)
+func runSearch(ctx context.Context, program string, args []string, cwd string, _ indexing.FileScanner, runtimes runtime.YzmaResolver, models runtime.ModelCache) (err error) {
+	defaultModelPath := defaultModelFlagValue()
 
 	fs := flag.NewFlagSet(program+" search", flag.ContinueOnError)
 	fs.SetOutput(nil)
 	fs.Usage = func() {}
 
 	root := fs.String("root", ".", "root directory used to format result paths")
-	dbPath := fs.String("db", defaultDBPath, "path to sqlite db")
+	stateDir := fs.String("state-dir", "", "path to .semsearch directory; defaults to <root>/.semsearch")
+	dbPath := fs.String("db", "", "deprecated: path to .semsearch/index.db, or to a .semsearch directory")
 	modelPath := fs.String("model", defaultModelPath, "path to GGUF embedding model, or a known model id such as embeddinggemma or qwen3")
 	libPath := fs.String("lib", "", "path to yzma library directory, or to one of its shared library files")
 	queryFlag := fs.String("query", "", "search query; if empty, remaining args are joined")
-	commentPrefix := fs.String("comment-prefix", "@search:", "legacy comment prefix used only by fallback indexers")
-	contextPrefix := fs.String("context-prefix", "@filectx:", "legacy file context prefix used only by fallback indexers")
 	contextSize := fs.Int("ctx-size", 0, "llama context size; 0 uses the selected model default")
 	batchSize := fs.Int("batch-size", 0, "llama batch size; 0 uses the selected model default")
 	limit := fs.Int("limit", 10, "max number of search results")
@@ -60,6 +58,7 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 					"Known model ids today: embeddinggemma and qwen3.",
 					"Use the same embedding model for both index and search, otherwise ranking quality will be wrong.",
 					"Switching models requires rebuilding the index with `unch index` first.",
+					"Use --state-dir to search an external .semsearch directory and keep remote sync bound to that state.",
 				},
 			)
 		}
@@ -79,8 +78,12 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 		return err
 	}
 
+	stateDirWasExplicit := false
 	dbWasExplicit := false
 	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "state-dir" {
+			stateDirWasExplicit = true
+		}
 		if f.Name == "db" {
 			dbWasExplicit = true
 		}
@@ -91,25 +94,38 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 		return fmt.Errorf("resolve root: %w", err)
 	}
 
-	targetPaths, err := semsearch.PreparePaths(rootAbs)
+	targetPaths, resolvedIndexPath, shouldSyncRemote, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
 	}
-	if _, err := semsearch.EnsureFileWeights(targetPaths.LocalDir); err != nil {
+
+	s, err := termui.NewSession(targetPaths.LocalDir)
+	if err != nil {
 		return err
 	}
+	defer func() {
+		if err != nil {
+			s.Logf("fatal error: %v", err)
+		}
+		_ = s.Close()
+	}()
+	s.Logf("program=%s", program)
+	s.Logf("args=%q", args)
+	s.Logf("cwd=%s", cwd)
+	s.Logf("command=search")
 
-	remoteSync, err := semsearch.SyncRemoteIndex(ctx, targetPaths.LocalDir)
-	if err != nil {
-		return fmt.Errorf("sync remote index: %w", err)
-	}
-	if remoteSync.Checked && remoteSync.Note != "" {
-		printSessionLine(s, "%s", remoteSync.Note)
-	}
+	if shouldSyncRemote {
+		if _, err := semsearch.EnsureFileWeights(targetPaths.LocalDir); err != nil {
+			return err
+		}
 
-	resolvedDBPath := *dbPath
-	if !dbWasExplicit {
-		resolvedDBPath = filepath.Join(targetPaths.LocalDir, "index.db")
+		remoteSync, err := semsearch.SyncRemoteIndex(ctx, targetPaths.LocalDir)
+		if err != nil {
+			return fmt.Errorf("sync remote index: %w", err)
+		}
+		if remoteSync.Checked && remoteSync.Note != "" {
+			printSessionLine(s, "%s", remoteSync.Note)
+		}
 	}
 
 	resolvedLibPath, libNote, err := runtimes.ResolveOrInstallYzmaLibPath(ctx, *libPath, targetPaths.LocalDir, s)
@@ -120,14 +136,20 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 		s.Logf("%s", libNote)
 	}
 
-	resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, *modelPath, defaultModelPath, true, s)
+	resolvedDefaultModelPath := runtime.DefaultModelPath(targetPaths.ModelsDir)
+	requestedModelPath := strings.TrimSpace(*modelPath)
+	if requestedModelPath == "" {
+		requestedModelPath = resolvedDefaultModelPath
+	}
+
+	resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, requestedModelPath, resolvedDefaultModelPath, true, s)
 	if err != nil {
 		return err
 	}
 	if modelNote != "" {
 		s.Logf("%s", modelNote)
 	}
-	modelID, err := runtime.CanonicalModelID(*modelPath, defaultModelPath)
+	modelID, err := runtime.CanonicalModelID(requestedModelPath, resolvedDefaultModelPath)
 	if err != nil {
 		return fmt.Errorf("resolve model id: %w", err)
 	}
@@ -140,7 +162,8 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 		resolvedBatchSize = defaultBatchSize(resolvedModelPath)
 	}
 
-	s.Logf("db=%s", resolvedDBPath)
+	s.Logf("index_db=%s", resolvedIndexPath)
+	s.Logf("state_dir=%s", targetPaths.LocalDir)
 	s.Logf("lib=%s", resolvedLibPath)
 	s.Logf("model=%s", resolvedModelPath)
 	s.Logf("model_id=%s", modelID)
@@ -165,7 +188,7 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 	}
 	defer embedder.Close()
 
-	repo, err := indexdb.Open(ctx, resolvedDBPath, embedder.Dim())
+	repo, err := indexdb.Open(ctx, resolvedIndexPath, embedder.Dim())
 	if err != nil {
 		return err
 	}
@@ -185,13 +208,11 @@ func runSearch(ctx context.Context, program string, args []string, paths semsear
 	}
 
 	results, err := service.Run(ctx, appsearch.Params{
-		QueryText:     queryText,
-		CommentPrefix: *commentPrefix,
-		ContextPrefix: *contextPrefix,
-		Limit:         *limit,
-		Mode:          searchMode,
-		MaxDistance:   *maxDistance,
-		ModelID:       modelID,
+		QueryText:   queryText,
+		Limit:       *limit,
+		Mode:        searchMode,
+		MaxDistance: *maxDistance,
+		ModelID:     modelID,
 	}, s)
 	if err != nil {
 		if errors.Is(err, indexdb.ErrNoActiveSnapshot) {

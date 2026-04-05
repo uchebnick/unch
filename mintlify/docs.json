@@ -1,0 +1,60 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "luma",
+  "name": "unch",
+  "colors": {
+    "primary": "#02B76D",
+    "light": "#00FFA1",
+    "dark": "#00965F"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/uchebnick/unch"
+    }
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Core Concepts",
+        "pages": [
+          "concepts/how-it-works",
+          "concepts/models",
+          "concepts/index-storage"
+        ]
+      },
+      {
+        "group": "Commands",
+        "pages": [
+          "commands/index",
+          "commands/search",
+          "commands/remote"
+        ]
+      },
+      {
+        "group": "CI & Remote Indexing",
+        "pages": [
+          "ci/overview",
+          "ci/github-actions"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/compatibility",
+          "reference/troubleshooting"
+        ]
+      }
+    ]
+  },
+  "logo": "/images/unch-logo.svg",
+  "favicon": "/images/search-icon.svg"
+}

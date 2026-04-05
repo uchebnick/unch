@@ -1,0 +1,57 @@
+---
+title: remote
+description: Manage remote index publishing and sync via GitHub Actions.
+---
+
+Remote indexing is optional. Use it when you want GitHub Actions to build and publish an index so contributors can search without running `unch index` locally first.
+
+The generated workflow file is `.github/workflows/unch-index.yml`.
+
+## Typical setup flow
+
+1. Run `unch create ci`.
+2. Run `unch bind ci <github-repo-or-workflow-url>`.
+3. Commit and push the workflow.
+4. After the workflow succeeds once, `unch search` and `unch remote sync` can restore the published state.
+
+## `unch create ci`
+
+Creates the remote index workflow scaffold.
+
+```bash
+unch create ci
+unch create ci --root ../other-repo
+```
+
+It writes `.github/workflows/unch-index.yml`.
+
+## `unch bind ci`
+
+Binds the local manifest to a GitHub repository URL or a direct workflow URL.
+
+```bash
+unch bind ci https://github.com/uchebnick/unch
+unch bind ci https://github.com/uchebnick/unch/actions/workflows/unch-index.yml
+```
+
+## `unch remote sync`
+
+Refreshes local state from the bound remote workflow.
+
+```bash
+unch remote sync
+unch remote sync --root ../repo --allow-missing
+```
+
+Use `--allow-missing` in bootstrap flows where no published artifact exists yet, or when an incompatible older artifact should not fail the run.
+
+## `unch remote download`
+
+Downloads a published artifact for a specific commit without changing the repository binding.
+
+```bash
+unch remote download --commit abc123 https://github.com/uchebnick/unch
+unch remote download --commit abc123 https://github.com/uchebnick/unch/actions/workflows/unch-index.yml
+```
+
+The downloaded manifest is activated as local-only state so future searches do not auto-sync to the latest remote artifact by accident.

@@ -1,0 +1,80 @@
+---
+title: index
+description: Build or refresh the local search index for a repository.
+---
+
+## Usage
+
+```bash
+unch index [flags]
+```
+
+## Flags
+
+### `--root`
+
+Root directory to index. Defaults to `.`.
+
+### `--state-dir`
+
+Path to a custom `.semsearch` directory. Defaults to `<root>/.semsearch`.
+
+### `--db`
+
+Deprecated alias for the index location. Accepts `.semsearch/index.db` or a `.semsearch` directory, but `--state-dir` is the preferred interface.
+
+### `--model`
+
+Embedding model to use. Accepts:
+
+- `embeddinggemma`
+- `qwen3`
+- a direct path to a `.gguf` file
+
+### `--exclude`
+
+Exclude glob pattern. Repeat it to add more patterns.
+
+### `--lib`
+
+Path to a `yzma` library directory, or one of its shared library files.
+
+### `--gitignore`
+
+Path to a `.gitignore` file. Defaults to `<root>/.gitignore`.
+
+### `--ctx-size`
+
+llama context size. `0` uses the selected model default.
+
+### `--batch-size`
+
+llama batch size. `0` uses the selected model default.
+
+### `--verbose`
+
+Enable verbose `yzma` logging.
+
+### `--comment-prefix`
+
+Legacy fallback comment prefix for unsupported files or parser failures.
+
+### `--context-prefix`
+
+Legacy fallback file-context prefix for unsupported files or parser failures.
+
+## Examples
+
+```bash
+unch index --root .
+unch index --exclude node_modules --exclude dist
+unch index --model qwen3
+unch index --model ~/.semsearch/models/Qwen3-Embedding-0.6B-Q8_0.gguf
+unch index --state-dir /tmp/project.semsearch
+```
+
+## Notes
+
+- The first run may download the default embedding model and local `yzma` runtime libraries.
+- If the repository is currently bound to remote CI, a local reindex detaches that binding and returns the manifest to local mode.
+- Use the same model family for `index` and `search`, otherwise ranking quality will be wrong.

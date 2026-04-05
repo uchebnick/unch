@@ -1,0 +1,27 @@
+name: docs-check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Install Mintlify CLI
+        run: npm install -g mint
+
+      - name: Check for broken links
+        run: mint broken-links

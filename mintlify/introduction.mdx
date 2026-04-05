@@ -1,0 +1,43 @@
+---
+title: Introduction
+description: Local-first semantic code search for functions, methods, types, and their docs.
+---
+
+`unch` indexes the API surface of your repository and lets you search it from the terminal using natural language.
+
+It extracts top-level symbols and attached documentation, computes embeddings locally from a GGUF model, and returns ranked matches. Your code stays on your machine unless you explicitly publish a remote index.
+
+## What unch does
+
+When you know what a piece of code does but cannot remember its name, file, or exact text, `unch` lets you describe the behavior and find the symbol.
+
+## Key features
+
+- Local-first by default
+- Symbol-aware indexing instead of raw line search
+- Local GGUF embeddings
+- `auto`, `semantic`, and `lexical` search modes
+- Optional remote publishing through GitHub Actions
+
+## Supported languages
+
+`unch` uses Tree-sitter-based symbol extraction for:
+
+- Go
+- TypeScript
+- JavaScript
+- Python
+
+For unsupported files or parser failures, `index` can still use the legacy prefix fallback.
+
+## When unch helps
+
+- You know the behavior you want, but not the exact symbol name
+- You want docs and API surface searchable together
+- You want semantic search over a local repo without sending code to a hosted service
+
+## Next steps
+
+- [Install unch](/installation)
+- [Run the quick start](/quickstart)
+- [Read how indexing works](/concepts/how-it-works)

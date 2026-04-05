@@ -1,0 +1,91 @@
+---
+title: Troubleshooting
+description: Solutions to common issues with unch.
+---
+
+## "No active index for model X; run unch index --model X first"
+
+Cause:
+
+- you searched with a different model than the one used for indexing
+
+Fix:
+
+```bash
+unch index --model <model-name>
+unch search --model <model-name> "query"
+```
+
+## Search returns no results or poor results
+
+Try:
+
+- `--mode semantic`
+- `--mode lexical`
+- rephrasing the query in terms of behavior
+- confirming that `index` and `search` use the same model
+
+```bash
+unch search --mode semantic "parse query parameters"
+unch search --mode lexical "ParseQuery"
+```
+
+## First run is slow
+
+That is usually expected. The first run may download:
+
+- the GGUF embedding model
+- the local `yzma` runtime libraries
+
+Later runs reuse those caches.
+
+## Remote sync fails with an incompatible schema error
+
+Rerun the repository remote index workflow so it republishes compatible state:
+
+- `index.db`
+- `manifest.json`
+- `filehashes.db`
+
+Then run:
+
+```bash
+unch remote sync
+```
+
+## Local search breaks after upgrading unch
+
+Rebuild the local index:
+
+```bash
+unch index
+```
+
+## Mintlify site does not refresh after a docs push
+
+Confirm that Mintlify is connected to the `unch-docs` repository and not the main `unch` code repository.
+
+## bind ci requires exactly one GitHub repository or workflow URL
+
+Pass exactly one URL:
+
+```bash
+unch bind ci https://github.com/owner/repo
+unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
+```
+
+## local reindex canceled; remote CI binding preserved
+
+You tried to run `unch index` on a checkout bound to remote CI and declined the detach prompt.
+
+If you want a local rebuild:
+
+1. run `unch index` again
+2. confirm the prompt
+3. rebind afterwards if you still want remote sync for that checkout
+
+If you only want the latest published state instead:
+
+```bash
+unch remote sync
+```

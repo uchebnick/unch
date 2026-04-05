@@ -1,0 +1,79 @@
+---
+title: GitHub Actions
+description: Step-by-step guide to setting up the unch remote index workflow in your repository.
+---
+
+## Setup
+
+### 1. Create the workflow file
+
+```bash
+unch create ci
+```
+
+This writes `.github/workflows/unch-index.yml`.
+
+To scaffold into another repository:
+
+```bash
+unch create ci --root ../other-repo
+```
+
+### 2. Commit the workflow
+
+```bash
+git add .github/workflows/unch-index.yml
+git commit -m "Add unch remote index workflow"
+```
+
+### 3. Bind the local manifest
+
+```bash
+unch bind ci https://github.com/owner/repo
+```
+
+You can also bind directly to a workflow URL:
+
+```bash
+unch bind ci https://github.com/owner/repo/actions/workflows/unch-index.yml
+```
+
+### 4. Push and verify
+
+Push the commit and confirm that the workflow succeeds in the repository Actions tab.
+
+### 5. Force sync if needed
+
+```bash
+unch remote sync
+```
+
+After the first successful publish, `unch search` can auto-refresh from remote when a newer version exists.
+
+## Workflow inputs
+
+The generated workflow supports manual `workflow_dispatch` inputs:
+
+- `force_rebuild`
+- `skip_remote_restore`
+- `skip_publish`
+
+These are useful for bootstrap flows, debugging, and controlled republish runs.
+
+## Bootstrap flows
+
+If you want to continue gracefully when no remote artifact exists yet:
+
+```bash
+unch remote sync --allow-missing
+```
+
+With `--allow-missing`, a missing or incompatible remote index prints a notice and exits cleanly instead of failing the flow.
+
+## Schema upgrades
+
+When a release changes indexing or storage compatibility:
+
+1. rerun the repository’s `unch-index.yml` workflow
+2. let CI republish a compatible `index.db`, `manifest.json`, and `filehashes.db`
+3. run `unch remote sync` or just search again locally

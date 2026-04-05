@@ -1,0 +1,58 @@
+name: sync-mintlify-docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mintlify/**"
+      - ".github/workflows/sync-mintlify-docs.yml"
+      - "scripts/sync_mintlify_docs.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-mintlify-docs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out unch
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check out unch-docs
+        uses: actions/checkout@v6
+        with:
+          repository: uchebnick/unch-docs
+          token: ${{ secrets.UNCH_DOCS_SYNC_TOKEN }}
+          path: .docs-sync/unch-docs
+          fetch-depth: 0
+
+      - name: Sync Mintlify source into unch-docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/sync_mintlify_docs.sh mintlify .docs-sync/unch-docs
+
+      - name: Commit and push docs mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .docs-sync/unch-docs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No unch-docs changes to publish."
+            exit 0
+          fi
+          git commit -m "docs: sync Mintlify source from unch@${GITHUB_SHA}"
+          git push

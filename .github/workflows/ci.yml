@@ -338,7 +338,7 @@ jobs:
           set -euo pipefail
           asset_dir="${RUNNER_TEMP}/release-assets"
           mkdir -p "${asset_dir}" "${RUNNER_TEMP}/build"
-          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" .
+          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" ./cmd/unch
           tar -C "${RUNNER_TEMP}/build" -czf "${asset_dir}/${{ matrix.asset_name }}" unch
 
       - name: Build local Windows release asset
@@ -350,7 +350,7 @@ jobs:
           mkdir -p "${build_dir}"
           export CGO_ENABLED=1
           export CC="${{ matrix.cc }}"
-          go build -trimpath -o "${build_dir}/unch.exe" .
+          go build -trimpath -o "${build_dir}/unch.exe" ./cmd/unch
 
       - name: Archive local Windows release asset
         if: runner.os == 'Windows'
@@ -421,7 +421,7 @@ jobs:
           set -euo pipefail
           asset_dir="${RUNNER_TEMP}/release-assets"
           mkdir -p "${asset_dir}" "${RUNNER_TEMP}/build"
-          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" .
+          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" ./cmd/unch
           tar -C "${RUNNER_TEMP}/build" -czf "${asset_dir}/unch_Linux_x86_64.tar.gz" unch
 
       - name: Install from local asset inside ${{ matrix.label }} container
@@ -459,7 +459,7 @@ jobs:
           set -euo pipefail
           asset_dir="${RUNNER_TEMP}/release-assets"
           mkdir -p "${asset_dir}" "${RUNNER_TEMP}/build"
-          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" .
+          CGO_ENABLED=1 go build -trimpath -o "${RUNNER_TEMP}/build/unch" ./cmd/unch
           tar -C "${RUNNER_TEMP}/build" -czf "${asset_dir}/unch_Linux_x86_64.tar.gz" unch
 
       - name: Install from local asset inside nix container

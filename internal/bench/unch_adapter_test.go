@@ -1,6 +1,11 @@
 package bench
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParseSearchHits(t *testing.T) {
 	t.Parallel()
@@ -27,6 +32,15 @@ func TestParseSearchHitsNoMatches(t *testing.T) {
 	}
 	if len(hits) != 0 {
 		t.Fatalf("parseSearchHits() hits = %+v, want empty", hits)
+	}
+}
+
+func TestParseSearchHitsRejectsUnexpectedOutput(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseSearchHits("Loaded model dim=768\nweird output\n", "Loaded model dim=768\nweird output\n")
+	if err == nil {
+		t.Fatalf("parseSearchHits() error = nil, want parse failure")
 	}
 }
 
@@ -80,5 +94,53 @@ func TestBenchmarkBinaryName(t *testing.T) {
 				t.Fatalf("benchmarkBinaryName(%q) = %q, want %q", tt.goos, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestUnchAdapterBuildBinaryFromCmdUnch(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	tempRoot := t.TempDir()
+	t.Cleanup(func() {
+		_ = filepath.Walk(tempRoot, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info == nil {
+				return nil
+			}
+			mode := os.FileMode(0o644)
+			if info.IsDir() {
+				mode = 0o755
+			}
+			_ = os.Chmod(path, mode)
+			return nil
+		})
+	})
+
+	env, err := NewEnvironment(
+		repoRoot,
+		filepath.Join(tempRoot, "suite.json"),
+		filepath.Join(tempRoot, "bench"),
+		filepath.Join(tempRoot, "results"),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewEnvironment() error: %v", err)
+	}
+
+	adapter := &UnchAdapter{
+		binaryPath: filepath.Join(env.BinDir, benchmarkBinaryName(env.OS)),
+	}
+	if err := adapter.buildBinary(context.Background(), env); err != nil {
+		t.Fatalf("buildBinary() error: %v", err)
+	}
+
+	info, err := os.Stat(adapter.binaryPath)
+	if err != nil {
+		t.Fatalf("stat built binary: %v", err)
+	}
+	if info.IsDir() {
+		t.Fatalf("built binary path is a directory: %s", adapter.binaryPath)
 	}
 }

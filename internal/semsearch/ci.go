@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	// DefaultCIWorkflowRepository is the upstream repository that hosts the reusable searcher workflow.
+	// DefaultCIWorkflowRepository is the upstream repository that hosts the reusable remote-index workflow.
 	DefaultCIWorkflowRepository = "uchebnick/unch"
 	// DefaultCIWorkflowRef pins generated workflows to the matching reusable workflow release.
-	DefaultCIWorkflowRef = "v0.2.2"
+	DefaultCIWorkflowRef = "v0.3.6"
 )
 
-const defaultCIWorkflowTemplate = `name: searcher
+const defaultCIWorkflowTemplate = `name: unch-index
 
 on:
   push:
@@ -61,8 +61,8 @@ var DefaultCIWorkflow = fmt.Sprintf(
 	DefaultCIWorkflowRef,
 )
 
-// LocalCIWorkflow keeps this repository's checked-in searcher wrapper aligned with the generated shape.
-const LocalCIWorkflow = `name: searcher
+// LocalCIWorkflow keeps this repository's checked-in remote-index wrapper aligned with the generated shape.
+const LocalCIWorkflow = `name: unch-index
 
 on:
   push:
@@ -101,8 +101,8 @@ jobs:
     secrets: inherit
 `
 
-// ReusableCIWorkflow is the central searcher implementation that runs inside the caller repository.
-const ReusableCIWorkflow = `name: searcher-reusable
+// ReusableCIWorkflow is the central remote-index implementation that runs inside the caller repository.
+const ReusableCIWorkflow = `name: unch-index-reusable
 
 on:
   workflow_call:
@@ -130,7 +130,7 @@ on:
       unch_ref:
         description: Git ref from the unch repository used to build the CLI
         required: false
-        default: v0.2.2
+        default: v0.3.6
         type: string
 
 permissions:
@@ -165,7 +165,7 @@ jobs:
           rm -rf "$tool_dir" "$bin_dir" "$probe_dir"
           mkdir -p "$bin_dir"
           if [ "${UNCH_REPOSITORY}" = "${GITHUB_REPOSITORY}" ] && [ "${UNCH_REF}" = "${GITHUB_SHA}" ]; then
-            go build -trimpath -o "$bin_dir/unch" .
+            go build -trimpath -o "$bin_dir/unch" ./cmd/unch
           else
             mkdir -p "$tool_dir"
             (
@@ -174,7 +174,7 @@ jobs:
               git remote add origin "https://github.com/${UNCH_REPOSITORY}.git"
               git fetch --depth 1 origin "${UNCH_REF}"
               git checkout --detach FETCH_HEAD
-              go build -trimpath -o "$bin_dir/unch" .
+              go build -trimpath -o "$bin_dir/unch" ./cmd/unch
             )
           fi
           export PATH="$bin_dir:$PATH"

@@ -1,4 +1,4 @@
-name: searcher-reusable
+name: unch-index-reusable
 
 on:
   workflow_call:
@@ -26,7 +26,7 @@ on:
       unch_ref:
         description: Git ref from the unch repository used to build the CLI
         required: false
-        default: v0.2.2
+        default: v0.3.6
         type: string
 
 permissions:
@@ -61,7 +61,7 @@ jobs:
           rm -rf "$tool_dir" "$bin_dir" "$probe_dir"
           mkdir -p "$bin_dir"
           if [ "${UNCH_REPOSITORY}" = "${GITHUB_REPOSITORY}" ] && [ "${UNCH_REF}" = "${GITHUB_SHA}" ]; then
-            go build -trimpath -o "$bin_dir/unch" .
+            go build -trimpath -o "$bin_dir/unch" ./cmd/unch
           else
             mkdir -p "$tool_dir"
             (
@@ -70,7 +70,7 @@ jobs:
               git remote add origin "https://github.com/${UNCH_REPOSITORY}.git"
               git fetch --depth 1 origin "${UNCH_REF}"
               git checkout --detach FETCH_HEAD
-              go build -trimpath -o "$bin_dir/unch" .
+              go build -trimpath -o "$bin_dir/unch" ./cmd/unch
             )
           fi
           export PATH="$bin_dir:$PATH"

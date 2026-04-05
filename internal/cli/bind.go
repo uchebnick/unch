@@ -43,7 +43,7 @@ func runBindCI(program string, args []string) error {
 				os.Stdout,
 				fs,
 				cliName(program)+" bind ci [flags] <github-repo-or-workflow-url>",
-				"Bind the local manifest to a GitHub repository or a specific searcher workflow URL.",
+				"Bind the local manifest to a GitHub repository or a specific remote index workflow URL.",
 				[]string{
 					cliName(program) + " bind ci https://github.com/uchebnick/unch",
 					cliName(program) + " bind ci https://github.com/uchebnick/unch/actions/workflows/searcher.yml",

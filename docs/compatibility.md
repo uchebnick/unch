@@ -7,7 +7,7 @@ This document describes the current compatibility contract for `unch`.
 ### Module Path Compatibility
 
 - The canonical Go module path is `github.com/uchebnick/unch`.
-- New source-based installs should use `go install github.com/uchebnick/unch@latest`.
+- New source-based CLI installs should use `go install github.com/uchebnick/unch/cmd/unch@latest`.
 - Older references to `github.com/uchebnick/unch-searcher` should be treated as legacy and updated rather than relied on through repository redirects.
 
 ### CLI Compatibility
@@ -36,7 +36,7 @@ This document describes the current compatibility contract for `unch`.
 
 - Remote sync trusts the published index only when it is compatible with the local binary’s expectations.
 - If a published remote index uses an older incompatible schema, local search should keep using a compatible local cache when available.
-- Repositories that use remote indexing must rerun the `searcher` workflow after incompatible indexing releases so CI republishes a compatible `index.db` and `manifest.json`.
+- Repositories that use remote indexing must rerun the remote index workflow (`searcher.yml`) after incompatible indexing releases so CI republishes a compatible `index.db` and `manifest.json`.
 - A local reindex detaches remote binding and returns the manifest to `source: "local"` until the repository is rebound.
 
 ## Upgrade Notes
@@ -58,18 +58,18 @@ This document describes the current compatibility contract for `unch`.
 | Other languages | Limited | Legacy prefix fallback only |
 | Search modes | Supported | `auto`, `semantic`, `lexical` |
 | Homebrew install | Supported | macOS-first polished install path |
-| `go install` | Supported | Canonical module path is `github.com/uchebnick/unch` |
+| `go install` | Supported | CLI package path is `github.com/uchebnick/unch/cmd/unch` |
 | `install.sh` | Supported | Uses release assets on macOS and Linux by default, with Go fallback for unsupported targets; smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like environments |
 | `install/install.ps1` | Supported | Uses release assets on Windows by default, with Go fallback elsewhere; smoke-tested in CI on Windows `arm64` and `x86_64` |
 | Darwin release binaries | Supported | `arm64` and `x86_64` |
 | Linux release binaries | Supported | `arm64` and `x86_64` |
 | Windows release binaries | Supported | `arm64` and `x86_64` (`unch.exe`) |
-| Remote indexing | Supported | GitHub Actions `searcher` workflow |
+| Remote indexing | Supported | GitHub Actions remote index workflow (`searcher.yml`) |
 
 Published release binaries and CI builds on macOS, Linux, and Windows arm64/x86_64 use the full cgo-backed Tree-sitter and SQLite stack. Source builds on supported cgo toolchains do not require a separately installed SQLite development package because the SQLite header used by the embedded `sqlite-vec` bridge is vendored in-tree. On Linux environments that expose `nix` but not the usual system ELF loader path, `install.sh` patches the installed release binary with `nix-shell`, `patchelf`, and the required runtime library paths so the installed binary can run directly after installation. Manual Windows builds without cgo remain a fallback path and should not be treated as identical to the published binaries.
 
 ## Current Practical Rules
 
 - If `unch` upgrades but your local search breaks, rebuild with `unch index`.
-- If remote sync reports an incompatible published schema, rerun the repository’s `searcher` workflow.
-- If you automate installation from source, use `go install github.com/uchebnick/unch@latest`.
+- If remote sync reports an incompatible published schema, rerun the repository’s remote index workflow.
+- If you automate installation from source, use `go install github.com/uchebnick/unch/cmd/unch@latest`.

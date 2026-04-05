@@ -40,12 +40,12 @@ func TestMaybeSkipUnchangedIndexSkipsMatchingLocalState(t *testing.T) {
 		context.Background(),
 		semsearch.Paths{LocalDir: localDir},
 		dbPath,
-		false,
 		semsearch.Manifest{Version: 7, Source: "local"},
 		store,
 		"embeddinggemma",
 		"scan-v1",
 		files,
+		true,
 		nil,
 	)
 	if err != nil {
@@ -85,12 +85,12 @@ func TestMaybeSkipUnchangedIndexDoesNotSkipMismatchedState(t *testing.T) {
 		context.Background(),
 		semsearch.Paths{LocalDir: localDir},
 		dbPath,
-		false,
 		semsearch.Manifest{Version: 7, Source: "local"},
 		store,
 		"embeddinggemma",
 		"scan-v1",
 		map[string]string{"a.go": "bbb"},
+		true,
 		nil,
 	)
 	if err != nil {
@@ -128,32 +128,26 @@ func TestMaybeSkipUnchangedIndexDoesNotSkipExplicitOrRemoteDB(t *testing.T) {
 	}
 
 	cases := []struct {
-		name          string
-		resolvedDB    string
-		dbWasExplicit bool
-		manifest      semsearch.Manifest
+		name           string
+		resolvedDB     string
+		stateDirOwnsDB bool
+		manifest       semsearch.Manifest
 	}{
 		{
-			name:          "explicit db",
-			resolvedDB:    defaultDBPath,
-			dbWasExplicit: true,
-			manifest:      semsearch.Manifest{Version: 7, Source: "local"},
+			name:           "legacy custom db path",
+			resolvedDB:     filepath.Join(localDir, "custom.db"),
+			stateDirOwnsDB: false,
+			manifest:       semsearch.Manifest{Version: 7, Source: "local"},
 		},
 		{
-			name:          "remote binding",
-			resolvedDB:    defaultDBPath,
-			dbWasExplicit: false,
+			name:           "remote binding",
+			resolvedDB:     defaultDBPath,
+			stateDirOwnsDB: true,
 			manifest: semsearch.Manifest{
 				Version: 7,
 				Source:  "remote",
 				Remote:  &semsearch.Remote{CIURL: "https://github.com/acme/widgets/actions/workflows/searcher.yml"},
 			},
-		},
-		{
-			name:          "custom db path",
-			resolvedDB:    filepath.Join(localDir, "custom.db"),
-			dbWasExplicit: false,
-			manifest:      semsearch.Manifest{Version: 7, Source: "local"},
 		},
 	}
 
@@ -168,12 +162,12 @@ func TestMaybeSkipUnchangedIndexDoesNotSkipExplicitOrRemoteDB(t *testing.T) {
 				context.Background(),
 				semsearch.Paths{LocalDir: localDir},
 				tc.resolvedDB,
-				tc.dbWasExplicit,
 				tc.manifest,
 				store,
 				"embeddinggemma",
 				"scan-v1",
 				files,
+				tc.stateDirOwnsDB,
 				nil,
 			)
 			if err != nil {

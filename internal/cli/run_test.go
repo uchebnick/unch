@@ -12,7 +12,6 @@ import (
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/runtime"
-	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -225,7 +224,7 @@ func TestRunRootHelp(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(output, "Local-first semantic code search for real code objects.") {
+	if !strings.Contains(output, "Semantic code search for code symbols and docs.") {
 		t.Fatalf("Run(--help) output = %q, want root summary", output)
 	}
 	if !strings.Contains(output, "Model selection:") {
@@ -275,7 +274,7 @@ func TestRunRemoteHelp(t *testing.T) {
 func TestRunSearchRequiresQuery(t *testing.T) {
 	t.Parallel()
 
-	err := runSearch(context.Background(), "unch", nil, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+	err := runSearch(context.Background(), "unch", nil, ".", indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	if err == nil || !strings.Contains(err.Error(), "empty search query") {
 		t.Fatalf("runSearch() error = %v, want empty search query", err)
 	}
@@ -284,7 +283,7 @@ func TestRunSearchRequiresQuery(t *testing.T) {
 func TestRunSearchRejectsInvalidMode(t *testing.T) {
 	t.Parallel()
 
-	err := runSearch(context.Background(), "unch", []string{"--mode", "weird", "--query", "abc"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+	err := runSearch(context.Background(), "unch", []string{"--mode", "weird", "--query", "abc"}, ".", indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	if err == nil || !strings.Contains(err.Error(), "unknown search mode") {
 		t.Fatalf("runSearch() error = %v, want unknown search mode", err)
 	}
@@ -292,7 +291,7 @@ func TestRunSearchRejectsInvalidMode(t *testing.T) {
 
 func TestRunIndexRejectsUnknownFlag(t *testing.T) {
 	stderr := captureStderr(t, func() {
-		err := runIndex(context.Background(), "unch", []string{"--wat"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+		err := runIndex(context.Background(), "unch", []string{"--wat"}, ".", indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 		if err == nil {
 			t.Fatalf("expected runIndex() to reject unknown flag")
 		}

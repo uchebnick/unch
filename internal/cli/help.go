@@ -11,7 +11,6 @@ import (
 
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/runtime"
-	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 const rootHelpWordmark = `
@@ -30,9 +29,9 @@ func runHelp(program string, args []string) error {
 
 	switch args[0] {
 	case "index":
-		return runIndex(context.TODO(), name, []string{"--help"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+		return runIndex(context.TODO(), name, []string{"--help"}, ".", indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	case "search":
-		return runSearch(context.TODO(), name, []string{"--help"}, semsearch.Paths{}, nil, indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
+		return runSearch(context.TODO(), name, []string{"--help"}, ".", indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	case "init":
 		return runInit(context.TODO(), name, []string{"--help"}, ".")
 	case "create":
@@ -66,7 +65,7 @@ func printRootHelp(w io.Writer, program string) error {
 	if _, err := fmt.Fprintln(w, helpWordmark()); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(w, "Local-first semantic code search for real code objects."); err != nil {
+	if _, err := fmt.Fprintln(w, "Semantic code search for code symbols and docs."); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w); err != nil {
@@ -136,7 +135,7 @@ func printRootHelp(w io.Writer, program string) error {
 func printCreateHelp(w io.Writer, program string) error {
 	_, err := fmt.Fprintf(
 		w,
-		"Usage:\n  %s create ci [flags]\n\nTargets:\n  ci  Create .github/workflows/searcher.yml in the target repository\n\nUse `%s create ci --help` for flags.\n",
+		"Usage:\n  %s create ci [flags]\n\nTargets:\n  ci  Create the remote index workflow file (.github/workflows/searcher.yml) in the target repository\n\nUse `%s create ci --help` for flags.\n",
 		program,
 		program,
 	)
@@ -146,7 +145,7 @@ func printCreateHelp(w io.Writer, program string) error {
 func printBindHelp(w io.Writer, program string) error {
 	_, err := fmt.Fprintf(
 		w,
-		"Usage:\n  %s bind ci [flags] <github-repo-or-workflow-url>\n\nTargets:\n  ci  Bind the local manifest to a remote GitHub repository or searcher workflow\n\nUse `%s bind ci --help` for flags.\n",
+		"Usage:\n  %s bind ci [flags] <github-repo-or-workflow-url>\n\nTargets:\n  ci  Bind the local manifest to a remote GitHub repository or remote index workflow\n\nUse `%s bind ci --help` for flags.\n",
 		program,
 		program,
 	)

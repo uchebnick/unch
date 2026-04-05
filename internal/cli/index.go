@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/uchebnick/unch/internal/embed/llama"
 	"github.com/uchebnick/unch/internal/filehashdb"
@@ -17,18 +18,18 @@ import (
 	"github.com/uchebnick/unch/internal/termui"
 )
 
-func runIndex(ctx context.Context, program string, args []string, paths semsearch.Paths, s *termui.Session, scanner indexing.FileScanner, runtimes runtime.YzmaResolver, models runtime.ModelCache) error {
+func runIndex(ctx context.Context, program string, args []string, cwd string, scanner indexing.FileScanner, runtimes runtime.YzmaResolver, models runtime.ModelCache) (err error) {
 	var excludes stringListFlag
 
-	defaultDBPath := filepath.Join(paths.LocalDir, "index.db")
-	defaultModelPath := runtime.DefaultModelPath(paths.ModelsDir)
+	defaultModelPath := defaultModelFlagValue()
 
 	fs := flag.NewFlagSet(program+" index", flag.ContinueOnError)
 	fs.SetOutput(nil)
 	fs.Usage = func() {}
 
 	root := fs.String("root", ".", "root directory to index")
-	dbPath := fs.String("db", defaultDBPath, "path to sqlite db")
+	stateDir := fs.String("state-dir", "", "path to .semsearch directory; defaults to <root>/.semsearch")
+	dbPath := fs.String("db", "", "deprecated: path to .semsearch/index.db, or to a .semsearch directory")
 	modelPath := fs.String("model", defaultModelPath, "path to GGUF embedding model, or a known model id such as embeddinggemma or qwen3")
 	libPath := fs.String("lib", "", "path to yzma library directory, or to one of its shared library files")
 	contextPrefix := fs.String("context-prefix", "@filectx:", "legacy file context prefix used only by fallback indexers")
@@ -57,14 +58,19 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 					"Known model ids today: embeddinggemma and qwen3.",
 					"Changing --model changes the embedding space; rebuild the index before searching with the new model.",
 					"--comment-prefix and --context-prefix are legacy fallback knobs for unsupported files or parser failures.",
+					"Use --state-dir to keep index artifacts in a custom .semsearch directory.",
 				},
 			)
 		}
 		return err
 	}
 
+	stateDirWasExplicit := false
 	dbWasExplicit := false
 	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "state-dir" {
+			stateDirWasExplicit = true
+		}
 		if f.Name == "db" {
 			dbWasExplicit = true
 		}
@@ -75,10 +81,26 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 		return fmt.Errorf("resolve root: %w", err)
 	}
 
-	targetPaths, err := semsearch.PreparePaths(rootAbs)
+	targetPaths, resolvedDBPath, stateDirOwnsDB, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
 	}
+
+	s, err := termui.NewSession(targetPaths.LocalDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			s.Logf("fatal error: %v", err)
+		}
+		_ = s.Close()
+	}()
+	s.Logf("program=%s", program)
+	s.Logf("args=%q", args)
+	s.Logf("cwd=%s", cwd)
+	s.Logf("command=index")
+
 	if _, err := semsearch.EnsureFileWeights(targetPaths.LocalDir); err != nil {
 		return err
 	}
@@ -99,12 +121,13 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 		}
 	}
 
-	resolvedDBPath := *dbPath
-	if !dbWasExplicit {
-		resolvedDBPath = filepath.Join(targetPaths.LocalDir, "index.db")
+	resolvedDefaultModelPath := runtime.DefaultModelPath(targetPaths.ModelsDir)
+	requestedModelPath := strings.TrimSpace(*modelPath)
+	if requestedModelPath == "" {
+		requestedModelPath = resolvedDefaultModelPath
 	}
 
-	modelID, err := runtime.CanonicalModelID(*modelPath, defaultModelPath)
+	modelID, err := runtime.CanonicalModelID(requestedModelPath, resolvedDefaultModelPath)
 	if err != nil {
 		return fmt.Errorf("resolve model id: %w", err)
 	}
@@ -135,12 +158,12 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 		ctx,
 		targetPaths,
 		resolvedDBPath,
-		dbWasExplicit,
 		currentManifest,
 		hashStore,
 		modelID,
 		scannerFingerprint,
 		fileHashes,
+		stateDirOwnsDB,
 		s,
 	)
 	if err != nil {
@@ -170,7 +193,7 @@ func runIndex(ctx context.Context, program string, args []string, paths semsearc
 		s.Logf("%s", libNote)
 	}
 
-	resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, *modelPath, defaultModelPath, true, s)
+	resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, requestedModelPath, resolvedDefaultModelPath, true, s)
 	if err != nil {
 		return err
 	}
@@ -265,16 +288,15 @@ func maybeSkipUnchangedIndex(
 	ctx context.Context,
 	paths semsearch.Paths,
 	resolvedDBPath string,
-	dbWasExplicit bool,
 	currentManifest semsearch.Manifest,
 	hashStore *filehashdb.Store,
 	modelID string,
 	scannerFingerprint string,
 	fileHashes map[string]string,
+	stateDirOwnsDB bool,
 	s *termui.Session,
 ) (bool, error) {
-	defaultDBPath := filepath.Join(paths.LocalDir, "index.db")
-	if dbWasExplicit || resolvedDBPath != defaultDBPath {
+	if !stateDirOwnsDB || resolvedDBPath != filepath.Join(paths.LocalDir, "index.db") {
 		return false, nil
 	}
 	if currentManifest.Version <= 0 || semsearch.HasRemoteBinding(currentManifest) {

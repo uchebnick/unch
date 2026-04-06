@@ -9,11 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -103,14 +101,8 @@ func hasROCm() (bool, string) {
 }
 
 func downloadModelWithContext(ctx context.Context, url, destDir string, progress ProgressTracker) error {
-	filename, err := downloadFileToDir(ctx, url, destDir, progress)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(filename) == "" {
-		return fmt.Errorf("downloaded model from %s but could not determine filename", url)
-	}
-	return nil
+	_, err := downloadToTempFile(ctx, url, destDir, "model-*.gguf", progress)
+	return err
 }
 
 func downloadYzmaArchive(ctx context.Context, arch, osName, processor, version, dest string, progress ProgressTracker) error {
@@ -239,7 +231,12 @@ func yzmaDownloadLocation(arch, osName, processor, version string) (location str
 }
 
 func downloadAndExtractArchive(ctx context.Context, url, destDir string, progress ProgressTracker) error {
-	archivePath, err := downloadFile(ctx, url, destDir, progress)
+	pattern, archiveType, err := archiveDownloadPattern(url)
+	if err != nil {
+		return err
+	}
+
+	archivePath, err := downloadToTempFile(ctx, url, destDir, pattern, progress)
 	if err != nil {
 		return err
 	}
@@ -247,19 +244,30 @@ func downloadAndExtractArchive(ctx context.Context, url, destDir string, progres
 		_ = os.Remove(archivePath)
 	}()
 
-	switch {
-	case strings.HasSuffix(strings.ToLower(url), ".tar.gz"):
+	switch archiveType {
+	case ".tar.gz":
 		return extractTarGz(archivePath, destDir)
-	case strings.HasSuffix(strings.ToLower(url), ".zip"):
+	case ".zip":
 		return extractZIP(archivePath, destDir)
 	default:
 		return fmt.Errorf("unsupported archive type for %s", url)
 	}
 }
 
-func downloadFileToDir(ctx context.Context, url, destDir string, progress ProgressTracker) (string, error) {
+func archiveDownloadPattern(url string) (string, string, error) {
+	switch {
+	case strings.HasSuffix(strings.ToLower(url), ".tar.gz"):
+		return "archive-*.tar.gz", ".tar.gz", nil
+	case strings.HasSuffix(strings.ToLower(url), ".zip"):
+		return "archive-*.zip", ".zip", nil
+	default:
+		return "", "", fmt.Errorf("unsupported archive type for %s", url)
+	}
+}
+
+func downloadToTempFile(ctx context.Context, url, destDir, pattern string, progress ProgressTracker) (string, error) {
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return "", fmt.Errorf("create destination dir: %w", err)
+		return "", fmt.Errorf("create download dir: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -272,134 +280,50 @@ func downloadFileToDir(ctx context.Context, url, destDir string, progress Progre
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return "", fmt.Errorf("http %d from %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
-	}
-
-	filename := downloadFilename(resp)
-	if filename == "" {
-		filename = "download.bin"
-	}
-
-	dst := filepath.Join(destDir, filepath.Base(filename))
-	if _, err := downloadResponseBody(resp, dst, progress); err != nil {
-		return "", err
-	}
-
-	return filepath.Base(dst), nil
-}
-
-func downloadFile(ctx context.Context, url, destDir string, progress ProgressTracker) (string, error) {
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return "", fmt.Errorf("create destination dir: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-
-	client := &http.Client{Timeout: 0}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
 		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		return "", fmt.Errorf("http %d from %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
 	}
 
-	filename := downloadFilename(resp)
-	if filename == "" {
-		filename = path.Base(resp.Request.URL.Path)
-	}
-	if filename == "" || filename == "." || filename == "/" {
-		filename = "download.bin"
-	}
-
-	dst := filepath.Join(destDir, filepath.Base(filename))
-	if _, err := downloadResponseBody(resp, dst, progress); err != nil {
-		return "", err
-	}
-
-	return dst, nil
-}
-
-func downloadResponseBody(resp *http.Response, dst string, progress ProgressTracker) (int64, error) {
-	tmpFile, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".tmp-*")
+	tmpFile, err := os.CreateTemp(destDir, pattern)
 	if err != nil {
-		return 0, fmt.Errorf("create temp file: %w", err)
+		_ = resp.Body.Close()
+		return "", fmt.Errorf("create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 
-	if err := tmpFile.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return 0, fmt.Errorf("close temp file: %w", err)
-	}
-
-	out, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		_ = os.Remove(tmpPath)
-		return 0, fmt.Errorf("open temp file: %w", err)
-	}
-
-	stream := resp.Body
+	stream := io.ReadCloser(resp.Body)
 	if progress != nil {
 		stream = progress.TrackProgress(resp.Request.URL.String(), 0, resp.ContentLength, resp.Body)
 	}
 
-	written, copyErr := io.Copy(out, stream)
-	closeErr := out.Close()
+	_, copyErr := io.Copy(tmpFile, stream)
+	closeErr := tmpFile.Close()
 	streamCloseErr := stream.Close()
 	if copyErr != nil {
 		_ = os.Remove(tmpPath)
-		return 0, fmt.Errorf("copy response body: %w", copyErr)
+		return "", fmt.Errorf("copy response body: %w", copyErr)
 	}
 	if closeErr != nil {
 		_ = os.Remove(tmpPath)
-		return 0, fmt.Errorf("close temp file: %w", closeErr)
+		return "", fmt.Errorf("close temp file: %w", closeErr)
 	}
 	if streamCloseErr != nil {
 		_ = os.Remove(tmpPath)
-		return 0, fmt.Errorf("close response body: %w", streamCloseErr)
+		return "", fmt.Errorf("close response body: %w", streamCloseErr)
 	}
 
-	if err := os.Rename(tmpPath, dst); err != nil {
-		_ = os.Remove(tmpPath)
-		return 0, fmt.Errorf("move downloaded file into place: %w", err)
-	}
-
-	return written, nil
-}
-
-func downloadFilename(resp *http.Response) string {
-	if cd := strings.TrimSpace(resp.Header.Get("Content-Disposition")); cd != "" {
-		if _, params, err := mime.ParseMediaType(cd); err == nil {
-			if filename := strings.TrimSpace(params["filename"]); filename != "" {
-				return filepath.Base(filename)
-			}
-		}
-	}
-
-	if resp.Request != nil && resp.Request.URL != nil {
-		if base := path.Base(resp.Request.URL.Path); base != "" && base != "." && base != "/" {
-			return filepath.Base(base)
-		}
-	}
-
-	return ""
+	return tmpPath, nil
 }
 
 func extractTarGz(archivePath, destDir string) error {
+	root, err := prepareArchiveRoot(destDir)
+	if err != nil {
+		return err
+	}
+
 	file, err := os.Open(archivePath)
 	if err != nil {
 		return fmt.Errorf("open archive: %w", err)
@@ -426,24 +350,23 @@ func extractTarGz(archivePath, destDir string) error {
 			return fmt.Errorf("read tar header: %w", err)
 		}
 
-		name := stripArchiveRoot(header.Name)
+		name, err := archiveEntryName(header.Name)
+		if err != nil {
+			return err
+		}
 		if name == "" {
 			continue
 		}
 
-		target, err := archiveTargetPath(destDir, name)
-		if err != nil {
-			return err
-		}
-
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
-				return fmt.Errorf("create directory %s: %w", target, err)
+			if _, err := ensureArchiveDir(root, name, dirMode(os.FileMode(header.Mode))); err != nil {
+				return fmt.Errorf("create directory %s: %w", name, err)
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return fmt.Errorf("create parent directory for %s: %w", target, err)
+			target, err := archiveTargetPath(root, name)
+			if err != nil {
+				return err
 			}
 			out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
@@ -457,10 +380,11 @@ func extractTarGz(archivePath, destDir string) error {
 				return fmt.Errorf("close file %s: %w", target, err)
 			}
 		case tar.TypeSymlink:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return fmt.Errorf("create symlink parent for %s: %w", target, err)
+			target, err := archiveTargetPath(root, name)
+			if err != nil {
+				return err
 			}
-			if err := os.Symlink(header.Linkname, target); err != nil && !os.IsExist(err) {
+			if err := createArchiveSymlink(root, target, header.Linkname); err != nil {
 				return fmt.Errorf("create symlink %s: %w", target, err)
 			}
 		}
@@ -468,6 +392,11 @@ func extractTarGz(archivePath, destDir string) error {
 }
 
 func extractZIP(archivePath, destDir string) error {
+	root, err := prepareArchiveRoot(destDir)
+	if err != nil {
+		return err
+	}
+
 	reader, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return fmt.Errorf("open zip archive: %w", err)
@@ -477,31 +406,42 @@ func extractZIP(archivePath, destDir string) error {
 	}()
 
 	for _, file := range reader.File {
-		name := stripArchiveRoot(file.Name)
+		name, err := archiveEntryName(file.Name)
+		if err != nil {
+			return err
+		}
 		if name == "" {
 			continue
 		}
 
-		target, err := archiveTargetPath(destDir, name)
-		if err != nil {
-			return err
-		}
-
 		mode := file.Mode()
 		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, dirMode(mode)); err != nil {
-				return fmt.Errorf("create directory %s: %w", target, err)
+			if _, err := ensureArchiveDir(root, name, dirMode(mode)); err != nil {
+				return fmt.Errorf("create directory %s: %w", name, err)
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return fmt.Errorf("create parent directory for %s: %w", target, err)
+		target, err := archiveTargetPath(root, name)
+		if err != nil {
+			return err
 		}
 
 		rc, err := file.Open()
 		if err != nil {
 			return fmt.Errorf("open zip entry %s: %w", file.Name, err)
+		}
+
+		if mode&os.ModeSymlink != 0 {
+			linkTarget, err := io.ReadAll(rc)
+			_ = rc.Close()
+			if err != nil {
+				return fmt.Errorf("read symlink target from %s: %w", file.Name, err)
+			}
+			if err := createArchiveSymlink(root, target, string(linkTarget)); err != nil {
+				return fmt.Errorf("create symlink %s: %w", target, err)
+			}
+			continue
 		}
 
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode(mode))
@@ -527,29 +467,154 @@ func extractZIP(archivePath, destDir string) error {
 	return nil
 }
 
-func archiveTargetPath(destDir, name string) (string, error) {
-	name = filepath.Clean(name)
-	target := filepath.Join(destDir, name)
-	rel, err := filepath.Rel(destDir, target)
+func prepareArchiveRoot(destDir string) (string, error) {
+	root, err := filepath.Abs(destDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve extracted path %s: %w", target, err)
+		return "", fmt.Errorf("resolve destination root: %w", err)
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return "", fmt.Errorf("create destination root %s: %w", root, err)
+	}
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve destination root symlinks: %w", err)
+	}
+	return resolved, nil
+}
+
+func archiveEntryName(raw string) (string, error) {
+	name := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	name = strings.TrimPrefix(name, "./")
+	if name == "" {
+		return "", nil
+	}
+	if idx := strings.IndexByte(name, '/'); idx >= 0 {
+		name = strings.TrimPrefix(name[idx+1:], "/")
+	}
+	if name == "" {
+		return "", nil
+	}
+
+	clean := filepath.Clean(filepath.FromSlash(name))
+	if clean == "." || clean == "" {
+		return "", nil
+	}
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("archive entry %q escapes destination", raw)
+	}
+	return clean, nil
+}
+
+func archiveTargetPath(root, name string) (string, error) {
+	parent, err := ensureArchiveDir(root, filepath.Dir(name), 0o755)
+	if err != nil {
+		return "", err
+	}
+
+	target := filepath.Join(parent, filepath.Base(name))
+	if !pathWithinRoot(root, target) {
 		return "", fmt.Errorf("archive entry %q escapes destination", name)
 	}
+
+	if info, err := os.Lstat(target); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("archive entry %q would overwrite existing symlink", name)
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat extracted path %s: %w", target, err)
+	}
+
 	return target, nil
 }
 
-func stripArchiveRoot(name string) string {
-	name = strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
-	name = strings.TrimPrefix(name, "./")
-	if name == "" {
-		return ""
+func ensureArchiveDir(root, relDir string, mode os.FileMode) (string, error) {
+	current := root
+	relDir = filepath.Clean(relDir)
+	if relDir == "." || relDir == "" {
+		return current, nil
 	}
-	if idx := strings.IndexByte(name, '/'); idx >= 0 {
-		return strings.TrimPrefix(name[idx+1:], "/")
+
+	for _, component := range strings.Split(relDir, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		if component == ".." {
+			return "", fmt.Errorf("archive path %q escapes destination", relDir)
+		}
+
+		next := filepath.Join(current, component)
+		info, err := os.Lstat(next)
+		switch {
+		case os.IsNotExist(err):
+			if err := os.Mkdir(next, dirMode(mode)); err != nil {
+				return "", fmt.Errorf("mkdir %s: %w", next, err)
+			}
+			current = next
+		case err != nil:
+			return "", fmt.Errorf("stat %s: %w", next, err)
+		case info.Mode()&os.ModeSymlink != 0:
+			resolved, err := filepath.EvalSymlinks(next)
+			if err != nil {
+				return "", fmt.Errorf("resolve symlink %s: %w", next, err)
+			}
+			if !pathWithinRoot(root, resolved) {
+				return "", fmt.Errorf("archive path %q escapes destination through symlink", relDir)
+			}
+			resolvedInfo, err := os.Stat(resolved)
+			if err != nil {
+				return "", fmt.Errorf("stat resolved symlink %s: %w", resolved, err)
+			}
+			if !resolvedInfo.IsDir() {
+				return "", fmt.Errorf("archive path %q traverses non-directory symlink", relDir)
+			}
+			current = resolved
+		case info.IsDir():
+			current = next
+		default:
+			return "", fmt.Errorf("archive path %q traverses non-directory entry %s", relDir, next)
+		}
 	}
-	return name
+
+	return current, nil
+}
+
+func createArchiveSymlink(root, linkPath, rawTarget string) error {
+	parentDir, err := filepath.EvalSymlinks(filepath.Dir(linkPath))
+	if err != nil {
+		return fmt.Errorf("resolve symlink parent: %w", err)
+	}
+	if !pathWithinRoot(root, parentDir) {
+		return fmt.Errorf("symlink parent escapes destination")
+	}
+
+	linkTarget := filepath.Clean(filepath.FromSlash(strings.TrimSpace(rawTarget)))
+	if linkTarget == "." || linkTarget == "" || filepath.IsAbs(linkTarget) {
+		return fmt.Errorf("invalid symlink target %q", rawTarget)
+	}
+
+	resolvedTarget := filepath.Clean(filepath.Join(parentDir, linkTarget))
+	if !pathWithinRoot(root, resolvedTarget) {
+		return fmt.Errorf("symlink target %q escapes destination", rawTarget)
+	}
+
+	if info, err := os.Lstat(linkPath); err == nil {
+		if info.Mode()&os.ModeSymlink == 0 {
+			return fmt.Errorf("cannot replace non-symlink entry %s", linkPath)
+		}
+		if err := os.Remove(linkPath); err != nil {
+			return fmt.Errorf("remove existing symlink %s: %w", linkPath, err)
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("stat symlink path %s: %w", linkPath, err)
+	}
+
+	return os.Symlink(linkTarget, linkPath)
+}
+
+func pathWithinRoot(root, candidate string) bool {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func dirMode(mode os.FileMode) os.FileMode {

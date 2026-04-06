@@ -130,6 +130,7 @@ Useful flags:
 
 - `--exclude` to skip generated, vendor, or irrelevant paths
 - `--model` to use `embeddinggemma`, `qwen3`, or a custom `.gguf` path
+- `--ctx-size` to override the selected model context size; `0` uses the model default
 - `--lib` to use an existing `yzma` runtime directory
 - `--state-dir` to keep index state in a custom `.semsearch` directory
 
@@ -148,6 +149,7 @@ Useful flags:
 - `--limit` to control result count
 - `--max-distance` to narrow semantic matches
 - `--model` to search with `embeddinggemma`, `qwen3`, or a custom `.gguf` path
+- `--ctx-size` to override the selected model context size; `0` uses the model default
 - `--state-dir` to search against a custom `.semsearch` directory
 - `--details` to print symbol metadata, signature, docs, and body context for each match
 

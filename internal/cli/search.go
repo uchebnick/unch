@@ -32,7 +32,6 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	libPath := fs.String("lib", "", "path to yzma library directory, or to one of its shared library files")
 	queryFlag := fs.String("query", "", "search query; if empty, remaining args are joined")
 	contextSize := fs.Int("ctx-size", 0, "llama context size; 0 uses the selected model default")
-	batchSize := fs.Int("batch-size", 0, "llama batch size; 0 uses the selected model default")
 	limit := fs.Int("limit", 10, "max number of search results")
 	mode := fs.String("mode", "auto", "search mode: auto, semantic, lexical")
 	maxDistance := fs.Float64("max-distance", 0.85, "maximum semantic distance kept in auto and semantic modes; <= 0 disables filtering")
@@ -157,10 +156,6 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	if resolvedContextSize <= 0 {
 		resolvedContextSize = defaultContextSize(resolvedModelPath)
 	}
-	resolvedBatchSize := *batchSize
-	if resolvedBatchSize <= 0 {
-		resolvedBatchSize = defaultBatchSize(resolvedModelPath)
-	}
 
 	s.Logf("index_db=%s", resolvedIndexPath)
 	s.Logf("state_dir=%s", targetPaths.LocalDir)
@@ -168,7 +163,6 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	s.Logf("model=%s", resolvedModelPath)
 	s.Logf("model_id=%s", modelID)
 	s.Logf("ctx_size=%d", resolvedContextSize)
-	s.Logf("batch_size=%d", resolvedBatchSize)
 	s.Logf("root=%s", rootAbs)
 	s.Logf("query=%q", queryText)
 	s.Logf("limit=%d", *limit)
@@ -179,7 +173,6 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 		ModelPath:   resolvedModelPath,
 		LibPath:     resolvedLibPath,
 		ContextSize: resolvedContextSize,
-		BatchSize:   resolvedBatchSize,
 		Verbose:     *verbose,
 		Pooling:     defaultPooling(resolvedModelPath),
 	})

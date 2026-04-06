@@ -22,7 +22,6 @@ type Config struct {
 	ModelPath   string
 	LibPath     string
 	ContextSize int
-	BatchSize   int
 	Verbose     bool
 	Pooling     llama.PoolingType
 }
@@ -33,7 +32,7 @@ type Embedder struct {
 	ctx     llama.Context
 	vocab   llama.Vocab
 	dim     int
-	profile embeddingModel
+	profile embeddingBehavior
 }
 
 var (
@@ -50,7 +49,7 @@ func New(cfg Config) (*Embedder, error) {
 		return nil, err
 	}
 
-	profile := modelForPath(cfg.ModelPath)
+	profile := behaviorForPath(cfg.ModelPath)
 
 	resolvedLibPath, _, err := unchruntime.ResolveYzmaLibPath(cfg.LibPath)
 	if err != nil {
@@ -62,8 +61,8 @@ func New(cfg Config) (*Embedder, error) {
 		return nil, fmt.Errorf("prepare dynamic library lookup path: %w", err)
 	}
 
-	if cfg.BatchSize <= 0 {
-		cfg.BatchSize = 2048
+	if cfg.ContextSize <= 0 {
+		cfg.ContextSize = profileForPath(cfg.ModelPath).DefaultContextSize
 	}
 	if cfg.Pooling == 0 {
 		cfg.Pooling = profile.DefaultPooling()
@@ -116,7 +115,7 @@ func New(cfg Config) (*Embedder, error) {
 
 	ctxParams := llama.ContextDefaultParams()
 	ctxParams.NCtx = uint32(cfg.ContextSize)
-	ctxParams.NBatch = uint32(cfg.BatchSize)
+	ctxParams.NBatch = uint32(cfg.ContextSize)
 	ctxParams.PoolingType = cfg.Pooling
 	ctxParams.Embeddings = 1
 
@@ -256,11 +255,11 @@ func hashComment(text string) string {
 	return hex.EncodeToString(b[:])
 }
 
-func hashIndexedSymbolDocument(profile embeddingModel, path string, symbol indexing.IndexedSymbol) string {
-	return hashComment("embedding_doc_format:" + profile.ID() + "\n" + indexedSymbolDocument(profile, path, symbol))
+func hashIndexedSymbolDocument(profile embeddingBehavior, path string, symbol indexing.IndexedSymbol) string {
+	return hashComment("embedding_doc_format:" + profile.ProfileRevision() + "\n" + indexedSymbolDocument(profile, path, symbol))
 }
 
-func indexedSymbolDocument(profile embeddingModel, path string, symbol indexing.IndexedSymbol) string {
+func indexedSymbolDocument(profile embeddingBehavior, path string, symbol indexing.IndexedSymbol) string {
 	return profile.FormatIndexedSymbolDocument(path, symbol)
 }
 

@@ -105,14 +105,14 @@ func TestNormalizeDocumentTitle(t *testing.T) {
 func TestModelForPath(t *testing.T) {
 	t.Parallel()
 
-	gemmaID := embeddingGemmaModel{}.ID()
-	qwenID := qwen3EmbeddingModel{}.ID()
+	gemmaID := embeddingGemmaModel{}.ProfileRevision()
+	qwenID := qwen3EmbeddingModel{}.ProfileRevision()
 
-	if got := modelForPath("/tmp/embeddinggemma-300m.gguf").ID(); got != gemmaID {
-		t.Fatalf("modelForPath(gemma) = %q", got)
+	if got := behaviorForPath("/tmp/embeddinggemma-300m.gguf").ProfileRevision(); got != gemmaID {
+		t.Fatalf("behaviorForPath(gemma) = %q", got)
 	}
-	if got := modelForPath("/tmp/Qwen3-Embedding-0.6B-Q8_0.gguf").ID(); got != qwenID {
-		t.Fatalf("modelForPath(qwen3) = %q", got)
+	if got := behaviorForPath("/tmp/Qwen3-Embedding-0.6B-Q8_0.gguf").ProfileRevision(); got != qwenID {
+		t.Fatalf("behaviorForPath(qwen3) = %q", got)
 	}
 }
 
@@ -133,22 +133,19 @@ func TestKnownModelProfiles(t *testing.T) {
 	if !ok || qwenProfile.ID != "qwen3" {
 		t.Fatalf("ResolveKnownModelProfile(qwen3) = (%#v, %v)", qwenProfile, ok)
 	}
-	if qwenProfile.DefaultContext != 8192 || qwenProfile.DefaultBatch != 8192 {
-		t.Fatalf("ResolveKnownModelProfile(qwen3) defaults = (%d, %d)", qwenProfile.DefaultContext, qwenProfile.DefaultBatch)
+	if qwenProfile.DefaultContextSize != 8192 {
+		t.Fatalf("ResolveKnownModelProfile(qwen3) default context = %d", qwenProfile.DefaultContextSize)
 	}
 
 	gemmaByPath, ok := RecognizeModelProfileForPath("/tmp/embeddinggemma-300m.gguf")
 	if !ok || gemmaByPath.ID != "embeddinggemma" {
 		t.Fatalf("RecognizeModelProfileForPath(gemma) = (%#v, %v)", gemmaByPath, ok)
 	}
-	if gemmaByPath.DefaultContext != 2048 || gemmaByPath.DefaultBatch != 2048 {
-		t.Fatalf("RecognizeModelProfileForPath(gemma) defaults = (%d, %d)", gemmaByPath.DefaultContext, gemmaByPath.DefaultBatch)
+	if gemmaByPath.DefaultContextSize != 2048 {
+		t.Fatalf("RecognizeModelProfileForPath(gemma) default context = %d", gemmaByPath.DefaultContextSize)
 	}
 	if got := DefaultContextSizeForModelPath("/tmp/Qwen3-Embedding-0.6B-Q8_0.gguf"); got != 8192 {
 		t.Fatalf("DefaultContextSizeForModelPath(qwen3) = %d", got)
-	}
-	if got := DefaultBatchSizeForModelPath("/tmp/Qwen3-Embedding-0.6B-Q8_0.gguf"); got != 8192 {
-		t.Fatalf("DefaultBatchSizeForModelPath(qwen3) = %d", got)
 	}
 }
 

@@ -213,7 +213,7 @@ func TestResolveModelSelectionSupportsKnownAliases(t *testing.T) {
 	if got, want := selection.ResolvedPath, defaultPath; got != want {
 		t.Fatalf("resolveModelSelection(default) path = %q, want %q", got, want)
 	}
-	if !selection.AutoDownload || selection.Profile.ID != "embeddinggemma" {
+	if !selection.AutoDownload || selection.Target.ID != "embeddinggemma" {
 		t.Fatalf("resolveModelSelection(default) = %#v", selection)
 	}
 
@@ -225,7 +225,7 @@ func TestResolveModelSelectionSupportsKnownAliases(t *testing.T) {
 	if got := qwenSelection.ResolvedPath; got != wantQwen {
 		t.Fatalf("resolveModelSelection(qwen3) path = %q, want %q", got, wantQwen)
 	}
-	if !qwenSelection.AutoDownload || qwenSelection.Profile.ID != "qwen3" {
+	if !qwenSelection.AutoDownload || qwenSelection.Target.ID != "qwen3" {
 		t.Fatalf("resolveModelSelection(qwen3) = %#v", qwenSelection)
 	}
 }

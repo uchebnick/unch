@@ -213,7 +213,3 @@ func defaultPooling(modelPath string) llama.PoolingType {
 func defaultContextSize(modelPath string) int {
 	return llamaembed.DefaultContextSizeForModelPath(modelPath)
 }
-
-func defaultBatchSize(modelPath string) int {
-	return llamaembed.DefaultBatchSizeForModelPath(modelPath)
-}

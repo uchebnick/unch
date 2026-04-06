@@ -7,6 +7,7 @@ import (
 
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/uchebnick/unch/internal/indexing"
+	"github.com/uchebnick/unch/internal/modelcatalog"
 )
 
 const (
@@ -17,124 +18,132 @@ const (
 )
 
 type ModelProfile struct {
-	ID              string
-	DisplayName     string
-	Aliases         []string
-	DefaultFilename string
-	DownloadURL     string
-	DefaultContext  int
-	DefaultBatch    int
+	modelcatalog.Metadata
+	DefaultContextSize int
 }
 
-type embeddingModel interface {
-	Profile() ModelProfile
-	ID() string
+type embeddingBehavior interface {
+	ProfileRevision() string
 	DefaultPooling() llama.PoolingType
-	Matches(modelPath string) bool
 	FormatQuery(text string) string
 	FormatIndexedSymbolDocument(path string, symbol indexing.IndexedSymbol) string
+}
+
+type registeredEmbeddingModel struct {
+	TargetID string
+	Defaults runtimeDefaults
+	Behavior embeddingBehavior
+}
+
+type runtimeDefaults struct {
+	DefaultContextSize int
 }
 
 type embeddingGemmaModel struct{}
 
 type qwen3EmbeddingModel struct{}
 
-var embeddingModels = []embeddingModel{
-	qwen3EmbeddingModel{},
-	embeddingGemmaModel{},
+var embeddingModels = []registeredEmbeddingModel{
+	{
+		TargetID: "embeddinggemma",
+		Defaults: runtimeDefaults{DefaultContextSize: 2048},
+		Behavior: embeddingGemmaModel{},
+	},
+	{
+		TargetID: "qwen3",
+		Defaults: runtimeDefaults{DefaultContextSize: 8192},
+		Behavior: qwen3EmbeddingModel{},
+	},
 }
 
 // DefaultModelProfile returns the model profile used when --model is omitted.
 func DefaultModelProfile() ModelProfile {
-	return embeddingGemmaModel{}.Profile()
+	return profileForTarget(modelcatalog.DefaultInstallTarget())
 }
 
 // KnownModelProfiles returns the built-in GGUF embedding model profiles supported by the CLI.
 func KnownModelProfiles() []ModelProfile {
-	profiles := make([]ModelProfile, 0, len(embeddingModels))
-	for _, model := range embeddingModels {
-		profiles = append(profiles, model.Profile())
+	targets := modelcatalog.KnownInstallTargets()
+	profiles := make([]ModelProfile, 0, len(targets))
+	for _, target := range targets {
+		profiles = append(profiles, profileForTarget(target))
 	}
 	return profiles
 }
 
 // ResolveKnownModelProfile resolves a short model alias such as "embeddinggemma" or "qwen3".
 func ResolveKnownModelProfile(value string) (ModelProfile, bool) {
-	token := normalizeModelToken(value)
-	if token == "" {
+	target, ok := modelcatalog.ResolveInstallTarget(value)
+	if !ok {
 		return ModelProfile{}, false
 	}
 
-	for _, model := range embeddingModels {
-		profile := model.Profile()
-		for _, alias := range profile.Aliases {
-			if token == normalizeModelToken(alias) {
-				return profile, true
-			}
-		}
-	}
-
-	return ModelProfile{}, false
+	return profileForTarget(target), true
 }
 
 // RecognizeModelProfileForPath returns a built-in model profile when the path matches a known GGUF filename family.
 func RecognizeModelProfileForPath(modelPath string) (ModelProfile, bool) {
-	for _, model := range embeddingModels {
-		if model.Matches(modelPath) {
-			return model.Profile(), true
-		}
+	target, ok := modelcatalog.RecognizeInstallTargetForPath(modelPath)
+	if !ok {
+		return ModelProfile{}, false
 	}
-	return ModelProfile{}, false
+	return profileForTarget(target), true
 }
 
 // DefaultPoolingForModelPath returns the pooling mode that matches the known GGUF embedding model.
 func DefaultPoolingForModelPath(modelPath string) llama.PoolingType {
-	return modelForPath(modelPath).DefaultPooling()
+	return behaviorForPath(modelPath).DefaultPooling()
 }
 
 // DefaultContextSizeForModelPath returns the model-specific context size used when the CLI does not override it.
 func DefaultContextSizeForModelPath(modelPath string) int {
-	return modelForPath(modelPath).Profile().DefaultContext
+	return profileForPath(modelPath).DefaultContextSize
 }
 
-// DefaultBatchSizeForModelPath returns the model-specific batch size used when the CLI does not override it.
-func DefaultBatchSizeForModelPath(modelPath string) int {
-	return modelForPath(modelPath).Profile().DefaultBatch
+func profileForPath(modelPath string) ModelProfile {
+	target, ok := modelcatalog.RecognizeInstallTargetForPath(modelPath)
+	if !ok {
+		target = modelcatalog.DefaultInstallTarget()
+	}
+	return profileForTarget(target)
 }
 
-func modelForPath(modelPath string) embeddingModel {
+func behaviorForTargetID(targetID string) embeddingBehavior {
+	return registeredModelForTargetID(targetID).Behavior
+}
+
+func behaviorForPath(modelPath string) embeddingBehavior {
+	return behaviorForTargetID(profileForPath(modelPath).ID)
+}
+
+func profileForTarget(target modelcatalog.InstallTarget) ModelProfile {
+	defaults := runtimeDefaultsForTargetID(target.ID)
+	return ModelProfile{
+		Metadata:           target.Clone(),
+		DefaultContextSize: defaults.DefaultContextSize,
+	}
+}
+
+func runtimeDefaultsForTargetID(targetID string) runtimeDefaults {
+	return registeredModelForTargetID(targetID).Defaults
+}
+
+func registeredModelForTargetID(targetID string) registeredEmbeddingModel {
 	for _, model := range embeddingModels {
-		if model.Matches(modelPath) {
+		if model.TargetID == targetID {
 			return model
 		}
 	}
 
-	return embeddingGemmaModel{}
+	return embeddingModels[0]
 }
 
-func (embeddingGemmaModel) Profile() ModelProfile {
-	return ModelProfile{
-		ID:              "embeddinggemma",
-		DisplayName:     "embeddinggemma-300m",
-		Aliases:         []string{"default", "embeddinggemma", "gemma", "embeddinggemma-300m"},
-		DefaultFilename: "embeddinggemma-300m.gguf",
-		DownloadURL:     "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf?download=true",
-		DefaultContext:  2048,
-		DefaultBatch:    2048,
-	}
-}
-
-func (embeddingGemmaModel) ID() string {
+func (embeddingGemmaModel) ProfileRevision() string {
 	return "embeddinggemma-v4"
 }
 
 func (embeddingGemmaModel) DefaultPooling() llama.PoolingType {
 	return llama.PoolingTypeMean
-}
-
-func (embeddingGemmaModel) Matches(modelPath string) bool {
-	name, full := normalizedModelPath(modelPath)
-	return strings.Contains(name, "embeddinggemma") || strings.Contains(full, "embeddinggemma")
 }
 
 func (embeddingGemmaModel) FormatQuery(text string) string {
@@ -147,31 +156,12 @@ func (embeddingGemmaModel) FormatIndexedSymbolDocument(path string, symbol index
 	return fmt.Sprintf(embeddingGemmaDocumentPrefix, normalizeDocumentTitle(title), normalizeText(body))
 }
 
-func (qwen3EmbeddingModel) Profile() ModelProfile {
-	return ModelProfile{
-		ID:              "qwen3",
-		DisplayName:     "Qwen3-Embedding-0.6B",
-		Aliases:         []string{"qwen3", "qwen3-embedding", "qwen3embedding", "qwen"},
-		DefaultFilename: "Qwen3-Embedding-0.6B-Q8_0.gguf",
-		DownloadURL:     "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true",
-		DefaultContext:  8192,
-		DefaultBatch:    8192,
-	}
-}
-
-func (qwen3EmbeddingModel) ID() string {
+func (qwen3EmbeddingModel) ProfileRevision() string {
 	return "qwen3-embedding-v1"
 }
 
 func (qwen3EmbeddingModel) DefaultPooling() llama.PoolingType {
 	return llama.PoolingTypeLast
-}
-
-func (qwen3EmbeddingModel) Matches(modelPath string) bool {
-	name, full := normalizedModelPath(modelPath)
-	return strings.Contains(name, "qwen3-embedding") ||
-		strings.Contains(name, "qwen3embedding") ||
-		(strings.Contains(full, "qwen3") && strings.Contains(full, "embed"))
 }
 
 func (qwen3EmbeddingModel) FormatQuery(text string) string {
@@ -264,16 +254,4 @@ func normalizeDocumentTitle(title string) string {
 		return "none"
 	}
 	return title
-}
-
-func normalizedModelPath(modelPath string) (string, string) {
-	full := strings.ToLower(strings.TrimSpace(modelPath))
-	name := strings.ToLower(filepath.Base(full))
-	return name, full
-}
-
-func normalizeModelToken(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	replacer := strings.NewReplacer("-", "", "_", "", " ", "")
-	return replacer.Replace(value)
 }

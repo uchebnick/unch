@@ -102,7 +102,7 @@ func printRootHelp(w io.Writer, program string) error {
 		"  - Pass --model embeddinggemma or --model qwen3 to auto-select and auto-download a known GGUF model.",
 		"  - Pass --model /path/to/model.gguf to use a custom GGUF embedding model.",
 		"  - Known profiles today: embeddinggemma (mean pooling) and Qwen3-Embedding (last-token pooling).",
-		"  - --ctx-size and --batch-size default to the selected model profile when left at 0.",
+		"  - --ctx-size defaults to the selected model profile when left at 0.",
 		"  - Rebuild the index after changing models, and use the same model family for both index and search.",
 	}
 	for _, line := range modelNotes {

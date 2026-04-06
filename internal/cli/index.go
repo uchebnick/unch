@@ -36,7 +36,6 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	commentPrefix := fs.String("comment-prefix", "@search:", "legacy comment prefix used only by fallback indexers")
 	gitignorePath := fs.String("gitignore", "", "optional path to .gitignore; default is <root>/.gitignore")
 	contextSize := fs.Int("ctx-size", 0, "llama context size; 0 uses the selected model default")
-	batchSize := fs.Int("batch-size", 0, "llama batch size; 0 uses the selected model default")
 	verbose := fs.Bool("verbose", false, "enable yzma verbose logging")
 	fs.Var(&excludes, "exclude", "exclude pattern; can be used multiple times")
 
@@ -182,10 +181,6 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	if resolvedContextSize <= 0 {
 		resolvedContextSize = defaultContextSize(resolvedModelPath)
 	}
-	resolvedBatchSize := *batchSize
-	if resolvedBatchSize <= 0 {
-		resolvedBatchSize = defaultBatchSize(resolvedModelPath)
-	}
 
 	s.Logf("state_dir=%s", targetPaths.LocalDir)
 	s.Logf("index_db=%s", resolvedIndexPath)
@@ -193,14 +188,12 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	s.Logf("model=%s", resolvedModelPath)
 	s.Logf("model_id=%s", modelID)
 	s.Logf("ctx_size=%d", resolvedContextSize)
-	s.Logf("batch_size=%d", resolvedBatchSize)
 	s.Logf("root=%s", rootAbs)
 
 	embedder, err := loadEmbedderWithSpinner(ctx, s, llamaembed.Config{
 		ModelPath:   resolvedModelPath,
 		LibPath:     resolvedLibPath,
 		ContextSize: resolvedContextSize,
-		BatchSize:   resolvedBatchSize,
 		Verbose:     *verbose,
 		Pooling:     defaultPooling(resolvedModelPath),
 	})

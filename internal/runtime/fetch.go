@@ -324,6 +324,8 @@ func extractTarGz(archivePath, destDir string) error {
 		return err
 	}
 
+	var pendingLinks []archiveLink
+
 	file, err := os.Open(archivePath)
 	if err != nil {
 		return fmt.Errorf("open archive: %w", err)
@@ -344,10 +346,14 @@ func extractTarGz(archivePath, destDir string) error {
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
-			return nil
+			return materializeArchiveLinks(root, pendingLinks)
 		}
 		if err != nil {
 			return fmt.Errorf("read tar header: %w", err)
+		}
+
+		if archivePathHasParentRef(header.Name) {
+			return fmt.Errorf("archive entry %q escapes destination", header.Name)
 		}
 
 		name, err := archiveEntryName(header.Name)
@@ -384,9 +390,19 @@ func extractTarGz(archivePath, destDir string) error {
 			if err != nil {
 				return err
 			}
-			if err := createArchiveSymlink(root, target, header.Linkname); err != nil {
-				return fmt.Errorf("create symlink %s: %w", target, err)
+			pendingLinks = append(pendingLinks, archiveLink{
+				linkPath:   target,
+				targetPath: header.Linkname,
+			})
+		case tar.TypeLink:
+			target, err := archiveTargetPath(root, name)
+			if err != nil {
+				return err
 			}
+			pendingLinks = append(pendingLinks, archiveLink{
+				linkPath:   target,
+				targetPath: header.Linkname,
+			})
 		}
 	}
 }
@@ -397,6 +413,8 @@ func extractZIP(archivePath, destDir string) error {
 		return err
 	}
 
+	var pendingLinks []archiveLink
+
 	reader, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return fmt.Errorf("open zip archive: %w", err)
@@ -406,6 +424,10 @@ func extractZIP(archivePath, destDir string) error {
 	}()
 
 	for _, file := range reader.File {
+		if archivePathHasParentRef(file.Name) {
+			return fmt.Errorf("archive entry %q escapes destination", file.Name)
+		}
+
 		name, err := archiveEntryName(file.Name)
 		if err != nil {
 			return err
@@ -438,9 +460,10 @@ func extractZIP(archivePath, destDir string) error {
 			if err != nil {
 				return fmt.Errorf("read symlink target from %s: %w", file.Name, err)
 			}
-			if err := createArchiveSymlink(root, target, string(linkTarget)); err != nil {
-				return fmt.Errorf("create symlink %s: %w", target, err)
-			}
+			pendingLinks = append(pendingLinks, archiveLink{
+				linkPath:   target,
+				targetPath: string(linkTarget),
+			})
 			continue
 		}
 
@@ -464,7 +487,7 @@ func extractZIP(archivePath, destDir string) error {
 		}
 	}
 
-	return nil
+	return materializeArchiveLinks(root, pendingLinks)
 }
 
 func prepareArchiveRoot(destDir string) (string, error) {
@@ -576,39 +599,6 @@ func ensureArchiveDir(root, relDir string, mode os.FileMode) (string, error) {
 	return current, nil
 }
 
-func createArchiveSymlink(root, linkPath, rawTarget string) error {
-	parentDir, err := filepath.EvalSymlinks(filepath.Dir(linkPath))
-	if err != nil {
-		return fmt.Errorf("resolve symlink parent: %w", err)
-	}
-	if !pathWithinRoot(root, parentDir) {
-		return fmt.Errorf("symlink parent escapes destination")
-	}
-
-	linkTarget := filepath.Clean(filepath.FromSlash(strings.TrimSpace(rawTarget)))
-	if linkTarget == "." || linkTarget == "" || filepath.IsAbs(linkTarget) {
-		return fmt.Errorf("invalid symlink target %q", rawTarget)
-	}
-
-	resolvedTarget := filepath.Clean(filepath.Join(parentDir, linkTarget))
-	if !pathWithinRoot(root, resolvedTarget) {
-		return fmt.Errorf("symlink target %q escapes destination", rawTarget)
-	}
-
-	if info, err := os.Lstat(linkPath); err == nil {
-		if info.Mode()&os.ModeSymlink == 0 {
-			return fmt.Errorf("cannot replace non-symlink entry %s", linkPath)
-		}
-		if err := os.Remove(linkPath); err != nil {
-			return fmt.Errorf("remove existing symlink %s: %w", linkPath, err)
-		}
-	} else if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("stat symlink path %s: %w", linkPath, err)
-	}
-
-	return os.Symlink(linkTarget, linkPath)
-}
-
 func pathWithinRoot(root, candidate string) bool {
 	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
 	if err != nil {
@@ -633,4 +623,97 @@ func fileMode(mode os.FileMode) os.FileMode {
 
 func isHTTPNotFound(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "http 404")
+}
+
+type archiveLink struct {
+	linkPath   string
+	targetPath string
+}
+
+func archivePathHasParentRef(name string) bool {
+	name = strings.ReplaceAll(name, "\\", "/")
+	return strings.Contains(name, "..")
+}
+
+func materializeArchiveLinks(root string, links []archiveLink) error {
+	for _, link := range links {
+		if err := materializeArchiveLink(root, link); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func materializeArchiveLink(root string, link archiveLink) error {
+	parentDir, err := filepath.EvalSymlinks(filepath.Dir(link.linkPath))
+	if err != nil {
+		return fmt.Errorf("resolve archive link parent: %w", err)
+	}
+	if !pathWithinRoot(root, parentDir) {
+		return fmt.Errorf("archive link parent escapes destination")
+	}
+	if _, err := os.Lstat(link.linkPath); err == nil {
+		return fmt.Errorf("archive link destination %s already exists", link.linkPath)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat archive link destination %s: %w", link.linkPath, err)
+	}
+
+	resolvedTarget, err := resolvedArchiveLinkTarget(parentDir, root, link.targetPath)
+	if err != nil {
+		return err
+	}
+
+	info, err := os.Stat(resolvedTarget)
+	if err != nil {
+		return fmt.Errorf("stat archive link target %s: %w", resolvedTarget, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("archive link target %s is a directory", resolvedTarget)
+	}
+
+	if err := copyFile(resolvedTarget, link.linkPath, fileMode(info.Mode())); err != nil {
+		return fmt.Errorf("materialize archive link %s from %s: %w", link.linkPath, resolvedTarget, err)
+	}
+	return nil
+}
+
+func resolvedArchiveLinkTarget(parentDir, root, rawTarget string) (string, error) {
+	linkTarget := filepath.Clean(filepath.FromSlash(strings.TrimSpace(rawTarget)))
+	if linkTarget == "." || linkTarget == "" || filepath.IsAbs(linkTarget) {
+		return "", fmt.Errorf("invalid archive link target %q", rawTarget)
+	}
+
+	candidateTarget := filepath.Clean(filepath.Join(parentDir, linkTarget))
+	if !pathWithinRoot(root, candidateTarget) {
+		return "", fmt.Errorf("archive link target %q escapes destination", rawTarget)
+	}
+
+	resolvedTarget, err := filepath.EvalSymlinks(candidateTarget)
+	if err != nil {
+		return "", fmt.Errorf("resolve archive link target %q: %w", rawTarget, err)
+	}
+	if !pathWithinRoot(root, resolvedTarget) {
+		return "", fmt.Errorf("archive link target %q escapes destination", rawTarget)
+	}
+	return resolvedTarget, nil
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = in.Close()
+	}()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }

@@ -49,7 +49,7 @@ func TestExtractTarGzRejectsOverwriteThroughSymlink(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected archive to fail when a regular file reuses a symlink path")
 	}
-	if !strings.Contains(err.Error(), "overwrite existing symlink") {
+	if !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

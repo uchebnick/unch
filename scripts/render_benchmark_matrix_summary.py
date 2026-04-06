@@ -49,50 +49,6 @@ def platform_sort_key(report: dict) -> tuple[int, str, str]:
     return (order.get(key, 99), env["os"], env["arch"])
 
 
-def render_repository_table(report: dict) -> list[str]:
-    lines = [
-        "| Repo | Language | Queries | Modes | Latest index | Cold index | Warm index | Warm search | Score |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ]
-
-    for repo in report["repositories"]:
-        repo_timing = repo["timing"]
-        repo_metrics = repo["metrics"]
-        repo_stats = repo.get("stats") or {}
-        latest_index = "n/a"
-        if repo_stats.get("last_indexed_symbols") or repo_stats.get("last_indexed_files"):
-            latest_index = (
-                f"{repo_stats.get('last_indexed_symbols', 0)} symbols / "
-                f"{repo_stats.get('last_indexed_files', 0)} files"
-            )
-
-        lines.append(
-            f"| `{repo['id']}` | `{repo['language']}` | "
-            f"`{repo_stats.get('query_count', len(repo.get('queries') or []))}` | "
-            f"`{format_mode_counts(repo_stats.get('mode_counts'))}` | "
-            f"`{latest_index}` | "
-            f"`{format_duration_ms(repo_timing['cold_index_mean_ms'])}` | "
-            f"`{format_duration_ms(repo_timing['warm_index_mean_ms'])}` | "
-            f"`{format_duration_ms(repo_timing['warm_search_mean_ms'])}` | "
-            f"`{repo_metrics['quality_score']}` |"
-        )
-
-    return lines
-
-
-def render_platform_summary(report: dict) -> str:
-    env = report["environment"]
-    timing = report["timing"]
-    metrics = report["metrics"]
-    return (
-        f"<code>{env['os']}/{env['arch']}</code> • "
-        f"{env.get('cpu_info') or 'unknown CPU'} • "
-        f"cold {format_duration_ms(timing['cold_index_mean_ms'])} • "
-        f"warm {format_duration_ms(timing['warm_search_mean_ms'])} • "
-        f"score {metrics['quality_score']}/100"
-    )
-
-
 def render_matrix_summary(reports: list[dict]) -> str:
     lines: list[str] = ["## Benchmark Matrix", ""]
 
@@ -132,30 +88,6 @@ def render_matrix_summary(reports: list[dict]) -> str:
             f"`{format_duration_ms(timing['warm_search_mean_ms'])}` | "
             f"`{metrics['quality_score']}` |"
         )
-
-    for report in reports:
-        env = report["environment"]
-        timing = report["timing"]
-        metrics = report["metrics"]
-        lines.append("")
-        lines.append("<details>")
-        lines.append(f"<summary>{render_platform_summary(report)}</summary>")
-        lines.append("")
-        lines.append(f"- Tool: `{report['tool']}` (`{env['tool_version']}`)")
-        lines.append(f"- CPU: `{env.get('cpu_info') or 'unknown CPU'}` • `{env['num_cpu']}` cores")
-        lines.append(
-            f"- Timing: cold `{format_duration_ms(timing['cold_index_mean_ms'])}` • "
-            f"warm index `{format_duration_ms(timing['warm_index_mean_ms'])}` • "
-            f"warm search `{format_duration_ms(timing['warm_search_mean_ms'])}`"
-        )
-        lines.append(
-            f"- Quality: `{metrics['quality_score']}/100` "
-            f"(top1=`{metrics['top1']:.3f}` top3=`{metrics['top3']:.3f}` mrr=`{metrics['mrr']:.3f}`)"
-        )
-        lines.append("")
-        lines.extend(render_repository_table(report))
-        lines.append("")
-        lines.append("</details>")
 
     lines.append("")
     return "\n".join(lines)

@@ -93,7 +93,7 @@ func (a *UnchAdapter) Prepare(ctx context.Context, env Environment) error {
 	}
 
 	if a.libPath == "" {
-		resolvedLibPath, err := discoverManagedYzmaLibDir(env.WarmupRoot)
+		resolvedLibPath, err := discoverWarmedYzmaLibDir(env.WarmupRoot)
 		if err != nil {
 			return fmt.Errorf("discover warmed yzma libs: %w", err)
 		}
@@ -291,28 +291,56 @@ func gitDescribe(ctx context.Context, repoRoot string) string {
 	return strings.TrimSpace(string(output))
 }
 
-func discoverManagedYzmaLibDir(warmupRoot string) (string, error) {
+func discoverWarmedYzmaLibDir(warmupRoot string) (string, error) {
 	installRoot := filepath.Join(warmupRoot, ".semsearch", "yzma")
 	candidates := []string{
 		installRoot,
 		filepath.Join(installRoot, "lib"),
 	}
+	if loggedPath := discoverLoggedYzmaLibDir(warmupRoot); loggedPath != "" {
+		candidates = append(candidates, loggedPath)
+	}
 
 	requiredFiles := requiredYzmaLibFilesForGOOS(runtime.GOOS)
 	for _, candidate := range candidates {
-		ok := true
-		for _, filename := range requiredFiles {
-			if _, err := os.Stat(filepath.Join(candidate, filename)); err != nil {
-				ok = false
-				break
-			}
-		}
-		if ok {
+		if hasRequiredFiles(candidate, requiredFiles) {
 			return candidate, nil
 		}
 	}
 
 	return "", fmt.Errorf("yzma libs not found under %s", installRoot)
+}
+
+func discoverLoggedYzmaLibDir(warmupRoot string) string {
+	logPath := filepath.Join(warmupRoot, ".semsearch", "logs", "run.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		idx := strings.LastIndex(line, "lib=")
+		if idx < 0 {
+			continue
+		}
+		candidate := strings.TrimSpace(line[idx+len("lib="):])
+		if candidate != "" {
+			return candidate
+		}
+	}
+
+	return ""
+}
+
+func hasRequiredFiles(dir string, requiredFiles []string) bool {
+	for _, filename := range requiredFiles {
+		if _, err := os.Stat(filepath.Join(dir, filename)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func requiredYzmaLibFilesForGOOS(goos string) []string {

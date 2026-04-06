@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	stdruntime "runtime"
 	"testing"
 )
 
@@ -142,5 +143,58 @@ func TestUnchAdapterBuildBinaryFromCmdUnch(t *testing.T) {
 	}
 	if info.IsDir() {
 		t.Fatalf("built binary path is a directory: %s", adapter.binaryPath)
+	}
+}
+
+func TestDiscoverWarmedYzmaLibDirPrefersManagedInstall(t *testing.T) {
+	t.Parallel()
+
+	warmupRoot := t.TempDir()
+	managedDir := filepath.Join(warmupRoot, ".semsearch", "yzma", "lib")
+	writeRequiredYzmaFiles(t, managedDir)
+
+	got, err := discoverWarmedYzmaLibDir(warmupRoot)
+	if err != nil {
+		t.Fatalf("discoverWarmedYzmaLibDir() error = %v", err)
+	}
+	if got != filepath.Clean(managedDir) {
+		t.Fatalf("discoverWarmedYzmaLibDir() = %q, want %q", got, managedDir)
+	}
+}
+
+func TestDiscoverWarmedYzmaLibDirFallsBackToLoggedPath(t *testing.T) {
+	t.Parallel()
+
+	warmupRoot := t.TempDir()
+	fallbackDir := filepath.Join(t.TempDir(), "fallback-lib")
+	writeRequiredYzmaFiles(t, fallbackDir)
+
+	logPath := filepath.Join(warmupRoot, ".semsearch", "logs", "run.log")
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(logPath, []byte("2026/04/06 09:44:10 lib="+fallbackDir+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := discoverWarmedYzmaLibDir(warmupRoot)
+	if err != nil {
+		t.Fatalf("discoverWarmedYzmaLibDir() error = %v", err)
+	}
+	if got != filepath.Clean(fallbackDir) {
+		t.Fatalf("discoverWarmedYzmaLibDir() = %q, want %q", got, fallbackDir)
+	}
+}
+
+func writeRequiredYzmaFiles(t *testing.T, dir string) {
+	t.Helper()
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) error = %v", dir, err)
+	}
+	for _, name := range requiredYzmaLibFilesForGOOS(stdruntime.GOOS) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("ok"), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", name, err)
+		}
 	}
 }

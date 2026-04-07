@@ -32,17 +32,26 @@ sha256_file() {
   file_path="$1"
 
   if has_cmd sha256sum; then
-    sha256sum "$file_path" | awk '{print $1}'
+    sha256sum "$file_path" | {
+      IFS=' ' read -r checksum _
+      printf '%s\n' "$checksum"
+    }
     return
   fi
 
   if has_cmd shasum; then
-    shasum -a 256 "$file_path" | awk '{print $1}'
+    shasum -a 256 "$file_path" | {
+      IFS=' ' read -r checksum _
+      printf '%s\n' "$checksum"
+    }
     return
   fi
 
   if has_cmd openssl; then
-    openssl dgst -sha256 "$file_path" | awk '{print $NF}'
+    openssl dgst -sha256 "$file_path" | {
+      read -r _ checksum
+      printf '%s\n' "$checksum"
+    }
     return
   fi
 
@@ -53,16 +62,21 @@ find_expected_checksum() {
   checksums_path="$1"
   asset_name="$2"
 
-  awk -v target="$asset_name" '
-    NF >= 2 {
-      file = $NF
-      sub(/^.*\//, "", file)
-      if (file == target) {
-        print $1
-        exit
-      }
-    }
-  ' "$checksums_path"
+  while IFS= read -r line || [ -n "$line" ]; do
+    set -- $line
+    checksum="${1:-}"
+    file_path="${2:-}"
+    [ -n "$checksum" ] || continue
+    [ -n "$file_path" ] || continue
+    file_path="${file_path#\*}"
+    file_name="${file_path##*/}"
+    if [ "$file_name" = "$asset_name" ]; then
+      printf '%s\n' "$checksum"
+      return 0
+    fi
+  done < "$checksums_path"
+
+  return 1
 }
 
 resolve_checksums_file() {

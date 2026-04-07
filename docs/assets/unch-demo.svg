@@ -1,31 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" fill="none">
+  <defs>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(140 70) rotate(26) scale(360 220)">
+      <stop stop-color="#0EA5E9" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#0EA5E9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1000 180) rotate(38) scale(340 240)">
+      <stop stop-color="#22C55E" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#22C55E" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="windowGrad" x1="600" y1="32" x2="600" y2="728" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101A2E"/>
+      <stop offset="1" stop-color="#0D1628"/>
+    </linearGradient>
+    <linearGradient id="panelGrad" x1="600" y1="294" x2="600" y2="656" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101A2F"/>
+      <stop offset="1" stop-color="#0A1325"/>
+    </linearGradient>
+    <filter id="shadowLg" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+    <filter id="shadowSm" x="-20%" y="-20%" width="140%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity="0.38"/>
+    </filter>
+  </defs>
   <rect width="1200" height="760" rx="28" fill="#09111F"/>
-  <rect x="32" y="32" width="1136" height="696" rx="20" fill="#0F172A" stroke="#1F2A44" stroke-width="2"/>
+  <rect width="1200" height="760" rx="28" fill="url(#glowA)"/>
+  <rect width="1200" height="760" rx="28" fill="url(#glowB)"/>
+  <rect x="32" y="32" width="1136" height="696" rx="20" fill="url(#windowGrad)" stroke="#1F2A44" stroke-width="2" filter="url(#shadowLg)"/>
   <rect x="32" y="32" width="1136" height="44" rx="20" fill="#111B32"/>
+  <line x1="33" y1="76" x2="1167" y2="76" stroke="#223456"/>
   <circle cx="68" cy="54" r="8" fill="#F87171"/>
   <circle cx="96" cy="54" r="8" fill="#FBBF24"/>
   <circle cx="124" cy="54" r="8" fill="#34D399"/>
   <text x="568" y="60" text-anchor="middle" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18">unch demo</text>
 
-  <text x="72" y="122" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="28">$</text>
-  <text x="104" y="122" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="28">cd gorilla/mux</text>
+  <text x="72" y="122" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">$</text>
+  <text x="104" y="122" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">cd gorilla/mux</text>
 
-  <text x="72" y="176" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="28">$</text>
-  <text x="104" y="176" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="28">unch index --root .</text>
+  <text x="72" y="176" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">$</text>
+  <text x="104" y="176" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">unch index --root .</text>
   <text x="104" y="218" fill="#A7F3D0" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">Loaded model       dim=768</text>
   <text x="104" y="256" fill="#A7F3D0" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">Indexed 278 symbols in 16 files</text>
 
-  <rect x="72" y="298" width="1056" height="154" rx="16" fill="#0B1324" stroke="#24324D"/>
-  <text x="96" y="338" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="26">$ unch search "create a new router"</text>
+  <rect x="72" y="294" width="1056" height="156" rx="16" fill="url(#panelGrad)" stroke="#24324D" filter="url(#shadowSm)"/>
+  <rect x="73" y="295" width="1054" height="26" rx="15" fill="#17243E" fill-opacity="0.55"/>
+  <text x="96" y="338" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">$</text>
+  <text x="128" y="338" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">unch search "create a new router"</text>
   <text x="96" y="382" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">1. mux.go:32   0.7747</text>
   <text x="96" y="418" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">2. mux.go:314  0.8135</text>
 
-  <rect x="72" y="480" width="1056" height="204" rx="16" fill="#0B1324" stroke="#24324D"/>
-  <text x="96" y="522" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="26">$ unch search --details "get path variables from a request"</text>
-  <text x="96" y="564" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">1. mux.go:466   0.7991</text>
-  <text x="128" y="600" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="22">kind: function</text>
-  <text x="128" y="632" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="22">name: Vars</text>
-  <text x="128" y="664" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="22">signature: func Vars(r *http.Request) map[string]string</text>
+  <rect x="72" y="474" width="1056" height="194" rx="16" fill="url(#panelGrad)" stroke="#24324D" filter="url(#shadowSm)"/>
+  <rect x="73" y="475" width="1054" height="26" rx="15" fill="#17243E" fill-opacity="0.55"/>
+  <text x="96" y="522" fill="#93C5FD" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">$</text>
+  <text x="128" y="522" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">unch search --details "get path variables from a request"</text>
+  <text x="96" y="558" fill="#E5E7EB" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">1. mux.go:466   0.7991</text>
+  <text x="128" y="592" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">kind: function</text>
+  <text x="128" y="624" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">name: Vars</text>
+  <text x="128" y="656" fill="#CBD5E1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="24">signature: func Vars(r *http.Request) map[string]string</text>
 
-  <text x="72" y="706" fill="#64748B" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="20">Real output captured from indexing github.com/gorilla/mux with unch.</text>
+  <text x="72" y="718" fill="#64748B" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="20">Real output captured from indexing github.com/gorilla/mux with unch.</text>
 </svg>

@@ -24,17 +24,17 @@ function Normalize-Version {
     return "v$RequestedVersion"
 }
 
-function Resolve-LatestVersion {
-    try {
-        $response = Invoke-WebRequest -Method Head -MaximumRedirection 0 -Uri "https://github.com/$Repo/releases/latest" -ErrorAction Stop
-        return "latest"
-    } catch {
-        $location = $_.Exception.Response.Headers.Location
-        if ($location) {
-            return [System.IO.Path]::GetFileName($location.ToString())
-        }
-        return "latest"
+function Get-ReleaseDownloadUrl {
+    param(
+        [string]$ResolvedVersion,
+        [string]$FileName
+    )
+
+    if ($ResolvedVersion -eq "latest") {
+        return "https://github.com/$Repo/releases/latest/download/$FileName"
     }
+
+    return "https://github.com/$Repo/releases/download/$ResolvedVersion/$FileName"
 }
 
 function Resolve-AssetArchive {
@@ -53,7 +53,7 @@ function Resolve-AssetArchive {
         }
     }
 
-    $url = "https://github.com/$Repo/releases/download/$ResolvedVersion/$AssetName"
+    $url = Get-ReleaseDownloadUrl -ResolvedVersion $ResolvedVersion -FileName $AssetName
     Write-Note "Downloading $url"
     try {
         Invoke-WebRequest -Uri $url -OutFile $DestinationPath
@@ -78,7 +78,7 @@ function Resolve-ChecksumsFile {
         throw "Missing checksums.txt in $assetDir"
     }
 
-    $url = "https://github.com/$Repo/releases/download/$ResolvedVersion/checksums.txt"
+    $url = Get-ReleaseDownloadUrl -ResolvedVersion $ResolvedVersion -FileName "checksums.txt"
     Write-Note "Downloading $url"
     Invoke-WebRequest -Uri $url -OutFile $DestinationPath
     return $DestinationPath
@@ -191,18 +191,13 @@ function Install-WithGo {
 }
 
 $resolvedVersion = Normalize-Version $Version
-if ($resolvedVersion -eq "latest") {
-    $resolvedVersion = Resolve-LatestVersion
-}
 
 $installed = $false
 
-if ($resolvedVersion -ne "latest" -or -not [string]::IsNullOrWhiteSpace($env:UNCH_INSTALL_ASSET_DIR)) {
-    $archiveInstall = Install-ReleaseArchive -ResolvedVersion $resolvedVersion -Destination $BinDir
-    $installed = $archiveInstall.Success
-    if (-not $installed -and $archiveInstall.Fatal) {
-        throw "Release archive install failed verification or extraction; refusing to continue."
-    }
+$archiveInstall = Install-ReleaseArchive -ResolvedVersion $resolvedVersion -Destination $BinDir
+$installed = $archiveInstall.Success
+if (-not $installed -and $archiveInstall.Fatal) {
+    throw "Release archive install failed verification or extraction; refusing to continue."
 }
 
 if (-not $installed) {

@@ -97,7 +97,11 @@ resolve_checksums_file() {
   fi
 
   checksums_path="${tmp_dir}/checksums.txt"
-  url="https://github.com/${repo}/releases/download/${version}/checksums.txt"
+  if [ "$version" = "latest" ]; then
+    url="https://github.com/${repo}/releases/latest/download/checksums.txt"
+  else
+    url="https://github.com/${repo}/releases/download/${version}/checksums.txt"
+  fi
   say "Downloading ${url}"
   curl -fsSL "$url" -o "${checksums_path}"
   printf '%s\n' "${checksums_path}"
@@ -207,20 +211,6 @@ normalize_version() {
   esac
 }
 
-resolve_latest_version() {
-  if ! has_cmd curl; then
-    printf 'latest\n'
-    return
-  fi
-
-  effective_url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${repo}/releases/latest" 2>/dev/null || true)"
-  tag="${effective_url##*/}"
-  case "$tag" in
-    ""|latest) printf 'latest\n' ;;
-    *) printf '%s\n' "$tag" ;;
-  esac
-}
-
 detect_os() {
   case "$(uname -s)" in
     Darwin) printf 'Darwin\n' ;;
@@ -315,7 +305,11 @@ install_release_archive() {
     say "Using local install asset ${UNCH_INSTALL_ASSET_DIR}/${asset}"
     cp "${UNCH_INSTALL_ASSET_DIR}/${asset}" "${asset_path}" || return 2
   else
-    url="https://github.com/${repo}/releases/download/${version}/${asset}"
+    if [ "$version" = "latest" ]; then
+      url="https://github.com/${repo}/releases/latest/download/${asset}"
+    else
+      url="https://github.com/${repo}/releases/download/${version}/${asset}"
+    fi
     say "Downloading ${url}"
     if ! curl -fsSL "$url" -o "${asset_path}"; then
       return 1
@@ -379,24 +373,19 @@ fi
 mkdir -p "$bin_dir"
 
 version="$(normalize_version "$requested_version")"
-if [ "$version" = "latest" ]; then
-  version="$(resolve_latest_version)"
-fi
 
 os_name="$(detect_os)"
 arch_name="$(detect_arch)"
 
 installed="false"
 
-if [ "$version" != "latest" ] || [ -n "${UNCH_INSTALL_ASSET_DIR:-}" ]; then
-  if install_release_archive "$version" "$os_name" "$arch_name"; then
-    installed="true"
-  else
-    archive_status=$?
-    if [ "$archive_status" -eq 2 ]; then
-      say "Release archive install failed verification or extraction; refusing to continue."
-      exit 1
-    fi
+if install_release_archive "$version" "$os_name" "$arch_name"; then
+  installed="true"
+else
+  archive_status=$?
+  if [ "$archive_status" -eq 2 ]; then
+    say "Release archive install failed verification or extraction; refusing to continue."
+    exit 1
   fi
 fi
 

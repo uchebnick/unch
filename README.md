@@ -9,7 +9,6 @@
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/uchebnick/unch/gh-pages/coverage/coverage-badge.json)](https://github.com/uchebnick/unch/actions/workflows/ci.yml)
 [![Go 1.25+](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://github.com/uchebnick/unch)
 [![Docs](https://img.shields.io/badge/Docs-unch.mintlify.app-0F172A)](https://unch.mintlify.app/)
-[![Telegram News](https://img.shields.io/badge/Telegram-News-26A5E4?logo=telegram&logoColor=white)](https://t.me/unchnews)
 [![Telegram Chat](https://img.shields.io/badge/Telegram-Chat-26A5E4?logo=telegram&logoColor=white)](https://t.me/unchchat)
 
 **Semantic code search for code symbols and docs.**
@@ -53,13 +52,16 @@ PowerShell installer on Windows:
 iwr https://raw.githubusercontent.com/uchebnick/unch/main/install/install.ps1 -useb | iex
 ```
 
+This makes `unch` available immediately in the current PowerShell session.
+To keep it available in future PowerShell or terminal sessions, add `$HOME\AppData\Local\Programs\unch\bin` to your user `PATH`.
+
 Source install:
 
 ```bash
 go install github.com/uchebnick/unch/cmd/unch@latest
 ```
 
-This install path requires a cgo-capable Go toolchain. It is smoke-tested in CI in the official Debian-based Go container image. If `@latest` still resolves to the older pre-rename release line, use a release archive or build from the current checkout until the next tagged release is published.
+This install path requires a cgo-capable Go toolchain. It is smoke-tested in CI in the official Debian-based Go container image. To pin a specific release, use `@<tag>`.
 
 If you want to build from the current checkout:
 

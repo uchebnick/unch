@@ -58,7 +58,7 @@ On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an eq
 
     ```bash
     curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sudo sh -s -- -b /usr/local/bin
-    curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sudo sh -s -- -b /usr/local/bin -v v0.3.6
+    curl -fsSL https://raw.githubusercontent.com/uchebnick/unch/main/install.sh | sudo sh -s -- -b /usr/local/bin -v <tag>
     ```
 
     `install.sh` verifies downloaded release archives against the published `checksums.txt` file. It is smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like Linux environments, including the default no-`-b` path selection flow.
@@ -78,8 +78,11 @@ On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an eq
     After downloading the script locally, you can override the target or pin a version:
 
     ```powershell
-    .\install\install.ps1 -BinDir "C:\Tools\unch\bin" -Version v0.3.6
+    .\install\install.ps1 -BinDir "C:\Tools\unch\bin" -Version <tag>
     ```
+
+    `unch` is available immediately in the current PowerShell session after the installer finishes.
+    To keep it available in future PowerShell or terminal sessions, add `$HOME\AppData\Local\Programs\unch\bin` to your user `PATH`.
 
     The PowerShell installer is smoke-tested in CI on Windows `x86_64` and `arm64`.
   </Tab>
@@ -89,7 +92,7 @@ On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an eq
     go install github.com/uchebnick/unch/cmd/unch@latest
     ```
 
-    This install path requires a cgo-capable Go toolchain. It is smoke-tested in CI in the official Debian-based Go container image.
+    This install path requires a cgo-capable Go toolchain. It is smoke-tested in CI in the official Debian-based Go container image. To pin a specific release, use `@<tag>`.
 
     Older references to `github.com/uchebnick/unch-searcher` should be treated as legacy.
   </Tab>

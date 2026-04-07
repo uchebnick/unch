@@ -85,6 +85,7 @@ func printRootHelp(w io.Writer, program string) error {
 		"  bind    Bind the local manifest to a remote GitHub repo/workflow",
 		"  remote  Sync or download published search indexes",
 		"  help    Show root or command-specific help",
+		"  version Print the CLI version",
 	}
 	for _, line := range commands {
 		if _, err := fmt.Fprintln(w, line); err != nil {

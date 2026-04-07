@@ -387,6 +387,7 @@ jobs:
           set -euo pipefail
           bin_dir="${RUNNER_TEMP}/unch-bin"
           ./install.sh -b "${bin_dir}" -v vci-test
+          "${bin_dir}/unch" --version >/dev/null
           "${bin_dir}/unch" --help >/dev/null
 
       - name: Reject local asset with wrong shell checksum
@@ -419,6 +420,7 @@ jobs:
           rm -f "${bin_dir}/unch"
           ./install.sh -v vci-test
           command -v unch >/dev/null
+          unch --version >/dev/null
           unch --help >/dev/null
 
       - name: Install from local asset with PowerShell installer
@@ -429,6 +431,7 @@ jobs:
         run: |
           $binDir = Join-Path $env:RUNNER_TEMP "unch-bin"
           .\install\install.ps1 -BinDir $binDir -Version vci-test
+          & (Join-Path $binDir "unch.exe") --version | Out-Null
           & (Join-Path $binDir "unch.exe") --help | Out-Null
 
       - name: Reject local asset with wrong PowerShell checksum
@@ -510,6 +513,7 @@ jobs:
               '"${{ matrix.prepare }}"'
               export UNCH_INSTALL_ASSET_DIR=/assets
               ./install.sh -b /tmp/bin -v vci-test
+              /tmp/bin/unch --version >/dev/null
               /tmp/bin/unch --help >/dev/null
             '
 
@@ -530,6 +534,7 @@ jobs:
               rm -f "$HOME/.unch-install-bin-smoke/unch"
               ./install.sh -v vci-test
               command -v unch >/dev/null
+              unch --version >/dev/null
               unch --help >/dev/null
             '
 
@@ -572,6 +577,7 @@ jobs:
                   set -eu
                   export UNCH_INSTALL_ASSET_DIR=/assets
                   ./install.sh -b /tmp/bin -v vci-test
+                  /tmp/bin/unch --version >/dev/null
                   /tmp/bin/unch --help >/dev/null
                 "
             '
@@ -595,6 +601,7 @@ jobs:
               set -eu
               go install -buildvcs=false ./cmd/unch
               command -v unch
+              unch --version >/dev/null
               unch --help >/dev/null
             '
 

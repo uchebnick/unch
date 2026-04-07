@@ -28,6 +28,9 @@ func Run(program string, args []string) (err error) {
 	if command == "help" {
 		return runHelp(program, commandArgs)
 	}
+	if command == "version" {
+		return printVersion(os.Stdout)
+	}
 	if command == "init" {
 		return runInit(ctx, program, commandArgs, cwd)
 	}
@@ -61,6 +64,8 @@ func detectCommand(args []string) (string, []string, error) {
 	switch args[0] {
 	case "-h", "--help", "help":
 		return "help", args[1:], nil
+	case "-version", "--version", "version":
+		return "version", args[1:], nil
 	case "bind", "create", "init", "index", "remote", "search":
 		return args[0], args[1:], nil
 	default:

@@ -81,13 +81,16 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CC: ${{ matrix.cc || '' }}
+          BUILD_VERSION: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist/build
           if [ -n "${CC}" ]; then
             export CC
           fi
-          CGO_ENABLED=1 go build -trimpath -o dist/build/unch ./cmd/unch
+          CGO_ENABLED=1 go build -trimpath \
+            -ldflags "-X github.com/uchebnick/unch/internal/cli.buildVersion=${BUILD_VERSION}" \
+            -o dist/build/unch ./cmd/unch
           tar -C dist/build -czf "dist/${{ matrix.asset_name }}" unch
 
       - name: Build Windows archive
@@ -96,12 +99,15 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          BUILD_VERSION: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist/build
           export CGO_ENABLED=1
           export CC="${{ matrix.cc }}"
-          go build -trimpath -o dist/build/unch.exe ./cmd/unch
+          go build -trimpath \
+            -ldflags "-X github.com/uchebnick/unch/internal/cli.buildVersion=${BUILD_VERSION}" \
+            -o dist/build/unch.exe ./cmd/unch
 
       - name: Archive Windows asset
         if: runner.os == 'Windows'
@@ -137,6 +143,7 @@ jobs:
               export GOPROXY=direct
               go install -buildvcs=false "github.com/${GITHUB_REPOSITORY}/cmd/unch@${GITHUB_REF_NAME}"
               command -v unch
+              unch --version >/dev/null
               unch --help >/dev/null
             '
 

@@ -77,6 +77,13 @@ Published release archives:
 
 On those targets, the installers use published release archives by default, so Go is not required. `install.sh` and `install/install.ps1` only fall back to `go install` when no matching archive is available. `install.sh` is smoke-tested in CI on Ubuntu, Debian, Arch, and NixOS-like environments, including the default no-`-b` path selection flow; the PowerShell installer is smoke-tested on Windows `arm64` and `x86_64`.
 
+Verify the installed binary:
+
+```bash
+unch --version
+unch --help
+```
+
 See [Compatibility](docs/compatibility.md) for the support matrix and upgrade rules, and [Benchmarks](docs/benchmarks.md) for the checked-in `smoke`, `ci`, and `default` suites.
 
 Model selection accepts either a known model id or a direct `.gguf` path:

@@ -18,6 +18,8 @@ func TestDetectCommand(t *testing.T) {
 		{name: "index command", args: []string{"index", "--root", "."}, want: "index"},
 		{name: "remote command", args: []string{"remote", "sync"}, want: "remote"},
 		{name: "search command", args: []string{"search", "RunCLI"}, want: "search"},
+		{name: "version flag", args: []string{"--version"}, want: "version"},
+		{name: "version command", args: []string{"version"}, want: "version"},
 		{name: "index flags without command", args: []string{"--root", "."}, want: "index"},
 		{name: "unknown command", args: []string{"download", "."}, wantErr: true},
 	}

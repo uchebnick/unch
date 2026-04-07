@@ -235,6 +235,54 @@ func TestRunRootHelp(t *testing.T) {
 	}
 }
 
+func TestRunRootHelpIncludesVersionCommand(t *testing.T) {
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"--help"}); err != nil {
+			t.Fatalf("Run(--help) error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "version Print the CLI version") {
+		t.Fatalf("Run(--help) output = %q, want version command", output)
+	}
+}
+
+func TestRunVersionFlag(t *testing.T) {
+	originalVersion := buildVersion
+	buildVersion = "v9.9.9-test"
+	t.Cleanup(func() {
+		buildVersion = originalVersion
+	})
+
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"--version"}); err != nil {
+			t.Fatalf("Run(--version) error: %v", err)
+		}
+	})
+
+	if strings.TrimSpace(output) != "v9.9.9-test" {
+		t.Fatalf("Run(--version) output = %q, want %q", output, "v9.9.9-test\n")
+	}
+}
+
+func TestRunVersionCommand(t *testing.T) {
+	originalVersion := buildVersion
+	buildVersion = "v9.9.9-test"
+	t.Cleanup(func() {
+		buildVersion = originalVersion
+	})
+
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"version"}); err != nil {
+			t.Fatalf("Run(version) error: %v", err)
+		}
+	})
+
+	if strings.TrimSpace(output) != "v9.9.9-test" {
+		t.Fatalf("Run(version) output = %q, want %q", output, "v9.9.9-test\n")
+	}
+}
+
 func TestRunSearchHelp(t *testing.T) {
 	output := captureStdout(t, func() {
 		if err := Run("unch", []string{"search", "--help"}); err != nil {

@@ -11,8 +11,8 @@ github.com/jupiterrider/ffi v0.6.0 h1:UX378KcZvH5c8qgLi9KL/bL82SZTHdRspZ+jj7bvBn
 github.com/jupiterrider/ffi v0.6.0/go.mod h1:PqZ5Go6X9by8CIXgfprxfMPYmn8oT5m2O7AA56s64bY=
 github.com/mattn/go-pointer v0.0.1 h1:n+XhsuGeVO6MEAp7xyEukFINEa+Quek5psIR/ylA6o0=
 github.com/mattn/go-pointer v0.0.1/go.mod h1:2zXcozF6qYGgmsG+SeTZz3oAbFLdD3OWqnUbNvJZAlc=
-github.com/mattn/go-sqlite3 v1.14.38 h1:tDUzL85kMvOrvpCt8P64SbGgVFtJB11GPi2AdmITgb4=
-github.com/mattn/go-sqlite3 v1.14.38/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
+github.com/mattn/go-sqlite3 v1.14.41 h1:8p7Pwz5NHkEbWSqc/ygU4CBGubhFFkpgP9KwcdkAHNA=
+github.com/mattn/go-sqlite3 v1.14.41/go.mod h1:pjEuOr8IwzLJP2MfGeTb0A35jauH+C2kbHKBr7yXKVQ=
 github.com/ncruces/go-sqlite3 v0.17.1 h1:VxTjDpCn87FaFlKMaAYC1jP7ND0d4UNj+6G4IQDHbgI=
 github.com/ncruces/go-sqlite3 v0.17.1/go.mod h1:FnCyui8SlDoL0mQZ5dTouNo7s7jXS0kJv9lBt1GlM9w=
 github.com/ncruces/julianday v1.0.0 h1:fH0OKwa7NWvniGQtxdJRxAgkBMolni2BjDHaWTxqt7M=

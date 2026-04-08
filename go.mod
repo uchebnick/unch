@@ -9,7 +9,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.38
 	github.com/ncruces/go-sqlite3 v0.17.1
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/tree-sitter/go-tree-sitter v0.24.1-0.20250202211042-adc13ffd8b2c
+	github.com/tree-sitter/go-tree-sitter v0.25.0
 	github.com/tree-sitter/tree-sitter-go v0.25.0
 	github.com/tree-sitter/tree-sitter-javascript v0.25.0
 	github.com/tree-sitter/tree-sitter-python v0.25.0

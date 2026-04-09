@@ -116,6 +116,8 @@ func New(cfg Config) (*Embedder, error) {
 
 	ctxParams := llama.ContextDefaultParams()
 	ctxParams.NCtx = uint32(cfg.ContextSize)
+	ctxParams.NBatch = uint32(cfg.ContextSize)
+	ctxParams.NUbatch = uint32(cfg.ContextSize)
 	ctxParams.PoolingType = cfg.Pooling
 	ctxParams.Embeddings = 1
 
@@ -185,28 +187,29 @@ func (e *Embedder) Dim() int {
 }
 
 func (e *Embedder) Embed(text string) ([]float32, error) {
-	if e == nil {
-		return nil, fmt.Errorf("nil embedder")
-	}
-
-	text = normalizeText(text)
-	if text == "" {
-		return nil, fmt.Errorf("empty text")
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	tokens := llama.Tokenize(e.vocab, text, true, true)
+	text = normalizeText(text)
+
+	tokens := llama.Tokenize(e.vocab, text, true, false)
 	if len(tokens) == 0 {
-		return nil, fmt.Errorf("tokenize returned zero tokens")
+		return nil, nil // Return empty if text results in zero tokens
 	}
 
+	// Truncate tokens if they exceed ContextSize
 	if len(tokens) > e.contextSize {
 		tokens = tokens[:e.contextSize]
 	}
 
+	// Clear memory before processing new tokens
+	mem, err := llama.GetMemory(e.ctx)
+	if err == nil {
+		llama.MemoryClear(mem, true)
+	}
+
 	batch := llama.BatchGetOne(tokens)
+	defer llama.BatchFree(batch)
 
 	ret, err := llama.Decode(e.ctx, batch)
 	if err != nil {

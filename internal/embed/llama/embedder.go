@@ -34,6 +34,7 @@ type Embedder struct {
 	dim         int
 	profile     embeddingBehavior
 	contextSize int
+	tokenLimit  int
 }
 
 var (
@@ -131,6 +132,13 @@ func New(cfg Config) (*Embedder, error) {
 		return nil, fmt.Errorf("init context from model: %w", err)
 	}
 
+	tokenLimit := effectiveTokenLimit(
+		cfg.ContextSize,
+		int(llama.NCtx(ctx)),
+		int(llama.NBatch(ctx)),
+		int(llama.NUBatch(ctx)),
+	)
+
 	return &Embedder{
 		model:       model,
 		ctx:         ctx,
@@ -138,6 +146,7 @@ func New(cfg Config) (*Embedder, error) {
 		dim:         int(llama.ModelNEmbd(model)),
 		profile:     profile,
 		contextSize: cfg.ContextSize,
+		tokenLimit:  tokenLimit,
 	}, nil
 }
 
@@ -197,9 +206,9 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 		return nil, nil // Return empty if text results in zero tokens
 	}
 
-	// Truncate tokens if they exceed ContextSize
-	if len(tokens) > e.contextSize {
-		tokens = tokens[:e.contextSize]
+	// Truncate tokens to the smallest safe bound reported by the runtime.
+	if len(tokens) > e.tokenLimit {
+		tokens = tokens[:e.tokenLimit]
 	}
 
 	// Clear memory before processing new tokens
@@ -208,14 +217,10 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 		_ = llama.MemoryClear(mem, true)
 	}
 
-	if len(tokens) > e.contextSize {
-		tokens = tokens[:e.contextSize]
-	}
-
 	batch := llama.BatchGetOne(tokens)
-	defer func() {
-		_ = llama.BatchFree(batch)
-	}()
+	// yzma's single-sequence batch is not safe to free here: on real indexing
+	// workloads that triggered invalid pointer / heap corruption crashes on both
+	// Linux and Windows ARM CI.
 
 	ret, err := llama.Decode(e.ctx, batch)
 	if err != nil {
@@ -251,6 +256,19 @@ func (e *Embedder) IndexedSymbolHash(path string, symbol indexing.IndexedSymbol)
 // EmbedIndexedSymbol builds a retrieval document for a symbol and returns its embedding vector.
 func (e *Embedder) EmbedIndexedSymbol(path string, symbol indexing.IndexedSymbol) ([]float32, error) {
 	return e.Embed(indexedSymbolDocument(e.profile, path, symbol))
+}
+
+func effectiveTokenLimit(requested int, limits ...int) int {
+	limit := requested
+	for _, candidate := range limits {
+		if candidate <= 0 {
+			continue
+		}
+		if limit <= 0 || candidate < limit {
+			limit = candidate
+		}
+	}
+	return limit
 }
 
 func hashComment(text string) string {

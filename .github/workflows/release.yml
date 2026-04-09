@@ -147,11 +147,36 @@ jobs:
               unch --help >/dev/null
             '
 
+  index-tag-smoke:
+    name: index-tag-smoke
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets-linux-amd64
+          path: dist
+
+      - name: Build local search index from release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/extract
+          tar -C dist/extract -xzf dist/unch_Linux_x86_64.tar.gz
+          dist/extract/unch --version >/dev/null
+          dist/extract/unch index --root . --state-dir "${RUNNER_TEMP}/unch-index-smoke"
+
   release:
     name: publish-release
     needs:
       - build
       - go-install-tag-smoke
+      - index-tag-smoke
     runs-on: ubuntu-latest
 
     steps:

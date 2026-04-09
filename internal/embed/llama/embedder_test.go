@@ -163,3 +163,30 @@ func TestHashCommentIsStable(t *testing.T) {
 		t.Fatalf("expected different comments to have different hashes")
 	}
 }
+
+func TestEffectiveTokenLimitPrefersSmallestPositiveBound(t *testing.T) {
+	t.Parallel()
+
+	got := effectiveTokenLimit(2048, 2048, 1024, 1536)
+	if got != 1024 {
+		t.Fatalf("effectiveTokenLimit() = %d, want 1024", got)
+	}
+}
+
+func TestEffectiveTokenLimitIgnoresZeroRuntimeValues(t *testing.T) {
+	t.Parallel()
+
+	got := effectiveTokenLimit(2048, 0, -1, 2048)
+	if got != 2048 {
+		t.Fatalf("effectiveTokenLimit() = %d, want 2048", got)
+	}
+}
+
+func TestEffectiveTokenLimitFallsBackToRuntimeBound(t *testing.T) {
+	t.Parallel()
+
+	got := effectiveTokenLimit(0, 4096, 1024, 0)
+	if got != 1024 {
+		t.Fatalf("effectiveTokenLimit() = %d, want 1024", got)
+	}
+}

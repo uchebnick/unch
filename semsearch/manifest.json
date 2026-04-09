@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": 67,
-  "indexing_hash": "1b55c423a5501fed470869cc7ba263250ffb84a54a32fb63c2ad9b6127fcaa3c",
+  "version": 68,
+  "indexing_hash": "68399a4bb59a8285cae3d6a22ada4e7e232bfddb883d40d362c9093c56a7569f",
   "source": "remote",
   "remote": {
     "ci_url": "https://github.com/uchebnick/unch/actions/workflows/unch-index.yml"

@@ -205,7 +205,7 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 	// Clear memory before processing new tokens
 	mem, err := llama.GetMemory(e.ctx)
 	if err == nil {
-		llama.MemoryClear(mem, true)
+		_ = llama.MemoryClear(mem, true)
 	}
 
 	if len(tokens) > e.contextSize {
@@ -213,7 +213,9 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 	}
 
 	batch := llama.BatchGetOne(tokens)
-	defer llama.BatchFree(batch)
+	defer func() {
+		_ = llama.BatchFree(batch)
+	}()
 
 	ret, err := llama.Decode(e.ctx, batch)
 	if err != nil {

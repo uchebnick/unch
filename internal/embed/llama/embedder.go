@@ -208,6 +208,10 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 		llama.MemoryClear(mem, true)
 	}
 
+	if len(tokens) > e.contextSize {
+		tokens = tokens[:e.contextSize]
+	}
+
 	batch := llama.BatchGetOne(tokens)
 	defer llama.BatchFree(batch)
 

@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/uchebnick/unch/internal/embed/llama"
+	appembed "github.com/uchebnick/unch/internal/embed"
 	"github.com/uchebnick/unch/internal/filehashdb"
 	"github.com/uchebnick/unch/internal/indexdb"
 	"github.com/uchebnick/unch/internal/indexing"
@@ -31,6 +30,7 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	stateDir := fs.String("state-dir", "", "path to .semsearch directory; defaults to <root>/.semsearch")
 	dbPath := fs.String("db", "", "deprecated: path to .semsearch/index.db, or to a .semsearch directory")
 	modelPath := fs.String("model", defaultModelPath, "path to GGUF embedding model, or a known model id such as embeddinggemma or qwen3")
+	provider := fs.String("provider", appembed.DefaultProvider().String(), "embedding provider: llama.cpp or openrouter")
 	libPath := fs.String("lib", "", "path to yzma library directory, or to one of its shared library files")
 	contextPrefix := fs.String("context-prefix", "@filectx:", "legacy file context prefix used only by fallback indexers")
 	commentPrefix := fs.String("comment-prefix", "@search:", "legacy comment prefix used only by fallback indexers")
@@ -50,10 +50,12 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 					cliName(program) + " index --root .",
 					cliName(program) + " index --exclude node_modules --exclude dist",
 					cliName(program) + " index --model qwen3",
+					cliName(program) + " index --provider openrouter --model openai/text-embedding-3-small",
 					cliName(program) + " index --model ~/.semsearch/models/Qwen3-Embedding-0.6B-Q8_0.gguf",
 				},
 				[]string{
 					"Omit --model to auto-download the default embeddinggemma GGUF model.",
+					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, ~/.config/unch/tokens.json, then .semsearch/tokens.json.",
 					"Known model ids today: embeddinggemma and qwen3.",
 					"Changing --model changes the embedding space; rebuild the index before searching with the new model.",
 					"--comment-prefix and --context-prefix are legacy fallback knobs for unsupported files or parser failures.",
@@ -120,16 +122,6 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		}
 	}
 
-	resolvedDefaultModelPath := runtime.DefaultModelPath(targetPaths.ModelsDir)
-	requestedModelPath := strings.TrimSpace(*modelPath)
-	if requestedModelPath == "" {
-		requestedModelPath = resolvedDefaultModelPath
-	}
-
-	modelID, err := runtime.CanonicalModelID(requestedModelPath, resolvedDefaultModelPath)
-	if err != nil {
-		return fmt.Errorf("resolve model id: %w", err)
-	}
 	resolvedGitignore, err := indexing.ResolveGitignorePath(rootAbs, *gitignorePath)
 	if err != nil {
 		return fmt.Errorf("resolve gitignore: %w", err)
@@ -147,62 +139,51 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 
 	s.Logf("scanner_fingerprint=%s", scannerFingerprint)
 
+	prepared, err := prepareEmbedder(
+		ctx,
+		s,
+		targetPaths,
+		*provider,
+		*modelPath,
+		*libPath,
+		*contextSize,
+		*verbose,
+		runtimes,
+		models,
+	)
+	if err != nil {
+		return err
+	}
+	defer prepared.Embedder.Close()
+
 	var currentFileHashes map[string]string
-	if currentState, ok, err := hashStore.Current(ctx, modelID); err != nil {
+	if currentState, ok, err := hashStore.Current(ctx, prepared.Provider.String(), prepared.ModelID); err != nil {
 		return fmt.Errorf("read current file hash state: %w", err)
 	} else if ok && currentState.ScannerFingerprint == scannerFingerprint {
 		currentFileHashes = currentState.Files
 	}
 	s.Logf("current_file_hashes=%d", len(currentFileHashes))
 
-	fileHashStateVersion, err := hashStore.BeginState(ctx, modelID, scannerFingerprint)
+	fileHashStateVersion, err := hashStore.BeginState(ctx, prepared.Provider.String(), prepared.ModelID, scannerFingerprint)
 	if err != nil {
 		return fmt.Errorf("begin file hash state: %w", err)
 	}
 	s.Logf("staged_file_hash_state_version=%d", fileHashStateVersion)
 
-	resolvedLibPath, libNote, err := runtimes.ResolveOrInstallYzmaLibPath(ctx, *libPath, targetPaths.LocalDir, s)
-	if err != nil {
-		return err
-	}
-	if libNote != "" {
-		s.Logf("%s", libNote)
-	}
-
-	resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, requestedModelPath, resolvedDefaultModelPath, true, s)
-	if err != nil {
-		return err
-	}
-	if modelNote != "" {
-		s.Logf("%s", modelNote)
-	}
-
-	resolvedContextSize := *contextSize
-	if resolvedContextSize <= 0 {
-		resolvedContextSize = defaultContextSize(resolvedModelPath)
-	}
-
 	s.Logf("state_dir=%s", targetPaths.LocalDir)
 	s.Logf("index_db=%s", resolvedIndexPath)
-	s.Logf("lib=%s", resolvedLibPath)
-	s.Logf("model=%s", resolvedModelPath)
-	s.Logf("model_id=%s", modelID)
-	s.Logf("ctx_size=%d", resolvedContextSize)
+	s.Logf("provider=%s", prepared.Provider)
+	if prepared.ResolvedLib != "" {
+		s.Logf("lib=%s", prepared.ResolvedLib)
+	}
+	s.Logf("model=%s", prepared.ResolvedModel)
+	s.Logf("model_id=%s", prepared.ModelID)
+	if prepared.ContextSize > 0 {
+		s.Logf("ctx_size=%d", prepared.ContextSize)
+	}
 	s.Logf("root=%s", rootAbs)
 
-	embedder, err := loadEmbedderWithSpinner(ctx, s, llamaembed.Config{
-		ModelPath:   resolvedModelPath,
-		LibPath:     resolvedLibPath,
-		ContextSize: resolvedContextSize,
-		Verbose:     *verbose,
-		Pooling:     defaultPooling(resolvedModelPath),
-	})
-	if err != nil {
-		return err
-	}
-	defer embedder.Close()
-
-	repo, err := indexdb.Open(ctx, resolvedIndexPath, embedder.Dim())
+	repo, err := indexdb.Open(ctx, resolvedIndexPath, prepared.Embedder.Dim())
 	if err != nil {
 		return err
 	}
@@ -213,7 +194,7 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	service := indexing.Service{
 		Scanner:  scanner,
 		Repo:     repo,
-		Embedder: embedder,
+		Embedder: prepared.Embedder,
 		Hashes:   hashStore,
 	}
 
@@ -223,7 +204,8 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		Excludes:             excludes,
 		ContextPrefix:        *contextPrefix,
 		CommentPrefix:        *commentPrefix,
-		ModelID:              modelID,
+		Provider:             prepared.Provider.String(),
+		ModelID:              prepared.ModelID,
 		CurrentFileHashes:    currentFileHashes,
 		FileHashStateVersion: fileHashStateVersion,
 	}, s)
@@ -237,7 +219,7 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	}
 	s.Logf("manifest version=%d indexing_hash=%s", manifest.Version, manifest.IndexingHash)
 
-	if err := hashStore.ActivateState(ctx, modelID, fileHashStateVersion); err != nil {
+	if err := hashStore.ActivateState(ctx, prepared.Provider.String(), prepared.ModelID, fileHashStateVersion); err != nil {
 		return fmt.Errorf("activate file hash state: %w", err)
 	}
 	if err := hashStore.CleanupInactiveStates(ctx); err != nil {

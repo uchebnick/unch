@@ -10,6 +10,8 @@ import (
 	"github.com/uchebnick/unch/internal/search"
 )
 
+const SchemaVersion = 1
+
 var ErrNoActiveSnapshot = errors.New("no active snapshot for model")
 
 // Store wraps the SQLite connection and vector dimension used by the index database.
@@ -49,27 +51,52 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) init(ctx context.Context) error {
+	var userVersion int
+	if err := s.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&userVersion); err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+
+	switch userVersion {
+	case 0:
+		hasSchema, err := s.hasSchemaObjects(ctx)
+		if err != nil {
+			return err
+		}
+		if hasSchema {
+			if err := s.resetSchema(ctx); err != nil {
+				return fmt.Errorf("reset legacy schema: %w", err)
+			}
+		}
+	case SchemaVersion:
+	default:
+		return fmt.Errorf("unsupported schema version %d", userVersion)
+	}
+
 	stmts := []string{
 		`
 		CREATE TABLE IF NOT EXISTS index_snapshots (
 			snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,
 			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		`,
 		`
-		CREATE INDEX IF NOT EXISTS idx_index_snapshots_model_id
-		ON index_snapshots(model_id, snapshot_id);
+		CREATE INDEX IF NOT EXISTS idx_index_snapshots_provider_model_id
+		ON index_snapshots(provider, model_id, snapshot_id);
 		`,
 		`
 		CREATE TABLE IF NOT EXISTS current_model_snapshots (
-			model_id TEXT PRIMARY KEY,
-			snapshot_id INTEGER NOT NULL
+			provider TEXT NOT NULL,
+			model_id TEXT NOT NULL,
+			snapshot_id INTEGER NOT NULL,
+			PRIMARY KEY (provider, model_id)
 		);
 		`,
 		`
 		CREATE TABLE IF NOT EXISTS snapshot_symbols (
 			snapshot_id INTEGER NOT NULL,
+			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,
 			path TEXT NOT NULL,
 			line INTEGER NOT NULL,
@@ -90,17 +117,18 @@ func (s *Store) init(ctx context.Context) error {
 		ON snapshot_symbols(snapshot_id);
 		`,
 		`
-		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_model_id
-		ON snapshot_symbols(model_id, snapshot_id);
+		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_provider_model_id
+		ON snapshot_symbols(provider, model_id, snapshot_id);
 		`,
 		`
 		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_embedding_hash
-		ON snapshot_symbols(model_id, embedding_hash);
+		ON snapshot_symbols(provider, model_id, embedding_hash);
 		`,
 		`
 		CREATE INDEX IF NOT EXISTS idx_snapshot_symbols_qualified_name
-		ON snapshot_symbols(model_id, qualified_name);
+		ON snapshot_symbols(provider, model_id, qualified_name);
 		`,
+		fmt.Sprintf(`PRAGMA user_version = %d`, SchemaVersion),
 	}
 
 	for _, stmt := range stmts {
@@ -112,6 +140,7 @@ func (s *Store) init(ctx context.Context) error {
 	vecStmt := fmt.Sprintf(`
 		CREATE VIRTUAL TABLE IF NOT EXISTS snapshot_embeddings USING vec0(
 			embedding_key TEXT PRIMARY KEY,
+			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,
 			embedding_hash TEXT NOT NULL,
 			embedding FLOAT[%d]
@@ -124,9 +153,39 @@ func (s *Store) init(ctx context.Context) error {
 	return nil
 }
 
-// BeginSnapshot creates a new immutable snapshot id for one model family.
-func (s *Store) BeginSnapshot(ctx context.Context, modelID string) (int64, error) {
-	result, err := s.db.ExecContext(ctx, `INSERT INTO index_snapshots(model_id) VALUES (?)`, modelID)
+func (s *Store) hasSchemaObjects(ctx context.Context) (bool, error) {
+	var count int
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(1)
+		 FROM sqlite_master
+		 WHERE type = 'table'
+		   AND name IN ('index_snapshots', 'current_model_snapshots', 'snapshot_symbols', 'snapshot_embeddings')`,
+	).Scan(&count); err != nil {
+		return false, fmt.Errorf("inspect schema: %w", err)
+	}
+	return count > 0, nil
+}
+
+func (s *Store) resetSchema(ctx context.Context) error {
+	stmts := []string{
+		`DROP TABLE IF EXISTS current_model_snapshots;`,
+		`DROP TABLE IF EXISTS snapshot_symbols;`,
+		`DROP TABLE IF EXISTS snapshot_embeddings;`,
+		`DROP TABLE IF EXISTS index_snapshots;`,
+		`PRAGMA user_version = 0`,
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BeginSnapshot creates a new immutable snapshot id for one provider/model family.
+func (s *Store) BeginSnapshot(ctx context.Context, provider string, modelID string) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `INSERT INTO index_snapshots(provider, model_id) VALUES (?, ?)`, provider, modelID)
 	if err != nil {
 		return 0, fmt.Errorf("insert snapshot: %w", err)
 	}
@@ -137,26 +196,27 @@ func (s *Store) BeginSnapshot(ctx context.Context, modelID string) (int64, error
 	return snapshotID, nil
 }
 
-// CurrentSnapshot returns the active snapshot for one model family.
-func (s *Store) CurrentSnapshot(ctx context.Context, modelID string) (int64, error) {
+// CurrentSnapshot returns the active snapshot for one provider/model family.
+func (s *Store) CurrentSnapshot(ctx context.Context, provider string, modelID string) (int64, error) {
 	var snapshotID int64
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT snapshot_id FROM current_model_snapshots WHERE model_id = ?`,
+		`SELECT snapshot_id FROM current_model_snapshots WHERE provider = ? AND model_id = ?`,
+		provider,
 		modelID,
 	).Scan(&snapshotID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, fmt.Errorf("%w: %s", ErrNoActiveSnapshot, modelID)
+			return 0, fmt.Errorf("%w: %s/%s", ErrNoActiveSnapshot, provider, modelID)
 		}
 		return 0, fmt.Errorf("select current snapshot: %w", err)
 	}
 	return snapshotID, nil
 }
 
-// CurrentSnapshotIfAny returns the active snapshot for one model family when present.
-func (s *Store) CurrentSnapshotIfAny(ctx context.Context, modelID string) (int64, bool, error) {
-	snapshotID, err := s.CurrentSnapshot(ctx, modelID)
+// CurrentSnapshotIfAny returns the active snapshot for one provider/model family when present.
+func (s *Store) CurrentSnapshotIfAny(ctx context.Context, provider string, modelID string) (int64, bool, error) {
+	snapshotID, err := s.CurrentSnapshot(ctx, provider, modelID)
 	if err != nil {
 		if errors.Is(err, ErrNoActiveSnapshot) {
 			return 0, false, nil
@@ -166,13 +226,14 @@ func (s *Store) CurrentSnapshotIfAny(ctx context.Context, modelID string) (int64
 	return snapshotID, true, nil
 }
 
-// ActivateSnapshot marks one snapshot as the active searchable snapshot for its model family.
-func (s *Store) ActivateSnapshot(ctx context.Context, modelID string, snapshotID int64) error {
+// ActivateSnapshot marks one snapshot as the active searchable snapshot for its provider/model family.
+func (s *Store) ActivateSnapshot(ctx context.Context, provider string, modelID string, snapshotID int64) error {
 	_, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO current_model_snapshots(model_id, snapshot_id)
-		VALUES (?, ?)
-		ON CONFLICT(model_id) DO UPDATE SET snapshot_id = excluded.snapshot_id`,
+		`INSERT INTO current_model_snapshots(provider, model_id, snapshot_id)
+		VALUES (?, ?, ?)
+		ON CONFLICT(provider, model_id) DO UPDATE SET snapshot_id = excluded.snapshot_id`,
+		provider,
 		modelID,
 		snapshotID,
 	)
@@ -182,13 +243,13 @@ func (s *Store) ActivateSnapshot(ctx context.Context, modelID string, snapshotID
 	return nil
 }
 
-// EmbeddingExists reports whether the vector table already contains the given embedding hash for one model.
-func (s *Store) EmbeddingExists(ctx context.Context, modelID string, embeddingHash string) (bool, error) {
+// EmbeddingExists reports whether the vector table already contains the given embedding hash for one provider/model family.
+func (s *Store) EmbeddingExists(ctx context.Context, provider string, modelID string, embeddingHash string) (bool, error) {
 	var exists int
 	err := s.db.QueryRowContext(
 		ctx,
 		`SELECT 1 FROM snapshot_embeddings WHERE embedding_key = ? LIMIT 1`,
-		embeddingKey(modelID, embeddingHash),
+		embeddingKey(provider, modelID, embeddingHash),
 	).Scan(&exists)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -199,8 +260,8 @@ func (s *Store) EmbeddingExists(ctx context.Context, modelID string, embeddingHa
 	return true, nil
 }
 
-// AddEmbedding stores a new embedding vector under its content hash for one model family.
-func (s *Store) AddEmbedding(ctx context.Context, modelID string, embeddingHash string, embedding []float32) error {
+// AddEmbedding stores a new embedding vector under its content hash for one provider/model family.
+func (s *Store) AddEmbedding(ctx context.Context, provider string, modelID string, embeddingHash string, embedding []float32) error {
 	if len(embedding) != s.dim {
 		return fmt.Errorf("invalid embedding dimension: got=%d want=%d", len(embedding), s.dim)
 	}
@@ -212,8 +273,9 @@ func (s *Store) AddEmbedding(ctx context.Context, modelID string, embeddingHash 
 
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO snapshot_embeddings(embedding_key, model_id, embedding_hash, embedding) VALUES (?, ?, ?, ?)`,
-		embeddingKey(modelID, embeddingHash),
+		`INSERT INTO snapshot_embeddings(embedding_key, provider, model_id, embedding_hash, embedding) VALUES (?, ?, ?, ?, ?)`,
+		embeddingKey(provider, modelID, embeddingHash),
+		provider,
 		modelID,
 		embeddingHash,
 		vec,
@@ -225,11 +287,12 @@ func (s *Store) AddEmbedding(ctx context.Context, modelID string, embeddingHash 
 }
 
 // InsertSymbol stores one symbol row inside a building snapshot without mutating active snapshots.
-func (s *Store) InsertSymbol(ctx context.Context, snapshotID int64, modelID string, path string, symbol indexing.IndexedSymbol, embeddingHash string) error {
+func (s *Store) InsertSymbol(ctx context.Context, snapshotID int64, provider string, modelID string, path string, symbol indexing.IndexedSymbol, embeddingHash string) error {
 	_, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO snapshot_symbols(
 			snapshot_id,
+			provider,
 			model_id,
 			path,
 			line,
@@ -243,8 +306,9 @@ func (s *Store) InsertSymbol(ctx context.Context, snapshotID int64, modelID stri
 			body,
 			embedding_hash
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		snapshotID,
+		provider,
 		modelID,
 		path,
 		symbol.Line,
@@ -265,11 +329,12 @@ func (s *Store) InsertSymbol(ctx context.Context, snapshotID int64, modelID stri
 }
 
 // CopyPathFromSnapshot copies all symbol rows for one path from an existing snapshot into a building snapshot.
-func (s *Store) CopyPathFromSnapshot(ctx context.Context, modelID string, srcSnapshotID, dstSnapshotID int64, path string) (int, error) {
+func (s *Store) CopyPathFromSnapshot(ctx context.Context, provider string, modelID string, srcSnapshotID, dstSnapshotID int64, path string) (int, error) {
 	result, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO snapshot_symbols(
 			snapshot_id,
+			provider,
 			model_id,
 			path,
 			line,
@@ -285,6 +350,7 @@ func (s *Store) CopyPathFromSnapshot(ctx context.Context, modelID string, srcSna
 		)
 		SELECT
 			?,
+			provider,
 			model_id,
 			path,
 			line,
@@ -298,10 +364,12 @@ func (s *Store) CopyPathFromSnapshot(ctx context.Context, modelID string, srcSna
 			body,
 			embedding_hash
 		FROM snapshot_symbols
-		WHERE model_id = ?
+		WHERE provider = ?
+		  AND model_id = ?
 		  AND snapshot_id = ?
 		  AND path = ?`,
 		dstSnapshotID,
+		provider,
 		modelID,
 		srcSnapshotID,
 		path,
@@ -341,7 +409,7 @@ func (s *Store) CleanupUnusedEmbeddings(ctx context.Context) error {
 		ctx,
 		`DELETE FROM snapshot_embeddings
 		WHERE embedding_key NOT IN (
-			SELECT DISTINCT model_id || ':' || embedding_hash FROM snapshot_symbols
+			SELECT DISTINCT provider || '|' || model_id || '|' || embedding_hash FROM snapshot_symbols
 		)`,
 	)
 	if err != nil {
@@ -351,7 +419,7 @@ func (s *Store) CleanupUnusedEmbeddings(ctx context.Context) error {
 }
 
 // SearchBySnapshot performs semantic nearest-neighbor search against one immutable snapshot.
-func (s *Store) SearchBySnapshot(ctx context.Context, modelID string, snapshotID int64, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
+func (s *Store) SearchBySnapshot(ctx context.Context, provider string, modelID string, snapshotID int64, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
 	if len(queryEmbedding) != s.dim {
 		return nil, fmt.Errorf("invalid query dimension: got=%d want=%d", len(queryEmbedding), s.dim)
 	}
@@ -380,15 +448,18 @@ func (s *Store) SearchBySnapshot(ctx context.Context, modelID string, snapshotID
 			e.distance
 		FROM snapshot_embeddings e
 		JOIN snapshot_symbols s
-		  ON s.model_id = e.model_id
+		  ON s.provider = e.provider
+		 AND s.model_id = e.model_id
 		 AND s.embedding_hash = e.embedding_hash
 		WHERE e.embedding MATCH ?
 		  AND k = ?
+		  AND s.provider = ?
 		  AND s.model_id = ?
 		  AND s.snapshot_id = ?
 		ORDER BY e.distance ASC`,
 		queryVec,
 		limit,
+		provider,
 		modelID,
 		snapshotID,
 	)
@@ -426,17 +497,17 @@ func (s *Store) SearchBySnapshot(ctx context.Context, modelID string, snapshotID
 	return results, nil
 }
 
-// SearchCurrent performs semantic nearest-neighbor search against the active snapshot for one model.
-func (s *Store) SearchCurrent(ctx context.Context, modelID string, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
-	snapshotID, err := s.CurrentSnapshot(ctx, modelID)
+// SearchCurrent performs semantic nearest-neighbor search against the active snapshot for one provider/model family.
+func (s *Store) SearchCurrent(ctx context.Context, provider string, modelID string, queryEmbedding []float32, limit int) ([]search.SearchResult, error) {
+	snapshotID, err := s.CurrentSnapshot(ctx, provider, modelID)
 	if err != nil {
 		return nil, err
 	}
-	return s.SearchBySnapshot(ctx, modelID, snapshotID, queryEmbedding, limit)
+	return s.SearchBySnapshot(ctx, provider, modelID, snapshotID, queryEmbedding, limit)
 }
 
 // ListSymbolsBySnapshot returns all symbols stored in one immutable snapshot.
-func (s *Store) ListSymbolsBySnapshot(ctx context.Context, modelID string, snapshotID int64) ([]search.SearchResult, error) {
+func (s *Store) ListSymbolsBySnapshot(ctx context.Context, provider string, modelID string, snapshotID int64) ([]search.SearchResult, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT
@@ -451,9 +522,11 @@ func (s *Store) ListSymbolsBySnapshot(ctx context.Context, modelID string, snaps
 			documentation,
 			body
 		FROM snapshot_symbols
-		WHERE model_id = ?
+		WHERE provider = ?
+		  AND model_id = ?
 		  AND snapshot_id = ?
 		ORDER BY path ASC, line ASC, qualified_name ASC`,
+		provider,
 		modelID,
 		snapshotID,
 	)
@@ -489,15 +562,15 @@ func (s *Store) ListSymbolsBySnapshot(ctx context.Context, modelID string, snaps
 	return results, nil
 }
 
-// ListCurrentSymbols returns all symbols from the active snapshot for one model family.
-func (s *Store) ListCurrentSymbols(ctx context.Context, modelID string) ([]search.SearchResult, error) {
-	snapshotID, err := s.CurrentSnapshot(ctx, modelID)
+// ListCurrentSymbols returns all symbols from the active snapshot for one provider/model family.
+func (s *Store) ListCurrentSymbols(ctx context.Context, provider string, modelID string) ([]search.SearchResult, error) {
+	snapshotID, err := s.CurrentSnapshot(ctx, provider, modelID)
 	if err != nil {
 		return nil, err
 	}
-	return s.ListSymbolsBySnapshot(ctx, modelID, snapshotID)
+	return s.ListSymbolsBySnapshot(ctx, provider, modelID, snapshotID)
 }
 
-func embeddingKey(modelID string, embeddingHash string) string {
-	return modelID + ":" + embeddingHash
+func embeddingKey(provider string, modelID string, embeddingHash string) string {
+	return provider + "|" + modelID + "|" + embeddingHash
 }

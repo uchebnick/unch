@@ -25,7 +25,7 @@ description: Support matrix, upgrade rules, and versioning contract for unch.
 ## Index compatibility
 
 - `index.db` is a rebuildable cache artifact, not a durable user database
-- Active index state is model-scoped
+- Active index state is provider-scoped and model-scoped
 - When the current binary cannot use a database layout, the fix is to rebuild the index
 
 ## Remote and CI compatibility

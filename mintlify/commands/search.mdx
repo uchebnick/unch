@@ -78,6 +78,10 @@ Show symbol kind, name, signature, docs, and body context for each result.
 
 Query embedding model. Must match the model used when the index was built.
 
+### `--provider`
+
+Embedding provider. Must match the provider used when the index was built.
+
 ### `--root`
 
 Root directory used to render result paths relative to the repository.
@@ -98,10 +102,6 @@ Path to a `yzma` library directory, or one of its shared library files.
 
 llama context size. `0` uses the selected model default.
 
-### `--batch-size`
-
-llama batch size. `0` uses the selected model default.
-
 ### `--verbose`
 
 Enable verbose `yzma` logging.
@@ -113,6 +113,7 @@ unch search "sqlite schema"
 unch search --mode lexical "Run"
 unch search --details "get path variables from a request"
 unch search --model qwen3 "search query"
+unch search --provider openrouter --model openai/text-embedding-3-small "search query"
 unch search --state-dir /tmp/project.semsearch "router middleware"
 ```
 
@@ -120,7 +121,8 @@ unch search --state-dir /tmp/project.semsearch "router middleware"
 
 - `auto` stays semantic-first for natural-language queries.
 - If the manifest is bound to remote CI, `unch search` can refresh from remote automatically before running the query.
-- If no active snapshot exists for the requested model, `unch` tells you to run `unch index --model <model>` first.
+- OpenRouter token lookup checks `OPENROUTER_API_KEY`, then `~/.config/unch/tokens.json`, then `.semsearch/tokens.json`.
+- If no active snapshot exists for the requested provider and model, `unch` tells you to run `unch index --provider <provider> --model <model>` first.
 
 <AccordionGroup>
   <Accordion title="When should I force lexical mode?">
@@ -130,8 +132,8 @@ unch search --state-dir /tmp/project.semsearch "router middleware"
     Force semantic mode when the query is about behavior or intent and exact string overlap is weak.
   </Accordion>
   <Accordion title="Why should index and search use the same model?">
-    Ranking quality depends on query and document embeddings living in the same model space.
+    Ranking quality depends on query and document embeddings living in the same provider and model space.
 
-    If you indexed with one model and search with another, the results may degrade or fail entirely.
+    If you indexed with one provider or model and search with another, the results may degrade or fail entirely.
   </Accordion>
 </AccordionGroup>

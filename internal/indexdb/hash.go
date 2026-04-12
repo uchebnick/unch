@@ -34,6 +34,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 	rows, err := db.QueryContext(
 		ctx,
 		`SELECT
+			cs.provider,
 			cs.model_id,
 			s.path,
 			s.line,
@@ -49,12 +50,14 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 			e.embedding
 		FROM current_model_snapshots cs
 		JOIN snapshot_symbols s
-		  ON s.model_id = cs.model_id
+		  ON s.provider = cs.provider
+		 AND s.model_id = cs.model_id
 		 AND s.snapshot_id = cs.snapshot_id
 		JOIN snapshot_embeddings e
-		  ON e.model_id = s.model_id
+		  ON e.provider = s.provider
+		 AND e.model_id = s.model_id
 		 AND e.embedding_hash = s.embedding_hash
-		ORDER BY cs.model_id ASC, s.path ASC, s.line ASC, s.symbol_id ASC`,
+		ORDER BY cs.provider ASC, cs.model_id ASC, s.path ASC, s.line ASC, s.symbol_id ASC`,
 	)
 	if err != nil {
 		if isSchemaQueryError(err) {
@@ -67,9 +70,10 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 	}()
 
 	sum := sha256.New()
-	writeHashBytes(sum, []byte("semsearch-logical-index-v2"))
+	writeHashBytes(sum, []byte("semsearch-logical-index-v3"))
 
 	for rows.Next() {
+		var provider string
 		var modelID string
 		var path string
 		var line int64
@@ -84,6 +88,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 		var embeddingHash string
 		var embedding []byte
 		if err := rows.Scan(
+			&provider,
 			&modelID,
 			&path,
 			&line,
@@ -101,6 +106,7 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 			return "", fmt.Errorf("scan logical hash row: %w", err)
 		}
 
+		writeHashString(sum, provider)
 		writeHashString(sum, modelID)
 		writeHashString(sum, path)
 		writeHashInt64(sum, line)

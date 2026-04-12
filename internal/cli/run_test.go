@@ -12,6 +12,7 @@ import (
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/runtime"
+	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -158,6 +159,32 @@ func TestRunDispatchesInitCommand(t *testing.T) {
 	}
 }
 
+func TestRunDispatchesAuthCommand(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("UNCH_CONFIG_HOME", configHome)
+
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"auth", "openrouter", "--token", "sk-or-test"}); err != nil {
+			t.Fatalf("Run(auth openrouter) error: %v", err)
+		}
+	})
+
+	globalPath, err := semsearch.GlobalTokensPath()
+	if err != nil {
+		t.Fatalf("GlobalTokensPath() error: %v", err)
+	}
+	data, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) error: %v", globalPath, err)
+	}
+	if !strings.Contains(string(data), "\"openrouter\": \"sk-or-test\"") {
+		t.Fatalf("tokens file = %q, want openrouter token", string(data))
+	}
+	if !strings.Contains(output, "Saved global OpenRouter token") {
+		t.Fatalf("Run(auth openrouter) output = %q", output)
+	}
+}
+
 func TestRunDispatchesCreateCommand(t *testing.T) {
 	root := t.TempDir()
 	chdirForTest(t, root)
@@ -244,6 +271,36 @@ func TestRunRootHelpIncludesVersionCommand(t *testing.T) {
 
 	if !strings.Contains(output, "version Print the CLI version") {
 		t.Fatalf("Run(--help) output = %q, want version command", output)
+	}
+	if !strings.Contains(output, "auth    Save provider credentials such as OpenRouter API key") {
+		t.Fatalf("Run(--help) output = %q, want auth command", output)
+	}
+	if !strings.Contains(output, "start   Start long-running helpers such as MCP server") {
+		t.Fatalf("Run(--help) output = %q, want start command", output)
+	}
+}
+
+func TestRunStartHelp(t *testing.T) {
+	output := captureStdout(t, func() {
+		if err := Run("unch", []string{"help", "start"}); err != nil {
+			t.Fatalf("Run(help start) error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "unch start mcp [flags]") {
+		t.Fatalf("Run(help start) output = %q, want MCP start usage", output)
+	}
+}
+
+func TestRunStartMCPFlagHelp(t *testing.T) {
+	output := captureStdout(t, func() {
+		if err := runStart(context.Background(), "unch", []string{"mcp", "--help"}, "."); err != nil {
+			t.Fatalf("runStart(mcp --help) error: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "workspace_status, search_code, and index_repository tools") {
+		t.Fatalf("runStart(mcp --help) output = %q, want tool list", output)
 	}
 }
 

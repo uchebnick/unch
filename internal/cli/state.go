@@ -6,16 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/uchebnick/unch/internal/runtime"
 	"github.com/uchebnick/unch/internal/semsearch"
 )
 
 func defaultModelFlagValue() string {
-	modelsDir, err := semsearch.DefaultModelsDir()
-	if err != nil {
-		return ""
-	}
-	return runtime.DefaultModelPath(modelsDir)
+	return ""
 }
 
 func resolveStateTarget(rootAbs string, stateDirInput string, stateDirWasExplicit bool, dbInput string, dbWasExplicit bool) (semsearch.Paths, string, bool, error) {

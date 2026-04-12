@@ -15,13 +15,13 @@ type Scanner interface {
 }
 
 type Repository interface {
-	BeginSnapshot(ctx context.Context, modelID string) (int64, error)
-	CurrentSnapshotIfAny(ctx context.Context, modelID string) (int64, bool, error)
-	ActivateSnapshot(ctx context.Context, modelID string, snapshotID int64) error
-	EmbeddingExists(ctx context.Context, modelID string, embeddingHash string) (bool, error)
-	AddEmbedding(ctx context.Context, modelID string, embeddingHash string, embedding []float32) error
-	InsertSymbol(ctx context.Context, snapshotID int64, modelID string, path string, symbol IndexedSymbol, embeddingHash string) error
-	CopyPathFromSnapshot(ctx context.Context, modelID string, srcSnapshotID, dstSnapshotID int64, path string) (int, error)
+	BeginSnapshot(ctx context.Context, provider string, modelID string) (int64, error)
+	CurrentSnapshotIfAny(ctx context.Context, provider string, modelID string) (int64, bool, error)
+	ActivateSnapshot(ctx context.Context, provider string, modelID string, snapshotID int64) error
+	EmbeddingExists(ctx context.Context, provider string, modelID string, embeddingHash string) (bool, error)
+	AddEmbedding(ctx context.Context, provider string, modelID string, embeddingHash string, embedding []float32) error
+	InsertSymbol(ctx context.Context, snapshotID int64, provider string, modelID string, path string, symbol IndexedSymbol, embeddingHash string) error
+	CopyPathFromSnapshot(ctx context.Context, provider string, modelID string, srcSnapshotID, dstSnapshotID int64, path string) (int, error)
 	CleanupInactiveSnapshots(ctx context.Context) error
 	CleanupUnusedEmbeddings(ctx context.Context) error
 }
@@ -41,6 +41,7 @@ type Params struct {
 	Excludes             []string
 	ContextPrefix        string
 	CommentPrefix        string
+	Provider             string
 	ModelID              string
 	CurrentFileHashes    map[string]string
 	FileHashStateVersion int64
@@ -64,6 +65,7 @@ type runState struct {
 	ctx                context.Context
 	params             Params
 	reporter           Reporter
+	provider           string
 	modelID            string
 	currentSnapshotID  int64
 	hasCurrentSnapshot bool
@@ -77,21 +79,26 @@ type runState struct {
 
 // Run scans the repository, embeds extracted symbols, and activates the new index version.
 func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Result, error) {
+	provider := params.Provider
+	if provider == "" {
+		provider = "llama.cpp"
+	}
 	modelID := params.ModelID
 	if modelID == "" {
 		modelID = "embeddinggemma"
 	}
 
-	currentSnapshotID, hasCurrentSnapshot, err := s.Repo.CurrentSnapshotIfAny(ctx, modelID)
+	currentSnapshotID, hasCurrentSnapshot, err := s.Repo.CurrentSnapshotIfAny(ctx, provider, modelID)
 	if err != nil {
 		return Result{}, fmt.Errorf("read current snapshot: %w", err)
 	}
 
-	snapshotID, err := s.Repo.BeginSnapshot(ctx, modelID)
+	snapshotID, err := s.Repo.BeginSnapshot(ctx, provider, modelID)
 	if err != nil {
 		return Result{}, fmt.Errorf("begin snapshot: %w", err)
 	}
 	if reporter != nil {
+		reporter.Logf("provider=%s", provider)
 		reporter.Logf("model=%s", modelID)
 		reporter.Logf("snapshot id=%d", snapshotID)
 	}
@@ -101,6 +108,7 @@ func (s Service) Run(ctx context.Context, params Params, reporter Reporter) (Res
 		ctx:                ctx,
 		params:             params,
 		reporter:           reporter,
+		provider:           provider,
 		modelID:            modelID,
 		currentSnapshotID:  currentSnapshotID,
 		hasCurrentSnapshot: hasCurrentSnapshot,
@@ -162,7 +170,7 @@ func (r *runState) canReuseFile(rel string, contentHash string) bool {
 }
 
 func (r *runState) reuseFile(rel string) error {
-	copiedSymbols, err := r.service.Repo.CopyPathFromSnapshot(r.ctx, r.modelID, r.currentSnapshotID, r.snapshotID, rel)
+	copiedSymbols, err := r.service.Repo.CopyPathFromSnapshot(r.ctx, r.provider, r.modelID, r.currentSnapshotID, r.snapshotID, rel)
 	if err != nil {
 		return fmt.Errorf("copy unchanged file %s: %w", rel, err)
 	}
@@ -207,7 +215,7 @@ func (r *runState) indexJob(job FileJob) error {
 	for _, symbol := range job.Symbols {
 		hash := r.service.Embedder.IndexedSymbolHash(job.Path, symbol)
 
-		exists, err := r.service.Repo.EmbeddingExists(r.ctx, r.modelID, hash)
+		exists, err := r.service.Repo.EmbeddingExists(r.ctx, r.provider, r.modelID, hash)
 		if err != nil {
 			return fmt.Errorf("check embedding exists: %w", err)
 		}
@@ -216,12 +224,12 @@ func (r *runState) indexJob(job FileJob) error {
 			if err != nil {
 				return fmt.Errorf("embed symbol at %s:%d: %w", job.Path, symbol.Line, err)
 			}
-			if err := r.service.Repo.AddEmbedding(r.ctx, r.modelID, hash, vec); err != nil {
+			if err := r.service.Repo.AddEmbedding(r.ctx, r.provider, r.modelID, hash, vec); err != nil {
 				return fmt.Errorf("store embedding: %w", err)
 			}
 		}
 
-		if err := r.service.Repo.InsertSymbol(r.ctx, r.snapshotID, r.modelID, job.Path, symbol, hash); err != nil {
+		if err := r.service.Repo.InsertSymbol(r.ctx, r.snapshotID, r.provider, r.modelID, job.Path, symbol, hash); err != nil {
 			return fmt.Errorf("insert symbol: %w", err)
 		}
 	}
@@ -242,7 +250,7 @@ func (r *runState) finalize() error {
 	if r.processedFiles > 0 && r.reporter != nil {
 		r.reporter.CountProgress("Indexing", r.processedFiles, r.processedFiles)
 	}
-	if err := r.service.Repo.ActivateSnapshot(r.ctx, r.modelID, r.snapshotID); err != nil {
+	if err := r.service.Repo.ActivateSnapshot(r.ctx, r.provider, r.modelID, r.snapshotID); err != nil {
 		return fmt.Errorf("activate snapshot: %w", err)
 	}
 	if err := r.service.Repo.CleanupInactiveSnapshots(r.ctx); err != nil {

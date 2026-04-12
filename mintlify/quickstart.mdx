@@ -47,6 +47,28 @@ description: Index a repository and run your first search in under a minute.
   </Step>
 </Steps>
 
+## OpenRouter flow
+
+<Steps>
+  <Step title="Save the token once">
+    ```bash
+    unch auth openrouter --token sk-or-...
+    ```
+  </Step>
+
+  <Step title="Index with OpenRouter embeddings">
+    ```bash
+    unch index --root . --provider openrouter --model openai/text-embedding-3-small
+    ```
+  </Step>
+
+  <Step title="Search with the same provider and model">
+    ```bash
+    unch search --provider openrouter --model openai/text-embedding-3-small "create a new router"
+    ```
+  </Step>
+</Steps>
+
 ## Search modes in practice
 
 <Tabs>
@@ -75,13 +97,13 @@ description: Index a repository and run your first search in under a minute.
 
 ## What happens on first run
 
-The first `unch index` may:
+The first local `llama.cpp` index may:
 
 - download the default embedding model
 - fetch local `yzma` runtime libraries
 - create `./.semsearch/`
 
-Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
+Each provider and model pair keeps its own active index snapshot. Rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot until the new run finishes successfully.
 
 <Tip>
   If you want to keep state somewhere other than `./.semsearch`, use `--state-dir`.

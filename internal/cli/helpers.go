@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
+	appembed "github.com/uchebnick/unch/internal/embed"
 	llamaembed "github.com/uchebnick/unch/internal/embed/llama"
 	appsearch "github.com/uchebnick/unch/internal/search"
 	"github.com/uchebnick/unch/internal/termui"
@@ -160,9 +161,9 @@ func isCharDevice(file *os.File) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-func loadEmbedderWithSpinner(ctx context.Context, s *termui.Session, cfg llamaembed.Config) (*llamaembed.Embedder, error) {
+func loadEmbedderWithSpinner(ctx context.Context, s *termui.Session, load func() (appembed.Embedder, error)) (appembed.Embedder, error) {
 	if s == nil || !s.Interactive() {
-		embedder, err := llamaembed.New(cfg)
+		embedder, err := load()
 		if err != nil {
 			if s != nil {
 				s.Clear()
@@ -194,7 +195,7 @@ func loadEmbedderWithSpinner(ctx context.Context, s *termui.Session, cfg llamaem
 		}
 	}()
 
-	embedder, err := llamaembed.New(cfg)
+	embedder, err := load()
 	close(done)
 
 	if err != nil {

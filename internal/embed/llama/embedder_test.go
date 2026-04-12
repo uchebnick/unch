@@ -4,13 +4,14 @@ import (
 	"strings"
 	"testing"
 
+	appembed "github.com/uchebnick/unch/internal/embed"
 	"github.com/uchebnick/unch/internal/indexing"
 )
 
 func TestFormatIndexedSymbolDocumentIncludesMetadataAndBody(t *testing.T) {
 	t.Parallel()
 
-	doc := embeddingGemmaModel{}.FormatIndexedSymbolDocument(
+	doc := appembed.FormatterForModel("embeddinggemma").FormatIndexedSymbolDocument(
 		"/tmp/internal/model_cache.go",
 		indexing.IndexedSymbol{
 			Kind:          "function",
@@ -42,7 +43,7 @@ func TestFormatIndexedSymbolDocumentIncludesMetadataAndBody(t *testing.T) {
 func TestFormatEmbeddingGemmaQuery(t *testing.T) {
 	t.Parallel()
 
-	got := embeddingGemmaModel{}.FormatQuery("global model cache")
+	got := appembed.FormatterForModel("embeddinggemma").FormatQuery("global model cache")
 	want := "task: code retrieval | query: global model cache"
 	if got != want {
 		t.Fatalf("formatEmbeddingGemmaQuery() = %q, want %q", got, want)
@@ -52,7 +53,7 @@ func TestFormatEmbeddingGemmaQuery(t *testing.T) {
 func TestFormatQwen3Query(t *testing.T) {
 	t.Parallel()
 
-	got := formatQwen3Query(qwen3CodeRetrievalInstruction, "global model cache")
+	got := appembed.FormatterForModel("qwen3").FormatQuery("global model cache")
 	want := "Instruct: Given a code search query, retrieve relevant code symbols and documentation that answer the query.\nQuery: global model cache"
 	if got != want {
 		t.Fatalf("formatQwen3Query() = %q, want %q", got, want)
@@ -62,7 +63,7 @@ func TestFormatQwen3Query(t *testing.T) {
 func TestFormatQwen3IndexedSymbolDocumentIncludesTitleAndMetadata(t *testing.T) {
 	t.Parallel()
 
-	doc := qwen3EmbeddingModel{}.FormatIndexedSymbolDocument(
+	doc := appembed.FormatterForModel("qwen3").FormatIndexedSymbolDocument(
 		"/tmp/internal/model_cache.go",
 		indexing.IndexedSymbol{
 			Kind:          "function",
@@ -91,27 +92,16 @@ func TestFormatQwen3IndexedSymbolDocumentIncludesTitleAndMetadata(t *testing.T) 
 	}
 }
 
-func TestNormalizeDocumentTitle(t *testing.T) {
-	t.Parallel()
-
-	if got := normalizeDocumentTitle("internal/model|cache.go"); got != "internal/model/cache.go" {
-		t.Fatalf("normalizeDocumentTitle() = %q", got)
-	}
-	if got := normalizeDocumentTitle(""); got != "none" {
-		t.Fatalf("normalizeDocumentTitle(empty) = %q", got)
-	}
-}
-
 func TestModelForPath(t *testing.T) {
 	t.Parallel()
 
-	gemmaID := embeddingGemmaModel{}.ProfileRevision()
-	qwenID := qwen3EmbeddingModel{}.ProfileRevision()
+	gemmaID := appembed.FormatterForModel("embeddinggemma").ProfileRevision()
+	qwenID := appembed.FormatterForModel("qwen3").ProfileRevision()
 
-	if got := behaviorForPath("/tmp/embeddinggemma-300m.gguf").ProfileRevision(); got != gemmaID {
+	if got := formatterForPath("/tmp/embeddinggemma-300m.gguf").ProfileRevision(); got != gemmaID {
 		t.Fatalf("behaviorForPath(gemma) = %q", got)
 	}
-	if got := behaviorForPath("/tmp/Qwen3-Embedding-0.6B-Q8_0.gguf").ProfileRevision(); got != qwenID {
+	if got := formatterForPath("/tmp/Qwen3-Embedding-0.6B-Q8_0.gguf").ProfileRevision(); got != qwenID {
 		t.Fatalf("behaviorForPath(qwen3) = %q", got)
 	}
 }
@@ -149,17 +139,49 @@ func TestKnownModelProfiles(t *testing.T) {
 	}
 }
 
-func TestHashCommentIsStable(t *testing.T) {
+func TestIndexedSymbolHashIsStable(t *testing.T) {
 	t.Parallel()
 
-	hashA := hashComment("same comment")
-	hashB := hashComment("same comment")
-	hashC := hashComment("other comment")
+	formatter := appembed.FormatterForModel("embeddinggemma")
+	symbolA := indexing.IndexedSymbol{Name: "A", QualifiedName: "A", Documentation: "same comment"}
+	symbolB := indexing.IndexedSymbol{Name: "A", QualifiedName: "A", Documentation: "same comment"}
+	symbolC := indexing.IndexedSymbol{Name: "A", QualifiedName: "A", Documentation: "other comment"}
+
+	hashA := appembed.IndexedSymbolHash(formatter, "a.go", symbolA)
+	hashB := appembed.IndexedSymbolHash(formatter, "a.go", symbolB)
+	hashC := appembed.IndexedSymbolHash(formatter, "a.go", symbolC)
 
 	if hashA != hashB {
 		t.Fatalf("expected identical comments to have identical hashes")
 	}
 	if hashA == hashC {
 		t.Fatalf("expected different comments to have different hashes")
+	}
+}
+
+func TestEffectiveTokenLimitPrefersSmallestPositiveBound(t *testing.T) {
+	t.Parallel()
+
+	got := effectiveTokenLimit(2048, 2048, 1024, 1536)
+	if got != 1024 {
+		t.Fatalf("effectiveTokenLimit() = %d, want 1024", got)
+	}
+}
+
+func TestEffectiveTokenLimitIgnoresZeroRuntimeValues(t *testing.T) {
+	t.Parallel()
+
+	got := effectiveTokenLimit(2048, 0, -1, 2048)
+	if got != 2048 {
+		t.Fatalf("effectiveTokenLimit() = %d, want 2048", got)
+	}
+}
+
+func TestEffectiveTokenLimitFallsBackToRuntimeBound(t *testing.T) {
+	t.Parallel()
+
+	got := effectiveTokenLimit(0, 4096, 1024, 0)
+	if got != 1024 {
+		t.Fatalf("effectiveTokenLimit() = %d, want 1024", got)
 	}
 }

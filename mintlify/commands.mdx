@@ -3,13 +3,17 @@ title: Commands
 description: Overview of the main unch CLI commands.
 ---
 
-`unch` is centered around three main command families:
+`unch` is centered around four main command families:
 
+- `unch auth` to save provider credentials such as an OpenRouter API key
 - [`unch index`](/commands/index) to build or refresh a local index
 - [`unch search`](/commands/search) to query the current index
 - [`unch remote`](/commands/remote) to sync or download published remote state
 
-<CardGroup cols={3}>
+<CardGroup cols={4}>
+  <Card title="Auth" icon="key">
+    Save provider credentials without keeping tokens in your shell environment.
+  </Card>
   <Card title="Index" icon="database" href="/commands/index">
     Build or refresh `.semsearch` for a repository.
   </Card>
@@ -28,6 +32,7 @@ description: Overview of the main unch CLI commands.
 ## Typical local flow
 
 ```bash
+unch auth openrouter --token sk-or-...
 unch index --root .
 unch search "sqlite schema"
 unch search --details "get path variables from a request"

@@ -28,6 +28,11 @@ func runHelp(program string, args []string) error {
 	}
 
 	switch args[0] {
+	case "auth":
+		if len(args) > 1 && args[1] == "openrouter" {
+			return runAuth(context.TODO(), name, []string{"openrouter", "--help"}, ".")
+		}
+		return printAuthHelp(os.Stdout, name)
 	case "index":
 		return runIndex(context.TODO(), name, []string{"--help"}, ".", indexing.FileScanner{}, runtime.YzmaResolver{}, runtime.ModelCache{})
 	case "search":
@@ -39,6 +44,11 @@ func runHelp(program string, args []string) error {
 			return runCreate(context.TODO(), name, []string{"ci", "--help"}, ".")
 		}
 		return printCreateHelp(os.Stdout, name)
+	case "start":
+		if len(args) > 1 && args[1] == "mcp" {
+			return runStart(context.TODO(), name, []string{"mcp", "--help"}, ".")
+		}
+		return printStartHelp(os.Stdout, name)
 	case "bind":
 		if len(args) > 1 && args[1] == "ci" {
 			return runBind(context.TODO(), name, []string{"ci", "--help"}, ".")
@@ -78,12 +88,14 @@ func printRootHelp(w io.Writer, program string) error {
 		return err
 	}
 	commands := []string{
+		"  auth    Save provider credentials such as OpenRouter API key",
 		"  index   Build or refresh the local search index",
 		"  search  Query the current index",
 		"  init    Create .semsearch state in a repository",
 		"  create  Generate helper files such as GitHub Actions workflow",
 		"  bind    Bind the local manifest to a remote GitHub repo/workflow",
 		"  remote  Sync or download published search indexes",
+		"  start   Start long-running helpers such as MCP server",
 		"  help    Show root or command-specific help",
 		"  version Print the CLI version",
 	}
@@ -118,11 +130,13 @@ func printRootHelp(w io.Writer, program string) error {
 		return err
 	}
 	examples := []string{
+		fmt.Sprintf("  %s auth openrouter --token sk-or-...", program),
 		fmt.Sprintf("  %s index --root .", program),
 		fmt.Sprintf("  %s search \"sqlite schema\"", program),
 		fmt.Sprintf("  %s search --details \"get path variables from a request\"", program),
 		fmt.Sprintf("  %s index --model qwen3", program),
 		fmt.Sprintf("  %s index --model ~/.semsearch/models/Qwen3-Embedding-0.6B-Q8_0.gguf", program),
+		fmt.Sprintf("  %s start mcp", program),
 		fmt.Sprintf("  %s help search", program),
 	}
 	for _, line := range examples {

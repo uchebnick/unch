@@ -82,6 +82,17 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 		return fmt.Errorf("resolve root: %w", err)
 	}
 
+	previewPaths, _, _, err := previewStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
+	if err != nil {
+		return err
+	}
+	if parsedProvider, err := appembed.ParseProvider(*provider); err == nil && parsedProvider == appembed.ProviderOpenRouter {
+		if err := preflightProviderConfig(parsedProvider, previewPaths.LocalDir); err != nil {
+			printMissingProviderCredentialsWarning(parsedProvider)
+			return err
+		}
+	}
+
 	targetPaths, resolvedIndexPath, _, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err

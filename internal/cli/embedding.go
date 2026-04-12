@@ -55,12 +55,7 @@ func prepareEmbedder(
 		apiKey, err := semsearch.ResolveProviderToken(targetPaths.LocalDir, provider.String())
 		if err != nil {
 			if s != nil {
-				envName := strings.TrimSpace(providerTokenEnvName(provider.String()))
-				if envName == "" {
-					printSessionLine(s, "Warning: token for provider %q is not configured. Run `unch auth %s --token <token>`.", provider, provider)
-				} else {
-					printSessionLine(s, "Warning: token for provider %q is not configured. Run `unch auth %s --token <token>` or set %s.", provider, provider, envName)
-				}
+				printMissingProviderCredentialsWarning(provider)
 			}
 			return preparedEmbedder{}, fmt.Errorf("resolve openrouter token: %w", err)
 		}
@@ -151,4 +146,24 @@ func providerTokenEnvName(provider string) string {
 	default:
 		return ""
 	}
+}
+
+func preflightProviderConfig(provider appembed.Provider, localDir string) error {
+	switch provider {
+	case appembed.ProviderOpenRouter:
+		_, err := semsearch.ResolveProviderToken(localDir, provider.String())
+		if err != nil {
+			return fmt.Errorf("resolve %s token: %w", provider, err)
+		}
+	}
+	return nil
+}
+
+func printMissingProviderCredentialsWarning(provider appembed.Provider) {
+	envName := strings.TrimSpace(providerTokenEnvName(provider.String()))
+	if envName == "" {
+		printSessionLine(nil, "Warning: credentials for provider %q are not configured.", provider)
+		return
+	}
+	printSessionLine(nil, "Warning: credentials for provider %q are not configured. Save a token for this provider or set %s.", provider, envName)
 }

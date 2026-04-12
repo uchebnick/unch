@@ -185,6 +185,42 @@ func TestRunDispatchesAuthCommand(t *testing.T) {
 	}
 }
 
+func TestRunAuthDoesNotCreateRepoSemsearch(t *testing.T) {
+	root := t.TempDir()
+	configHome := t.TempDir()
+	t.Setenv("UNCH_CONFIG_HOME", configHome)
+	chdirForTest(t, root)
+
+	if err := Run("unch", []string{"auth", "openrouter", "--token", "sk-or-test"}); err != nil {
+		t.Fatalf("Run(auth openrouter) error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, ".semsearch")); !os.IsNotExist(err) {
+		t.Fatalf(".semsearch exists unexpectedly after global auth")
+	}
+}
+
+func TestRunIndexOpenRouterWithoutTokenDoesNotCreateRepoSemsearch(t *testing.T) {
+	root := t.TempDir()
+	configHome := t.TempDir()
+	t.Setenv("UNCH_CONFIG_HOME", configHome)
+	chdirForTest(t, root)
+
+	source := filepath.Join(root, "main.go")
+	if err := os.WriteFile(source, []byte("package main\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s) error: %v", source, err)
+	}
+
+	err := Run("unch", []string{"index", "--provider", "openrouter", "--model", "openai/text-embedding-3-small"})
+	if err == nil || !strings.Contains(err.Error(), "resolve openrouter token") {
+		t.Fatalf("Run(index openrouter) error = %v, want missing token error", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, ".semsearch")); !os.IsNotExist(err) {
+		t.Fatalf(".semsearch exists unexpectedly after failed openrouter index")
+	}
+}
+
 func TestRunDispatchesCreateCommand(t *testing.T) {
 	root := t.TempDir()
 	chdirForTest(t, root)

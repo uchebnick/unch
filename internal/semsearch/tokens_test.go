@@ -9,7 +9,7 @@ import (
 
 func TestResolveProviderTokenPrefersEnv(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "env-token")
-	t.Setenv("UNCH_CONFIG_HOME", t.TempDir())
+	t.Setenv("SEMSEARCH_HOME", t.TempDir())
 
 	root := t.TempDir()
 	token, err := ResolveProviderToken(filepath.Join(root, ".semsearch"), "openrouter")
@@ -22,7 +22,7 @@ func TestResolveProviderTokenPrefersEnv(t *testing.T) {
 }
 
 func TestResolveProviderTokenFallsBackToLocalFile(t *testing.T) {
-	t.Setenv("UNCH_CONFIG_HOME", t.TempDir())
+	t.Setenv("SEMSEARCH_HOME", t.TempDir())
 
 	localDir := filepath.Join(t.TempDir(), ".semsearch")
 	if err := os.MkdirAll(localDir, 0o755); err != nil {
@@ -42,8 +42,8 @@ func TestResolveProviderTokenFallsBackToLocalFile(t *testing.T) {
 }
 
 func TestResolveProviderTokenFallsBackToGlobalFile(t *testing.T) {
-	configHome := t.TempDir()
-	t.Setenv("UNCH_CONFIG_HOME", configHome)
+	semsearchHome := t.TempDir()
+	t.Setenv("SEMSEARCH_HOME", semsearchHome)
 
 	globalPath, err := GlobalTokensPath()
 	if err != nil {
@@ -89,8 +89,8 @@ func TestSaveProviderTokenMergesExistingProviders(t *testing.T) {
 }
 
 func TestResolveProviderTokenPrefersGlobalBeforeLocalFile(t *testing.T) {
-	configHome := t.TempDir()
-	t.Setenv("UNCH_CONFIG_HOME", configHome)
+	semsearchHome := t.TempDir()
+	t.Setenv("SEMSEARCH_HOME", semsearchHome)
 
 	globalPath, err := GlobalTokensPath()
 	if err != nil {

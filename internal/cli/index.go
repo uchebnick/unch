@@ -55,7 +55,7 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 				},
 				[]string{
 					"Omit --model to auto-download the default embeddinggemma GGUF model.",
-					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, ~/.config/unch/tokens.json, then .semsearch/tokens.json.",
+					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, then the global unch tokens.json, then .semsearch/tokens.json.",
 					"Known model ids today: embeddinggemma and qwen3.",
 					"Changing --model changes the embedding space; rebuild the index before searching with the new model.",
 					"--comment-prefix and --context-prefix are legacy fallback knobs for unsupported files or parser failures.",

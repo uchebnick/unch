@@ -102,7 +102,7 @@ unch index --provider openrouter --model openai/text-embedding-3-small
 unch search --provider openrouter --model openai/text-embedding-3-small "create a new router"
 ```
 
-By default `unch auth openrouter` writes `~/.config/unch/tokens.json`, so you do not need to keep the token in your shell environment. Use `--local` if you want to store it in `.semsearch/tokens.json` for one repository.
+By default `unch auth openrouter` writes `tokens.json` into the global `unch` state directory, so you do not need to keep the token in your shell environment. Use `--local` if you want to store it in `.semsearch/tokens.json` for one repository.
 
 ## Quick Start
 

@@ -76,13 +76,15 @@ Otherwise `unch` uses the system user cache directory for the current platform.
 `unch auth openrouter` writes to:
 
 ```text
-~/.config/unch/tokens.json
+$SEMSEARCH_HOME/tokens.json
 ```
+
+If `SEMSEARCH_HOME` is not set, `unch` uses the platform user cache directory and stores the token there as `unch/tokens.json`.
 
 At runtime, token lookup order is:
 
 1. `OPENROUTER_API_KEY`
-2. `~/.config/unch/tokens.json`
+2. global `unch` `tokens.json`
 3. `.semsearch/tokens.json`
 
 ## Practical rule

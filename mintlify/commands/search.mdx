@@ -121,7 +121,7 @@ unch search --state-dir /tmp/project.semsearch "router middleware"
 
 - `auto` stays semantic-first for natural-language queries.
 - If the manifest is bound to remote CI, `unch search` can refresh from remote automatically before running the query.
-- OpenRouter token lookup checks `OPENROUTER_API_KEY`, then `~/.config/unch/tokens.json`, then `.semsearch/tokens.json`.
+- OpenRouter token lookup checks `OPENROUTER_API_KEY`, then the global `unch` `tokens.json`, then `.semsearch/tokens.json`.
 - If no active snapshot exists for the requested provider and model, `unch` tells you to run `unch index --provider <provider> --model <model>` first.
 
 <AccordionGroup>

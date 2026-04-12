@@ -54,7 +54,10 @@ func prepareEmbedder(
 		}
 		apiKey, err := semsearch.ResolveProviderToken(targetPaths.LocalDir, provider.String())
 		if err != nil {
-			return preparedEmbedder{}, err
+			if s != nil {
+				printSessionLine(s, "Warning: OpenRouter token is not configured. Run `unch auth openrouter --token <token>` or set OPENROUTER_API_KEY.")
+			}
+			return preparedEmbedder{}, fmt.Errorf("resolve openrouter token: %w", err)
 		}
 
 		embedder, err := loadEmbedderWithSpinner(ctx, s, func() (appembed.Embedder, error) {

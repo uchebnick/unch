@@ -136,11 +136,13 @@ unch auth openrouter --token sk-or-...
 unch index --provider openrouter --model openai/text-embedding-3-small
 ```
 
-By default `unch auth openrouter` stores the token in:
+By default `unch auth openrouter` stores the token in the global `unch` state directory:
 
 ```text
-~/.config/unch/tokens.json
+$SEMSEARCH_HOME/tokens.json
 ```
+
+If `SEMSEARCH_HOME` is not set, `unch` uses the platform user cache directory and keeps the token there as `unch/tokens.json`.
 
 That keeps the token out of your project checkout and out of your shell environment.
 

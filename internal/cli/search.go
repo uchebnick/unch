@@ -56,7 +56,7 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 				},
 				[]string{
 					"Omit --model to reuse the default embeddinggemma GGUF model.",
-					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, ~/.config/unch/tokens.json, then .semsearch/tokens.json.",
+					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, then the global unch tokens.json, then .semsearch/tokens.json.",
 					"Known model ids today: embeddinggemma and qwen3.",
 					"Use the same embedding model for both index and search, otherwise ranking quality will be wrong.",
 					"Switching models requires rebuilding the index with `unch index` first.",

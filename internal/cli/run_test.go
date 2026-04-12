@@ -160,8 +160,8 @@ func TestRunDispatchesInitCommand(t *testing.T) {
 }
 
 func TestRunDispatchesAuthCommand(t *testing.T) {
-	configHome := t.TempDir()
-	t.Setenv("UNCH_CONFIG_HOME", configHome)
+	semsearchHome := t.TempDir()
+	t.Setenv("SEMSEARCH_HOME", semsearchHome)
 
 	output := captureStdout(t, func() {
 		if err := Run("unch", []string{"auth", "openrouter", "--token", "sk-or-test"}); err != nil {

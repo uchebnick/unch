@@ -65,7 +65,7 @@ func runStartMCP(ctx context.Context, program string, args []string) error {
 					"From the repository root, `unch start mcp` is enough in the common case.",
 					"Stdout is reserved for MCP protocol messages; use this command as a child process from an MCP client.",
 					"The server exposes workspace_status, search_code, and index_repository tools.",
-					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, ~/.config/unch/tokens.json, then .semsearch/tokens.json.",
+					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, then the global unch tokens.json, then .semsearch/tokens.json.",
 					"Use one MCP process per repository workspace; the process reuses the same model/runtime configuration across tool calls.",
 				},
 			)

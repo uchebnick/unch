@@ -55,7 +55,7 @@ func runAuthOpenRouter(program string, args []string) error {
 					"OPENROUTER_API_KEY=sk-or-... " + cliName(program) + " auth openrouter",
 				},
 				[]string{
-					"By default this writes ~/.config/unch/tokens.json and keeps project state untouched.",
+					"By default this writes the token into the global unch state directory and keeps project state untouched.",
 					"Use --local to write .semsearch/tokens.json for one repository workspace.",
 					"OPENROUTER_API_KEY still overrides saved values at runtime when it is set.",
 				},

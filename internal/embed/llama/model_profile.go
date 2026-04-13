@@ -11,11 +11,6 @@ type ModelProfile struct {
 	DefaultContextSize int
 }
 
-type embeddingBehavior interface {
-	DefaultPooling() llama.PoolingType
-	Formatter() appembed.Formatter
-}
-
 type registeredEmbeddingModel struct {
 	TargetID string
 	Defaults runtimeDefaults

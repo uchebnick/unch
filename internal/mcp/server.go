@@ -414,10 +414,6 @@ func (s *Server) errorEnvelope(id json.RawMessage, code int, message string) res
 	}
 }
 
-func (s *Server) writeResult(id json.RawMessage, result any) error {
-	return s.writeEnvelope(s.resultEnvelope(id, result))
-}
-
 func (s *Server) writeError(id json.RawMessage, code int, message string) error {
 	return s.writeEnvelope(s.errorEnvelope(id, code, message))
 }

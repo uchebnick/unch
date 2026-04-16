@@ -1,9 +1,29 @@
 ---
 title: Embedding models
-description: How unch uses local GGUF embedding models and which built-in profiles are available.
+description: How unch uses local GGUF models or OpenRouter embedding models, and how snapshots stay isolated per provider.
 ---
 
-`unch` computes embeddings locally from GGUF models. The model used for `index` and `search` must match.
+`unch` supports two embedding providers:
+
+- `llama.cpp` for local GGUF models
+- `openrouter` for remote embedding APIs
+
+The provider and model used for `index` and `search` must match.
+
+## Providers
+
+### `llama.cpp`
+
+- default provider
+- works with built-in model ids such as `embeddinggemma` and `qwen3`
+- also accepts a direct `.gguf` path
+- may download a default embedding model and local `yzma` runtime on first run
+
+### `openrouter`
+
+- remote provider
+- uses an OpenRouter embedding model id such as `openai/text-embedding-3-small`
+- token can be stored with `unch auth openrouter --token ...`
 
 ## Known model ids
 
@@ -26,16 +46,20 @@ unch index --model embeddinggemma
 unch index --model qwen3
 unch search --model qwen3 "create a new router"
 unch index --model /path/to/model.gguf
+unch auth openrouter --token sk-or-...
+unch index --provider openrouter --model openai/text-embedding-3-small
+unch search --provider openrouter --model openai/text-embedding-3-small "create a new router"
 ```
 
-## Model-scoped snapshots
+## Provider-scoped snapshots
 
-Each model keeps its own active snapshot in the local index state.
+Each provider and model pair keeps its own active snapshot in the local index state.
 
 That means:
 
 - rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot
-- switching models does require a matching reindex before search
+- rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot
+- switching providers or models does require a matching reindex before search
 
 ## Default cache location
 
@@ -47,6 +71,20 @@ $SEMSEARCH_HOME/models
 
 Otherwise `unch` uses the system user cache directory for the current platform.
 
+## Token storage for OpenRouter
+
+`unch auth openrouter` writes to:
+
+```text
+~/.config/unch/tokens.json
+```
+
+At runtime, token lookup order is:
+
+1. `OPENROUTER_API_KEY`
+2. `~/.config/unch/tokens.json`
+3. `.semsearch/tokens.json`
+
 ## Practical rule
 
-Always use the same model family for both `unch index` and `unch search`. If they differ, ranking quality will be wrong.
+Always use the same provider and model family for both `unch index` and `unch search`. If they differ, ranking quality will be wrong.

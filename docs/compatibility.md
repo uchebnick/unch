@@ -28,7 +28,7 @@ This document describes the current compatibility contract for `unch`.
 
 - `index.db` is a rebuildable cache artifact, not a durable user database.
 - Compatibility is determined by the schema and query expectations of the running `unch` binary.
-- Active index state is model-scoped: each embedding model family keeps its own active snapshot.
+- Active index state is provider-scoped and model-scoped: each provider and embedding model pair keeps its own active snapshot.
 - When the current binary cannot use a database layout, the correct fix is to rebuild the index, not to migrate user data in place.
 - Local upgrades may therefore require `unch index` after releases that change indexing or storage behavior.
 

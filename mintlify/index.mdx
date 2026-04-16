@@ -36,6 +36,13 @@ Everything stays local by default. Remote publishing is optional.
     unch search --details "get path variables from a request"
     ```
   </Tab>
+  <Tab title="OpenRouter">
+    ```bash
+    unch auth openrouter --token sk-or-...
+    unch index --root . --provider openrouter --model openai/text-embedding-3-small
+    unch search --provider openrouter --model openai/text-embedding-3-small "create a new router"
+    ```
+  </Tab>
   <Tab title="Shared via CI">
     ```bash
     unch create ci

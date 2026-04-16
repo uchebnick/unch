@@ -10,6 +10,8 @@ import (
 	"github.com/uchebnick/unch/internal/indexing"
 )
 
+const testProvider = "llama.cpp"
+
 func TestStoreLifecycle(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "index.db")
@@ -24,23 +26,23 @@ func TestStoreLifecycle(t *testing.T) {
 
 	const modelID = "embeddinggemma"
 
-	snapshot1, err := store.BeginSnapshot(ctx, modelID)
+	snapshot1, err := store.BeginSnapshot(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("BeginSnapshot() error: %v", err)
 	}
-	snapshot2, err := store.BeginSnapshot(ctx, "qwen3")
+	snapshot2, err := store.BeginSnapshot(ctx, testProvider, "qwen3")
 	if err != nil {
 		t.Fatalf("BeginSnapshot(qwen3) error: %v", err)
 	}
 
 	vec := []float32{1, 0, 0}
-	if err := store.AddEmbedding(ctx, modelID, "hash1", vec); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, modelID, "hash1", vec); err != nil {
 		t.Fatalf("AddEmbedding(hash1) error: %v", err)
 	}
-	if err := store.AddEmbedding(ctx, "qwen3", "hash2", []float32{0, 1, 0}); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, "qwen3", "hash2", []float32{0, 1, 0}); err != nil {
 		t.Fatalf("AddEmbedding(hash2) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, snapshot1, modelID, "a.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, snapshot1, testProvider, modelID, "a.go", indexing.IndexedSymbol{
 		Line:          10,
 		Kind:          "function",
 		Name:          "A",
@@ -50,7 +52,7 @@ func TestStoreLifecycle(t *testing.T) {
 	}, "hash1"); err != nil {
 		t.Fatalf("InsertSymbol(hash1) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, snapshot2, "qwen3", "b.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, snapshot2, testProvider, "qwen3", "b.go", indexing.IndexedSymbol{
 		Line:          20,
 		Kind:          "function",
 		Name:          "B",
@@ -60,21 +62,21 @@ func TestStoreLifecycle(t *testing.T) {
 	}, "hash2"); err != nil {
 		t.Fatalf("InsertSymbol(hash2) error: %v", err)
 	}
-	if err := store.ActivateSnapshot(ctx, modelID, snapshot1); err != nil {
+	if err := store.ActivateSnapshot(ctx, testProvider, modelID, snapshot1); err != nil {
 		t.Fatalf("ActivateSnapshot() error: %v", err)
 	}
 
-	currentSnapshot, err := store.CurrentSnapshot(ctx, modelID)
+	currentSnapshot, err := store.CurrentSnapshot(ctx, testProvider, modelID)
 	if err != nil || currentSnapshot != snapshot1 {
 		t.Fatalf("CurrentSnapshot() = (%d, %v), want (%d, nil)", currentSnapshot, err, snapshot1)
 	}
 
-	exists, err := store.EmbeddingExists(ctx, modelID, "hash1")
+	exists, err := store.EmbeddingExists(ctx, testProvider, modelID, "hash1")
 	if err != nil || !exists {
 		t.Fatalf("EmbeddingExists(hash1) = (%v, %v)", exists, err)
 	}
 
-	listed, err := store.ListCurrentSymbols(ctx, modelID)
+	listed, err := store.ListCurrentSymbols(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("ListCurrentSymbols() error: %v", err)
 	}
@@ -82,7 +84,7 @@ func TestStoreLifecycle(t *testing.T) {
 		t.Fatalf("ListCurrentSymbols() = %+v", listed)
 	}
 
-	results, err := store.SearchCurrent(ctx, modelID, vec, 5)
+	results, err := store.SearchCurrent(ctx, testProvider, modelID, vec, 5)
 	if err != nil {
 		t.Fatalf("SearchCurrent() error: %v", err)
 	}
@@ -90,7 +92,7 @@ func TestStoreLifecycle(t *testing.T) {
 		t.Fatalf("SearchCurrent() = %+v", results)
 	}
 
-	if _, err := store.ListCurrentSymbols(ctx, "qwen3"); !errors.Is(err, ErrNoActiveSnapshot) {
+	if _, err := store.ListCurrentSymbols(ctx, testProvider, "qwen3"); !errors.Is(err, ErrNoActiveSnapshot) {
 		t.Fatalf("ListCurrentSymbols(qwen3) error = %v, want ErrNoActiveSnapshot", err)
 	}
 
@@ -100,7 +102,7 @@ func TestStoreLifecycle(t *testing.T) {
 	if err := store.CleanupUnusedEmbeddings(ctx); err != nil {
 		t.Fatalf("CleanupUnusedEmbeddings() error: %v", err)
 	}
-	exists, err = store.EmbeddingExists(ctx, "qwen3", "hash2")
+	exists, err = store.EmbeddingExists(ctx, testProvider, "qwen3", "hash2")
 	if err != nil {
 		t.Fatalf("EmbeddingExists(hash2) error: %v", err)
 	}
@@ -121,14 +123,14 @@ func TestActiveSnapshotIsolationAcrossModels(t *testing.T) {
 		_ = store.Close()
 	}()
 
-	if err := store.AddEmbedding(ctx, "embeddinggemma", "hash-gemma", []float32{1, 0, 0}); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, "embeddinggemma", "hash-gemma", []float32{1, 0, 0}); err != nil {
 		t.Fatalf("AddEmbedding(gemma) error: %v", err)
 	}
-	gemmaSnapshot, err := store.BeginSnapshot(ctx, "embeddinggemma")
+	gemmaSnapshot, err := store.BeginSnapshot(ctx, testProvider, "embeddinggemma")
 	if err != nil {
 		t.Fatalf("BeginSnapshot(gemma) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, gemmaSnapshot, "embeddinggemma", "a.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, gemmaSnapshot, testProvider, "embeddinggemma", "a.go", indexing.IndexedSymbol{
 		Line:          10,
 		Kind:          "function",
 		Name:          "A",
@@ -136,18 +138,18 @@ func TestActiveSnapshotIsolationAcrossModels(t *testing.T) {
 	}, "hash-gemma"); err != nil {
 		t.Fatalf("InsertSymbol(gemma) error: %v", err)
 	}
-	if err := store.ActivateSnapshot(ctx, "embeddinggemma", gemmaSnapshot); err != nil {
+	if err := store.ActivateSnapshot(ctx, testProvider, "embeddinggemma", gemmaSnapshot); err != nil {
 		t.Fatalf("ActivateSnapshot(gemma) error: %v", err)
 	}
 
-	qwenSnapshot, err := store.BeginSnapshot(ctx, "qwen3")
+	qwenSnapshot, err := store.BeginSnapshot(ctx, testProvider, "qwen3")
 	if err != nil {
 		t.Fatalf("BeginSnapshot(qwen3) error: %v", err)
 	}
-	if err := store.AddEmbedding(ctx, "qwen3", "hash-qwen", []float32{0, 1, 0}); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, "qwen3", "hash-qwen", []float32{0, 1, 0}); err != nil {
 		t.Fatalf("AddEmbedding(qwen3) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, qwenSnapshot, "qwen3", "b.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, qwenSnapshot, testProvider, "qwen3", "b.go", indexing.IndexedSymbol{
 		Line:          20,
 		Kind:          "function",
 		Name:          "B",
@@ -156,7 +158,7 @@ func TestActiveSnapshotIsolationAcrossModels(t *testing.T) {
 		t.Fatalf("InsertSymbol(qwen3) error: %v", err)
 	}
 
-	listed, err := store.ListCurrentSymbols(ctx, "embeddinggemma")
+	listed, err := store.ListCurrentSymbols(ctx, testProvider, "embeddinggemma")
 	if err != nil {
 		t.Fatalf("ListCurrentSymbols(gemma) error: %v", err)
 	}
@@ -179,7 +181,7 @@ func TestLogicalHashIgnoresSnapshotOnlyChanges(t *testing.T) {
 
 	modelID := "embeddinggemma"
 	vec := []float32{1, 0, 0}
-	if err := store.AddEmbedding(ctx, modelID, "hash1", vec); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, modelID, "hash1", vec); err != nil {
 		t.Fatalf("AddEmbedding() error: %v", err)
 	}
 	symbol := indexing.IndexedSymbol{
@@ -191,14 +193,14 @@ func TestLogicalHashIgnoresSnapshotOnlyChanges(t *testing.T) {
 		Documentation: "A docs",
 	}
 
-	firstSnapshot, err := store.BeginSnapshot(ctx, modelID)
+	firstSnapshot, err := store.BeginSnapshot(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("BeginSnapshot(first) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, firstSnapshot, modelID, "a.go", symbol, "hash1"); err != nil {
+	if err := store.InsertSymbol(ctx, firstSnapshot, testProvider, modelID, "a.go", symbol, "hash1"); err != nil {
 		t.Fatalf("InsertSymbol(first) error: %v", err)
 	}
-	if err := store.ActivateSnapshot(ctx, modelID, firstSnapshot); err != nil {
+	if err := store.ActivateSnapshot(ctx, testProvider, modelID, firstSnapshot); err != nil {
 		t.Fatalf("ActivateSnapshot(first) error: %v", err)
 	}
 
@@ -207,14 +209,14 @@ func TestLogicalHashIgnoresSnapshotOnlyChanges(t *testing.T) {
 		t.Fatalf("LogicalHash(first) error: %v", err)
 	}
 
-	secondSnapshot, err := store.BeginSnapshot(ctx, modelID)
+	secondSnapshot, err := store.BeginSnapshot(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("BeginSnapshot(second) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, secondSnapshot, modelID, "a.go", symbol, "hash1"); err != nil {
+	if err := store.InsertSymbol(ctx, secondSnapshot, testProvider, modelID, "a.go", symbol, "hash1"); err != nil {
 		t.Fatalf("InsertSymbol(second) error: %v", err)
 	}
-	if err := store.ActivateSnapshot(ctx, modelID, secondSnapshot); err != nil {
+	if err := store.ActivateSnapshot(ctx, testProvider, modelID, secondSnapshot); err != nil {
 		t.Fatalf("ActivateSnapshot(second) error: %v", err)
 	}
 
@@ -282,15 +284,15 @@ func TestCopyPathFromSnapshot(t *testing.T) {
 	}()
 
 	modelID := "embeddinggemma"
-	if err := store.AddEmbedding(ctx, modelID, "hash-a", []float32{1, 0, 0}); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, modelID, "hash-a", []float32{1, 0, 0}); err != nil {
 		t.Fatalf("AddEmbedding() error: %v", err)
 	}
 
-	srcSnapshot, err := store.BeginSnapshot(ctx, modelID)
+	srcSnapshot, err := store.BeginSnapshot(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("BeginSnapshot(src) error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, srcSnapshot, modelID, "a.go", indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, srcSnapshot, testProvider, modelID, "a.go", indexing.IndexedSymbol{
 		Line:          10,
 		Kind:          "function",
 		Name:          "A",
@@ -298,15 +300,15 @@ func TestCopyPathFromSnapshot(t *testing.T) {
 	}, "hash-a"); err != nil {
 		t.Fatalf("InsertSymbol(src) error: %v", err)
 	}
-	if err := store.ActivateSnapshot(ctx, modelID, srcSnapshot); err != nil {
+	if err := store.ActivateSnapshot(ctx, testProvider, modelID, srcSnapshot); err != nil {
 		t.Fatalf("ActivateSnapshot(src) error: %v", err)
 	}
 
-	dstSnapshot, err := store.BeginSnapshot(ctx, modelID)
+	dstSnapshot, err := store.BeginSnapshot(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("BeginSnapshot(dst) error: %v", err)
 	}
-	copied, err := store.CopyPathFromSnapshot(ctx, modelID, srcSnapshot, dstSnapshot, "a.go")
+	copied, err := store.CopyPathFromSnapshot(ctx, testProvider, modelID, srcSnapshot, dstSnapshot, "a.go")
 	if err != nil {
 		t.Fatalf("CopyPathFromSnapshot() error: %v", err)
 	}
@@ -314,7 +316,7 @@ func TestCopyPathFromSnapshot(t *testing.T) {
 		t.Fatalf("CopyPathFromSnapshot() copied = %d, want 1", copied)
 	}
 
-	listed, err := store.ListSymbolsBySnapshot(ctx, modelID, dstSnapshot)
+	listed, err := store.ListSymbolsBySnapshot(ctx, testProvider, modelID, dstSnapshot)
 	if err != nil {
 		t.Fatalf("ListSymbolsBySnapshot(dst) error: %v", err)
 	}

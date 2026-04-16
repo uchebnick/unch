@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -94,5 +95,28 @@ func TestResolveStateTargetRejectsStateDirAndDBTogether(t *testing.T) {
 	_, _, _, err := resolveStateTarget(t.TempDir(), "/tmp/.semsearch", true, "/tmp/.semsearch/index.db", true)
 	if err == nil || err.Error() != "use either --state-dir or --db, not both" {
 		t.Fatalf("resolveStateTarget() error = %v", err)
+	}
+}
+
+func TestPreviewStateTargetDoesNotCreateDirectories(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+
+	paths, indexPath, stateDirOwnsIndex, err := previewStateTarget(root, "", false, "", false)
+	if err != nil {
+		t.Fatalf("previewStateTarget() error: %v", err)
+	}
+	if !stateDirOwnsIndex {
+		t.Fatalf("stateDirOwnsIndex = false, want true")
+	}
+	if paths.LocalDir != filepath.Join(root, ".semsearch") {
+		t.Fatalf("paths.LocalDir = %q", paths.LocalDir)
+	}
+	if indexPath != filepath.Join(root, ".semsearch", "index.db") {
+		t.Fatalf("indexPath = %q", indexPath)
+	}
+	if _, err := os.Stat(paths.LocalDir); !os.IsNotExist(err) {
+		t.Fatalf("previewStateTarget created %q unexpectedly", paths.LocalDir)
 	}
 }

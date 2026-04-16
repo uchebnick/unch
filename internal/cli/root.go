@@ -34,6 +34,9 @@ func Run(program string, args []string) (err error) {
 	if command == "init" {
 		return runInit(ctx, program, commandArgs, cwd)
 	}
+	if command == "auth" {
+		return runAuth(ctx, program, commandArgs, cwd)
+	}
 	if command == "bind" {
 		return runBind(ctx, program, commandArgs, cwd)
 	}
@@ -42,6 +45,9 @@ func Run(program string, args []string) (err error) {
 	}
 	if command == "remote" {
 		return runRemote(ctx, program, commandArgs, cwd)
+	}
+	if command == "start" {
+		return runStart(ctx, program, commandArgs, cwd)
 	}
 
 	scanner := indexing.FileScanner{}
@@ -66,7 +72,7 @@ func detectCommand(args []string) (string, []string, error) {
 		return "help", args[1:], nil
 	case "-version", "--version", "version":
 		return "version", args[1:], nil
-	case "bind", "create", "init", "index", "remote", "search":
+	case "auth", "bind", "create", "init", "index", "remote", "search", "start":
 		return args[0], args[1:], nil
 	default:
 		if len(args[0]) > 0 && args[0][0] == '-' {

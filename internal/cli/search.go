@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	llamaembed "github.com/uchebnick/unch/internal/embed/llama"
+	appembed "github.com/uchebnick/unch/internal/embed"
 	"github.com/uchebnick/unch/internal/indexdb"
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/runtime"
@@ -29,6 +29,7 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 	stateDir := fs.String("state-dir", "", "path to .semsearch directory; defaults to <root>/.semsearch")
 	dbPath := fs.String("db", "", "deprecated: path to .semsearch/index.db, or to a .semsearch directory")
 	modelPath := fs.String("model", defaultModelPath, "path to GGUF embedding model, or a known model id such as embeddinggemma or qwen3")
+	provider := fs.String("provider", appembed.DefaultProvider().String(), "embedding provider: llama.cpp or openrouter")
 	libPath := fs.String("lib", "", "path to yzma library directory, or to one of its shared library files")
 	queryFlag := fs.String("query", "", "search query; if empty, remaining args are joined")
 	contextSize := fs.Int("ctx-size", 0, "llama context size; 0 uses the selected model default")
@@ -50,10 +51,12 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 					cliName(program) + " search --mode lexical \"Run\"",
 					cliName(program) + " search --details \"get path variables from a request\"",
 					cliName(program) + " search --model qwen3 \"search query\"",
+					cliName(program) + " search --provider openrouter --model openai/text-embedding-3-small \"search query\"",
 					cliName(program) + " search --model ~/.semsearch/models/Qwen3-Embedding-0.6B-Q8_0.gguf \"search query\"",
 				},
 				[]string{
 					"Omit --model to reuse the default embeddinggemma GGUF model.",
+					"Use --provider openrouter with --model <remote-model-id>; token lookup checks OPENROUTER_API_KEY, then ~/.config/unch/tokens.json, then .semsearch/tokens.json.",
 					"Known model ids today: embeddinggemma and qwen3.",
 					"Use the same embedding model for both index and search, otherwise ranking quality will be wrong.",
 					"Switching models requires rebuilding the index with `unch index` first.",
@@ -93,6 +96,17 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 		return fmt.Errorf("resolve root: %w", err)
 	}
 
+	previewPaths, _, _, err := previewStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
+	if err != nil {
+		return err
+	}
+	if parsedProvider, err := appembed.ParseProvider(*provider); err == nil && parsedProvider == appembed.ProviderOpenRouter {
+		if err := preflightProviderConfig(parsedProvider, previewPaths.LocalDir); err != nil {
+			printMissingProviderCredentialsWarning(parsedProvider)
+			return err
+		}
+	}
+
 	targetPaths, resolvedIndexPath, shouldSyncRemote, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
@@ -127,61 +141,41 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 		}
 	}
 
-	resolvedLibPath, libNote, err := runtimes.ResolveOrInstallYzmaLibPath(ctx, *libPath, targetPaths.LocalDir, s)
+	prepared, err := prepareEmbedder(
+		ctx,
+		s,
+		targetPaths,
+		*provider,
+		*modelPath,
+		*libPath,
+		*contextSize,
+		*verbose,
+		runtimes,
+		models,
+	)
 	if err != nil {
 		return err
 	}
-	if libNote != "" {
-		s.Logf("%s", libNote)
-	}
-
-	resolvedDefaultModelPath := runtime.DefaultModelPath(targetPaths.ModelsDir)
-	requestedModelPath := strings.TrimSpace(*modelPath)
-	if requestedModelPath == "" {
-		requestedModelPath = resolvedDefaultModelPath
-	}
-
-	resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, requestedModelPath, resolvedDefaultModelPath, true, s)
-	if err != nil {
-		return err
-	}
-	if modelNote != "" {
-		s.Logf("%s", modelNote)
-	}
-	modelID, err := runtime.CanonicalModelID(requestedModelPath, resolvedDefaultModelPath)
-	if err != nil {
-		return fmt.Errorf("resolve model id: %w", err)
-	}
-	resolvedContextSize := *contextSize
-	if resolvedContextSize <= 0 {
-		resolvedContextSize = defaultContextSize(resolvedModelPath)
-	}
+	defer prepared.Embedder.Close()
 
 	s.Logf("index_db=%s", resolvedIndexPath)
 	s.Logf("state_dir=%s", targetPaths.LocalDir)
-	s.Logf("lib=%s", resolvedLibPath)
-	s.Logf("model=%s", resolvedModelPath)
-	s.Logf("model_id=%s", modelID)
-	s.Logf("ctx_size=%d", resolvedContextSize)
+	s.Logf("provider=%s", prepared.Provider)
+	if prepared.ResolvedLib != "" {
+		s.Logf("lib=%s", prepared.ResolvedLib)
+	}
+	s.Logf("model=%s", prepared.ResolvedModel)
+	s.Logf("model_id=%s", prepared.ModelID)
+	if prepared.ContextSize > 0 {
+		s.Logf("ctx_size=%d", prepared.ContextSize)
+	}
 	s.Logf("root=%s", rootAbs)
 	s.Logf("query=%q", queryText)
 	s.Logf("limit=%d", *limit)
 	s.Logf("mode=%s", searchMode)
 	s.Logf("max_distance=%.4f", *maxDistance)
 
-	embedder, err := loadEmbedderWithSpinner(ctx, s, llamaembed.Config{
-		ModelPath:   resolvedModelPath,
-		LibPath:     resolvedLibPath,
-		ContextSize: resolvedContextSize,
-		Verbose:     *verbose,
-		Pooling:     defaultPooling(resolvedModelPath),
-	})
-	if err != nil {
-		return err
-	}
-	defer embedder.Close()
-
-	repo, err := indexdb.Open(ctx, resolvedIndexPath, embedder.Dim())
+	repo, err := indexdb.Open(ctx, resolvedIndexPath, prepared.Embedder.Dim())
 	if err != nil {
 		return err
 	}
@@ -196,7 +190,7 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 
 	service := appsearch.Service{
 		Repo:         repo,
-		Embedder:     embedder,
+		Embedder:     prepared.Embedder,
 		PathWeighter: fileWeights,
 	}
 
@@ -205,11 +199,12 @@ func runSearch(ctx context.Context, program string, args []string, cwd string, _
 		Limit:       *limit,
 		Mode:        searchMode,
 		MaxDistance: *maxDistance,
-		ModelID:     modelID,
+		Provider:    prepared.Provider.String(),
+		ModelID:     prepared.ModelID,
 	}, s)
 	if err != nil {
 		if errors.Is(err, indexdb.ErrNoActiveSnapshot) {
-			return fmt.Errorf("no active index for model %q; run `unch index --model %s` first", modelID, modelID)
+			return fmt.Errorf("no active index for provider %q and model %q; run `unch index --provider %s --model %s` first", prepared.Provider, prepared.ModelID, prepared.Provider, prepared.ModelID)
 		}
 		return err
 	}

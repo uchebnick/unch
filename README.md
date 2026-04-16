@@ -94,6 +94,16 @@ unch index --model qwen3
 unch search --model qwen3 "create a new router"
 ```
 
+OpenRouter is also supported as an embedding provider:
+
+```bash
+unch auth openrouter --token sk-or-...
+unch index --provider openrouter --model openai/text-embedding-3-small
+unch search --provider openrouter --model openai/text-embedding-3-small "create a new router"
+```
+
+By default `unch auth openrouter` writes `~/.config/unch/tokens.json`, so you do not need to keep the token in your shell environment. Use `--local` if you want to store it in `.semsearch/tokens.json` for one repository.
+
 ## Quick Start
 
 ```bash
@@ -101,6 +111,15 @@ cd path/to/repo
 unch index --root .
 unch search "create a new router"
 unch search --details "get path variables from a request"
+```
+
+OpenRouter flow:
+
+```bash
+cd path/to/repo
+unch auth openrouter --token sk-or-...
+unch index --root . --provider openrouter --model openai/text-embedding-3-small
+unch search --provider openrouter --model openai/text-embedding-3-small "create a new router"
 ```
 
 Real output from indexing [`gorilla/mux`](https://github.com/gorilla/mux):
@@ -122,9 +141,9 @@ $ unch search --details "get path variables from a request"
    docs: Vars returns the route variables for the current request, if any.
 ```
 
-The first run may download the default embedding model, fetch local `yzma` runtime libraries, and create `./.semsearch/`.
+The first local `llama.cpp` run may download the default embedding model, fetch local `yzma` runtime libraries, and create `./.semsearch/`.
 
-Each model keeps its own active index snapshot. Rebuilding `qwen3` does not replace the active `embeddinggemma` snapshot until the new run finishes successfully.
+Each provider and model pair keeps its own active index snapshot. Rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot until the new run finishes successfully.
 
 ## What It Supports Today
 
@@ -147,6 +166,7 @@ unch index --root .
 Useful flags:
 
 - `--exclude` to skip generated, vendor, or irrelevant paths
+- `--provider` to switch between local `llama.cpp` embeddings and remote `openrouter`
 - `--model` to use `embeddinggemma`, `qwen3`, or a custom `.gguf` path
 - `--ctx-size` to override the selected model context size; `0` uses the model default
 - `--lib` to use an existing `yzma` runtime directory
@@ -166,6 +186,7 @@ Useful flags:
 - `--mode` for `auto`, `semantic`, or `lexical`
 - `--limit` to control result count
 - `--max-distance` to narrow semantic matches
+- `--provider` to select the embedding provider that matches the indexed snapshot
 - `--model` to search with `embeddinggemma`, `qwen3`, or a custom `.gguf` path
 - `--ctx-size` to override the selected model context size; `0` uses the model default
 - `--state-dir` to search against a custom `.semsearch` directory

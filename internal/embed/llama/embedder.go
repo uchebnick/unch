@@ -1,7 +1,6 @@
 package llamaembed
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math"
 	"os"
@@ -11,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/jupiterrider/ffi"
+	appembed "github.com/uchebnick/unch/internal/embed"
 	"github.com/uchebnick/unch/internal/indexing"
 	unchruntime "github.com/uchebnick/unch/internal/runtime"
 )
@@ -32,7 +31,7 @@ type Embedder struct {
 	ctx         llama.Context
 	vocab       llama.Vocab
 	dim         int
-	profile     embeddingBehavior
+	formatter   appembed.Formatter
 	contextSize int
 	tokenLimit  int
 }
@@ -51,7 +50,7 @@ func New(cfg Config) (*Embedder, error) {
 		return nil, err
 	}
 
-	profile := behaviorForPath(cfg.ModelPath)
+	formatter := formatterForPath(cfg.ModelPath)
 
 	resolvedLibPath, _, err := unchruntime.ResolveYzmaLibPath(cfg.LibPath)
 	if err != nil {
@@ -67,7 +66,7 @@ func New(cfg Config) (*Embedder, error) {
 		cfg.ContextSize = profileForPath(cfg.ModelPath).DefaultContextSize
 	}
 	if cfg.Pooling == 0 {
-		cfg.Pooling = profile.DefaultPooling()
+		cfg.Pooling = DefaultPoolingForModelPath(cfg.ModelPath)
 	}
 
 	llamaGlobalMu.Lock()
@@ -144,7 +143,7 @@ func New(cfg Config) (*Embedder, error) {
 		ctx:         ctx,
 		vocab:       llama.ModelGetVocab(model),
 		dim:         int(llama.ModelNEmbd(model)),
-		profile:     profile,
+		formatter:   formatter,
 		contextSize: cfg.ContextSize,
 		tokenLimit:  tokenLimit,
 	}, nil
@@ -245,17 +244,17 @@ func (e *Embedder) Embed(text string) ([]float32, error) {
 }
 
 func (e *Embedder) EmbedQuery(text string) ([]float32, error) {
-	return e.Embed(e.profile.FormatQuery(text))
+	return e.Embed(e.formatter.FormatQuery(text))
 }
 
 // IndexedSymbolHash returns the stable embedding-document hash for one symbol without running the model.
 func (e *Embedder) IndexedSymbolHash(path string, symbol indexing.IndexedSymbol) string {
-	return hashIndexedSymbolDocument(e.profile, path, symbol)
+	return appembed.IndexedSymbolHash(e.formatter, path, symbol)
 }
 
 // EmbedIndexedSymbol builds a retrieval document for a symbol and returns its embedding vector.
 func (e *Embedder) EmbedIndexedSymbol(path string, symbol indexing.IndexedSymbol) ([]float32, error) {
-	return e.Embed(indexedSymbolDocument(e.profile, path, symbol))
+	return e.Embed(e.formatter.FormatIndexedSymbolDocument(path, symbol))
 }
 
 func effectiveTokenLimit(requested int, limits ...int) int {
@@ -271,37 +270,13 @@ func effectiveTokenLimit(requested int, limits ...int) int {
 	return limit
 }
 
-func hashComment(text string) string {
-	sum := xxhash.Sum64String(normalizeText(text))
-
-	var b [8]byte
-	b[0] = byte(sum >> 56)
-	b[1] = byte(sum >> 48)
-	b[2] = byte(sum >> 40)
-	b[3] = byte(sum >> 32)
-	b[4] = byte(sum >> 24)
-	b[5] = byte(sum >> 16)
-	b[6] = byte(sum >> 8)
-	b[7] = byte(sum)
-
-	return hex.EncodeToString(b[:])
-}
-
-func hashIndexedSymbolDocument(profile embeddingBehavior, path string, symbol indexing.IndexedSymbol) string {
-	return hashComment("embedding_doc_format:" + profile.ProfileRevision() + "\n" + indexedSymbolDocument(profile, path, symbol))
-}
-
-func indexedSymbolDocument(profile embeddingBehavior, path string, symbol indexing.IndexedSymbol) string {
-	return profile.FormatIndexedSymbolDocument(path, symbol)
-}
-
-func normalizeText(s string) string {
-	s = strings.ToValidUTF8(s, "")
-	s = strings.ReplaceAll(s, "\x00", "")
-	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\r", "\n")
-	return s
+func normalizeText(text string) string {
+	text = strings.ToValidUTF8(text, "")
+	text = strings.ReplaceAll(text, "\x00", "")
+	text = strings.TrimSpace(text)
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	return text
 }
 
 func l2Normalize(v []float32) {

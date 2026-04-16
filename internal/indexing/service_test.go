@@ -33,33 +33,33 @@ type testRepo struct {
 	cleaned           bool
 }
 
-func (r *testRepo) BeginSnapshot(ctx context.Context, modelID string) (int64, error) {
-	r.models = append(r.models, modelID)
+func (r *testRepo) BeginSnapshot(ctx context.Context, provider string, modelID string) (int64, error) {
+	r.models = append(r.models, provider+"/"+modelID)
 	return r.snapshotID, nil
 }
-func (r *testRepo) CurrentSnapshotIfAny(ctx context.Context, modelID string) (int64, bool, error) {
+func (r *testRepo) CurrentSnapshotIfAny(ctx context.Context, provider string, modelID string) (int64, bool, error) {
 	if r.currentSnapshotID == 0 {
 		return 0, false, nil
 	}
 	return r.currentSnapshotID, true, nil
 }
-func (r *testRepo) ActivateSnapshot(ctx context.Context, modelID string, snapshotID int64) error {
-	r.models = append(r.models, modelID)
+func (r *testRepo) ActivateSnapshot(ctx context.Context, provider string, modelID string, snapshotID int64) error {
+	r.models = append(r.models, provider+"/"+modelID)
 	r.activated = snapshotID
 	return nil
 }
-func (r *testRepo) EmbeddingExists(ctx context.Context, modelID string, commentHash string) (bool, error) {
+func (r *testRepo) EmbeddingExists(ctx context.Context, provider string, modelID string, commentHash string) (bool, error) {
 	return r.existing[commentHash], nil
 }
-func (r *testRepo) AddEmbedding(ctx context.Context, modelID string, commentHash string, embedding []float32) error {
+func (r *testRepo) AddEmbedding(ctx context.Context, provider string, modelID string, commentHash string, embedding []float32) error {
 	r.added = append(r.added, commentHash)
 	return nil
 }
-func (r *testRepo) InsertSymbol(ctx context.Context, snapshotID int64, modelID string, path string, symbol IndexedSymbol, commentHash string) error {
+func (r *testRepo) InsertSymbol(ctx context.Context, snapshotID int64, provider string, modelID string, path string, symbol IndexedSymbol, commentHash string) error {
 	r.inserts = append(r.inserts, path)
 	return nil
 }
-func (r *testRepo) CopyPathFromSnapshot(ctx context.Context, modelID string, srcSnapshotID, dstSnapshotID int64, path string) (int, error) {
+func (r *testRepo) CopyPathFromSnapshot(ctx context.Context, provider string, modelID string, srcSnapshotID, dstSnapshotID int64, path string) (int, error) {
 	r.copies = append(r.copies, path)
 	if r.copyCounts != nil {
 		return r.copyCounts[path], nil
@@ -172,7 +172,7 @@ func TestServiceRunIndexesComments(t *testing.T) {
 	if repo.activated != 2 || !repo.cleaned {
 		t.Fatalf("expected version activation and cleanup, got activated=%d cleaned=%v", repo.activated, repo.cleaned)
 	}
-	if len(repo.models) < 2 || repo.models[0] != "qwen3" || repo.models[len(repo.models)-1] != "qwen3" {
+	if len(repo.models) < 2 || repo.models[0] != "llama.cpp/qwen3" || repo.models[len(repo.models)-1] != "llama.cpp/qwen3" {
 		t.Fatalf("expected model tracking for qwen3, got %v", repo.models)
 	}
 	if reporter.progressCalls == 0 {

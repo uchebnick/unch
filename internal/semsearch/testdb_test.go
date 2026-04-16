@@ -11,6 +11,8 @@ import (
 	"github.com/uchebnick/unch/internal/indexing"
 )
 
+const testProvider = "llama.cpp"
+
 func writeTestIndexDB(t *testing.T, dbPath string, version int64, path string, line int, commentHash string, embedding []float32) string {
 	t.Helper()
 	_ = version
@@ -28,14 +30,14 @@ func writeTestIndexDB(t *testing.T, dbPath string, version int64, path string, l
 
 	const modelID = "embeddinggemma"
 
-	snapshotID, err := store.BeginSnapshot(ctx, modelID)
+	snapshotID, err := store.BeginSnapshot(ctx, testProvider, modelID)
 	if err != nil {
 		t.Fatalf("BeginSnapshot() error: %v", err)
 	}
-	if err := store.AddEmbedding(ctx, modelID, commentHash, embedding); err != nil {
+	if err := store.AddEmbedding(ctx, testProvider, modelID, commentHash, embedding); err != nil {
 		t.Fatalf("AddEmbedding() error: %v", err)
 	}
-	if err := store.InsertSymbol(ctx, snapshotID, modelID, path, indexing.IndexedSymbol{
+	if err := store.InsertSymbol(ctx, snapshotID, testProvider, modelID, path, indexing.IndexedSymbol{
 		Line:          line,
 		Kind:          "function",
 		Name:          "TestSymbol",
@@ -45,7 +47,7 @@ func writeTestIndexDB(t *testing.T, dbPath string, version int64, path string, l
 	}, commentHash); err != nil {
 		t.Fatalf("InsertSymbol() error: %v", err)
 	}
-	if err := store.ActivateSnapshot(ctx, modelID, snapshotID); err != nil {
+	if err := store.ActivateSnapshot(ctx, testProvider, modelID, snapshotID); err != nil {
 		t.Fatalf("ActivateSnapshot() error: %v", err)
 	}
 

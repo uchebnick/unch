@@ -127,6 +127,35 @@ unch --version
 unch --help
 ```
 
+## Configure OpenRouter
+
+If you want to use OpenRouter for embeddings instead of the local `llama.cpp` runtime:
+
+```bash
+unch auth openrouter --token sk-or-...
+unch index --provider openrouter --model openai/text-embedding-3-small
+```
+
+By default `unch auth openrouter` stores the token in:
+
+```text
+~/.config/unch/tokens.json
+```
+
+That keeps the token out of your project checkout and out of your shell environment.
+
+For one repository only, use:
+
+```bash
+unch auth openrouter --token sk-or-... --local
+```
+
+That writes:
+
+```text
+.semsearch/tokens.json
+```
+
 <AccordionGroup>
   <Accordion title="When should I prefer release installers?">
     Prefer the release installers when your platform has a matching published archive and you just want a working binary quickly.

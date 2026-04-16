@@ -10,7 +10,7 @@ import (
 	"sort"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 type Store struct {
 	db *sql.DB
@@ -18,6 +18,7 @@ type Store struct {
 
 type State struct {
 	Version            int64
+	Provider           string
 	ModelID            string
 	ScannerFingerprint string
 	Files              map[string]string
@@ -60,7 +61,7 @@ func (s *Store) init(ctx context.Context) error {
 
 	switch userVersion {
 	case 0, SchemaVersion:
-	case 1:
+	case 1, 2:
 		if err := s.resetSchema(ctx); err != nil {
 			return fmt.Errorf("reset legacy schema: %w", err)
 		}
@@ -72,19 +73,22 @@ func (s *Store) init(ctx context.Context) error {
 		`
 		CREATE TABLE IF NOT EXISTS file_hash_states (
 			state_version INTEGER PRIMARY KEY AUTOINCREMENT,
+			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,
 			scanner_fingerprint TEXT NOT NULL,
 			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		`,
 		`
-		CREATE INDEX IF NOT EXISTS idx_file_hash_states_model_id
-		ON file_hash_states(model_id, state_version);
+		CREATE INDEX IF NOT EXISTS idx_file_hash_states_provider_model_id
+		ON file_hash_states(provider, model_id, state_version);
 		`,
 		`
 		CREATE TABLE IF NOT EXISTS current_model_states (
-			model_id TEXT PRIMARY KEY,
-			state_version INTEGER NOT NULL
+			provider TEXT NOT NULL,
+			model_id TEXT NOT NULL,
+			state_version INTEGER NOT NULL,
+			PRIMARY KEY (provider, model_id)
 		);
 		`,
 		`
@@ -126,8 +130,9 @@ func (s *Store) resetSchema(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) Current(ctx context.Context, modelID string) (State, bool, error) {
+func (s *Store) Current(ctx context.Context, provider string, modelID string) (State, bool, error) {
 	var state State
+	state.Provider = provider
 	state.ModelID = modelID
 
 	err := s.db.QueryRowContext(
@@ -136,8 +141,13 @@ func (s *Store) Current(ctx context.Context, modelID string) (State, bool, error
 		 FROM current_model_states cms
 		 JOIN file_hash_states fs
 		   ON fs.state_version = cms.state_version
-		 WHERE cms.model_id = ? AND fs.model_id = ?`,
+		 WHERE cms.provider = ?
+		   AND cms.model_id = ?
+		   AND fs.provider = ?
+		   AND fs.model_id = ?`,
+		provider,
 		modelID,
+		provider,
 		modelID,
 	).Scan(&state.ScannerFingerprint, &state.Version)
 	if err != nil {
@@ -175,8 +185,8 @@ func (s *Store) Current(ctx context.Context, modelID string) (State, bool, error
 	return state, true, nil
 }
 
-func (s *Store) Matches(ctx context.Context, modelID string, scannerFingerprint string, files map[string]string) (bool, int64, error) {
-	state, ok, err := s.Current(ctx, modelID)
+func (s *Store) Matches(ctx context.Context, provider string, modelID string, scannerFingerprint string, files map[string]string) (bool, int64, error) {
+	state, ok, err := s.Current(ctx, provider, modelID)
 	if err != nil {
 		return false, 0, err
 	}
@@ -197,10 +207,11 @@ func (s *Store) Matches(ctx context.Context, modelID string, scannerFingerprint 
 	return true, state.Version, nil
 }
 
-func (s *Store) BeginState(ctx context.Context, modelID string, scannerFingerprint string) (int64, error) {
+func (s *Store) BeginState(ctx context.Context, provider string, modelID string, scannerFingerprint string) (int64, error) {
 	result, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO file_hash_states(model_id, scanner_fingerprint) VALUES (?, ?)`,
+		`INSERT INTO file_hash_states(provider, model_id, scanner_fingerprint) VALUES (?, ?, ?)`,
+		provider,
 		modelID,
 		scannerFingerprint,
 	)
@@ -229,7 +240,7 @@ func (s *Store) InsertFileHash(ctx context.Context, stateVersion int64, path str
 	return nil
 }
 
-func (s *Store) StageState(ctx context.Context, modelID string, scannerFingerprint string, files map[string]string) (int64, error) {
+func (s *Store) StageState(ctx context.Context, provider string, modelID string, scannerFingerprint string, files map[string]string) (int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin tx: %w", err)
@@ -242,7 +253,8 @@ func (s *Store) StageState(ctx context.Context, modelID string, scannerFingerpri
 
 	result, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO file_hash_states(model_id, scanner_fingerprint) VALUES (?, ?)`,
+		`INSERT INTO file_hash_states(provider, model_id, scanner_fingerprint) VALUES (?, ?, ?)`,
+		provider,
 		modelID,
 		scannerFingerprint,
 	)
@@ -285,28 +297,37 @@ func (s *Store) StageState(ctx context.Context, modelID string, scannerFingerpri
 	return stateVersion, nil
 }
 
-func (s *Store) ActivateState(ctx context.Context, modelID string, stateVersion int64) error {
+func (s *Store) ActivateState(ctx context.Context, provider string, modelID string, stateVersion int64) error {
+	var storedProvider string
 	var storedModelID string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT model_id FROM file_hash_states WHERE state_version = ?`,
+		`SELECT provider, model_id FROM file_hash_states WHERE state_version = ?`,
 		stateVersion,
-	).Scan(&storedModelID)
+	).Scan(&storedProvider, &storedModelID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("unknown state version %d", stateVersion)
 		}
 		return fmt.Errorf("select staged state: %w", err)
 	}
-	if storedModelID != modelID {
-		return fmt.Errorf("state version %d belongs to model %q, not %q", stateVersion, storedModelID, modelID)
+	if storedProvider != provider || storedModelID != modelID {
+		return fmt.Errorf(
+			"state version %d belongs to provider/model %q/%q, not %q/%q",
+			stateVersion,
+			storedProvider,
+			storedModelID,
+			provider,
+			modelID,
+		)
 	}
 
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO current_model_states(model_id, state_version)
-		 VALUES (?, ?)
-		 ON CONFLICT(model_id) DO UPDATE SET state_version = excluded.state_version`,
+		`INSERT INTO current_model_states(provider, model_id, state_version)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(provider, model_id) DO UPDATE SET state_version = excluded.state_version`,
+		provider,
 		modelID,
 		stateVersion,
 	); err != nil {

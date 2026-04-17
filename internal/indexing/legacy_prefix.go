@@ -170,20 +170,3 @@ func normalizeDirectiveLine(line string) string {
 		}
 	}
 }
-
-func firstNLines(text string, limit int) string {
-	text = normalizeText(text)
-	if text == "" || limit <= 0 {
-		return ""
-	}
-
-	lines := strings.Split(text, "\n")
-	if len(lines) > limit {
-		lines = lines[:limit]
-	}
-
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " \t")
-	}
-	return strings.TrimSpace(strings.Join(lines, "\n"))
-}

@@ -250,10 +250,3 @@ func looksLikeBinary(data []byte) bool {
 
 	return suspicious*100/len(data) > 10
 }
-
-func normalizeText(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\r", "\n")
-	return s
-}

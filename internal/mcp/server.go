@@ -88,7 +88,7 @@ func (s *Server) buildResponse(ctx context.Context, req requestEnvelope) respons
 				Name:    "unch",
 				Version: s.service.Version(),
 			},
-			Instructions: "Use workspace_status to inspect the configured repository, search_code to retrieve symbol matches, and index_repository to rebuild the local semantic index.",
+			Instructions: serverInstructions(),
 		}
 		return s.resultEnvelope(req.ID, result)
 	case "ping":
@@ -149,4 +149,19 @@ func (s *Server) writePayload(payload []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	return writeContentLengthMessage(s.writer, payload)
+}
+
+func serverInstructions() string {
+	return strings.Join([]string{
+		"unch provides local-first semantic code search for the current repository workspace.",
+		"Recommended workflow for agents:",
+		"1. Call workspace_status first to learn the root, state directory, selected provider/model, and whether an index exists.",
+		"2. Before reading many files or using broad grep-style exploration, call search_code with a concise natural-language or identifier query.",
+		"3. If search_code says there is no active snapshot for the configured provider/model, call index_repository once, then retry search_code.",
+		"4. Do not call index_repository repeatedly unless files changed, the index is missing, or the user explicitly asks to rebuild.",
+		"5. Use mode=\"auto\" by default, mode=\"lexical\" for exact identifiers or strings, and mode=\"semantic\" for meaning-based discovery.",
+		"6. Set details=true when you need signatures, symbol kind/name, docs, or compact body snippets for deciding which files to open.",
+		"7. Treat results as ranked candidates, not a complete proof. Open the returned paths when you need exact implementation details.",
+		"Provider/model snapshots are isolated. The MCP process searches only the provider/model selected when it was launched.",
+	}, "\n")
 }

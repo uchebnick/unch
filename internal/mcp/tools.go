@@ -38,7 +38,7 @@ func toolDefinitions() []toolDefinition {
 	return []toolDefinition{
 		{
 			Name:        "workspace_status",
-			Description: "Describe the repository, .semsearch state directory, index manifest, and currently configured model/runtime settings.",
+			Description: "Call this first. Returns the current repository root, .semsearch state directory, selected provider/model, manifest data, and whether a local index is already present.",
 			InputSchema: map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -46,36 +46,36 @@ func toolDefinitions() []toolDefinition {
 		},
 		{
 			Name:        "search_code",
-			Description: "Search the configured repository index for relevant code symbols using semantic, lexical, or mixed retrieval.",
+			Description: "Search indexed code symbols before opening many files. Use concise natural-language queries for concepts, exact names with lexical mode, and details=true when signatures/docs/body snippets would help choose files to inspect.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"query": map[string]any{
 						"type":        "string",
-						"description": "Natural-language or lexical search query.",
+						"description": "Short natural-language, identifier, API, behavior, or error-handling query. Examples: \"request router middleware\", \"UserRepository Create\", \"MCP Content-Length framing\".",
 					},
 					"limit": map[string]any{
 						"type":        "integer",
 						"minimum":     1,
 						"maximum":     50,
 						"default":     10,
-						"description": "Maximum number of matches to return.",
+						"description": "Maximum number of ranked candidate symbols to return. Use a small limit first; increase it only when the first results are not enough.",
 					},
 					"mode": map[string]any{
 						"type":        "string",
 						"enum":        []string{"auto", "semantic", "lexical"},
 						"default":     "auto",
-						"description": "Retrieval mode.",
+						"description": "Retrieval mode. Use auto by default, semantic for meaning-based discovery, and lexical for exact identifiers or strings.",
 					},
 					"max_distance": map[string]any{
 						"type":        "number",
 						"default":     0.85,
-						"description": "Maximum semantic distance in auto and semantic modes; values <= 0 disable filtering.",
+						"description": "Maximum semantic distance in auto and semantic modes. Lower is stricter; values <= 0 disable distance filtering.",
 					},
 					"details": map[string]any{
 						"type":        "boolean",
 						"default":     false,
-						"description": "Include compact symbol metadata in the textual result.",
+						"description": "When true, include symbol kind/name, qualified name, signature, docs, and compact body snippets in addition to paths and lines.",
 					},
 				},
 				"required": []string{"query"},
@@ -83,27 +83,27 @@ func toolDefinitions() []toolDefinition {
 		},
 		{
 			Name:        "index_repository",
-			Description: "Build or refresh the configured repository index using the server's root, state directory, model, and yzma runtime settings.",
+			Description: "Build or refresh the local index for this workspace. Call when workspace_status shows no index, search_code reports no active snapshot, files changed and fresh search is needed, or the user asks to rebuild. Avoid repeated rebuilds during normal exploration.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"excludes": map[string]any{
 						"type":        "array",
 						"items":       map[string]any{"type": "string"},
-						"description": "Extra exclude globs passed to the indexer.",
+						"description": "Extra exclude globs for generated, dependency, build, cache, or otherwise noisy paths, for example node_modules, dist, build, vendor, .next.",
 					},
 					"gitignore": map[string]any{
 						"type":        "string",
-						"description": "Optional path to a custom .gitignore file.",
+						"description": "Optional path to a custom .gitignore file. Leave empty to use the repository default behavior.",
 					},
 					"comment_prefix": map[string]any{
 						"type":        "string",
-						"description": "Legacy fallback comment prefix for unsupported files.",
+						"description": "Legacy fallback comment prefix for unsupported files or parser failures. Most agents should leave this at the default.",
 						"default":     "@search:",
 					},
 					"context_prefix": map[string]any{
 						"type":        "string",
-						"description": "Legacy fallback file-context prefix for unsupported files.",
+						"description": "Legacy fallback file-context prefix for unsupported files or parser failures. Most agents should leave this at the default.",
 						"default":     "@filectx:",
 					},
 				},

@@ -83,6 +83,12 @@ func TestServerInitialize(t *testing.T) {
 	if _, ok := capabilities["resources"]; ok {
 		t.Fatalf("initialize capabilities unexpectedly include resources: %#v", capabilities)
 	}
+	instructions := result["instructions"].(string)
+	for _, want := range []string{"Call workspace_status first", "Before reading many files", "Do not call index_repository repeatedly", "Provider/model snapshots are isolated"} {
+		if !strings.Contains(instructions, want) {
+			t.Fatalf("initialize instructions missing %q: %q", want, instructions)
+		}
+	}
 }
 
 func TestServerPing(t *testing.T) {
@@ -120,6 +126,20 @@ func TestServerToolsList(t *testing.T) {
 		if !names[name] {
 			t.Fatalf("tools/list missing %q in %#v", name, names)
 		}
+	}
+	descriptions := map[string]string{}
+	for _, tool := range tools {
+		item := tool.(map[string]any)
+		descriptions[item["name"].(string)] = item["description"].(string)
+	}
+	if !strings.Contains(descriptions["workspace_status"], "Call this first") {
+		t.Fatalf("workspace_status description = %q", descriptions["workspace_status"])
+	}
+	if !strings.Contains(descriptions["search_code"], "before opening many files") {
+		t.Fatalf("search_code description = %q", descriptions["search_code"])
+	}
+	if !strings.Contains(descriptions["index_repository"], "Avoid repeated rebuilds") {
+		t.Fatalf("index_repository description = %q", descriptions["index_repository"])
 	}
 }
 

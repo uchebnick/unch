@@ -167,6 +167,85 @@ func TestActiveSnapshotIsolationAcrossModels(t *testing.T) {
 	}
 }
 
+func TestActiveSnapshotIsolationAcrossDimensions(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+
+	gemmaStore, err := Open(ctx, dbPath, 3)
+	if err != nil {
+		t.Fatalf("Open(gemma) error: %v", err)
+	}
+	gemmaSnapshot, err := gemmaStore.BeginSnapshot(ctx, testProvider, "embeddinggemma")
+	if err != nil {
+		t.Fatalf("BeginSnapshot(gemma) error: %v", err)
+	}
+	if err := gemmaStore.AddEmbedding(ctx, testProvider, "embeddinggemma", "hash-gemma", []float32{1, 0, 0}); err != nil {
+		t.Fatalf("AddEmbedding(gemma) error: %v", err)
+	}
+	if err := gemmaStore.InsertSymbol(ctx, gemmaSnapshot, testProvider, "embeddinggemma", "a.go", indexing.IndexedSymbol{
+		Line:          10,
+		Kind:          "function",
+		Name:          "A",
+		QualifiedName: "A",
+	}, "hash-gemma"); err != nil {
+		t.Fatalf("InsertSymbol(gemma) error: %v", err)
+	}
+	if err := gemmaStore.ActivateSnapshot(ctx, testProvider, "embeddinggemma", gemmaSnapshot); err != nil {
+		t.Fatalf("ActivateSnapshot(gemma) error: %v", err)
+	}
+	if err := gemmaStore.Close(); err != nil {
+		t.Fatalf("Close(gemma) error: %v", err)
+	}
+
+	qwenStore, err := Open(ctx, dbPath, 2)
+	if err != nil {
+		t.Fatalf("Open(qwen) error: %v", err)
+	}
+	qwenSnapshot, err := qwenStore.BeginSnapshot(ctx, testProvider, "qwen3")
+	if err != nil {
+		t.Fatalf("BeginSnapshot(qwen) error: %v", err)
+	}
+	if err := qwenStore.AddEmbedding(ctx, testProvider, "qwen3", "hash-qwen", []float32{0, 1}); err != nil {
+		t.Fatalf("AddEmbedding(qwen) error: %v", err)
+	}
+	if err := qwenStore.InsertSymbol(ctx, qwenSnapshot, testProvider, "qwen3", "b.go", indexing.IndexedSymbol{
+		Line:          20,
+		Kind:          "function",
+		Name:          "B",
+		QualifiedName: "B",
+	}, "hash-qwen"); err != nil {
+		t.Fatalf("InsertSymbol(qwen) error: %v", err)
+	}
+	if err := qwenStore.ActivateSnapshot(ctx, testProvider, "qwen3", qwenSnapshot); err != nil {
+		t.Fatalf("ActivateSnapshot(qwen) error: %v", err)
+	}
+	qwenResults, err := qwenStore.SearchCurrent(ctx, testProvider, "qwen3", []float32{0, 1}, 5)
+	if err != nil {
+		t.Fatalf("SearchCurrent(qwen) error: %v", err)
+	}
+	if len(qwenResults) == 0 || qwenResults[0].Path != "b.go" {
+		t.Fatalf("SearchCurrent(qwen) = %+v", qwenResults)
+	}
+	if err := qwenStore.Close(); err != nil {
+		t.Fatalf("Close(qwen) error: %v", err)
+	}
+
+	gemmaStore, err = Open(ctx, dbPath, 3)
+	if err != nil {
+		t.Fatalf("Reopen(gemma) error: %v", err)
+	}
+	defer func() {
+		_ = gemmaStore.Close()
+	}()
+	gemmaResults, err := gemmaStore.SearchCurrent(ctx, testProvider, "embeddinggemma", []float32{1, 0, 0}, 5)
+	if err != nil {
+		t.Fatalf("SearchCurrent(gemma) error: %v", err)
+	}
+	if len(gemmaResults) == 0 || gemmaResults[0].Path != "a.go" {
+		t.Fatalf("SearchCurrent(gemma) = %+v", gemmaResults)
+	}
+}
+
 func TestLogicalHashIgnoresSnapshotOnlyChanges(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "index.db")

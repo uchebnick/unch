@@ -30,13 +30,13 @@ type mcpBackendConfig struct {
 }
 
 type preparedMCPResources struct {
-	embedder          appembed.Embedder
-	repo              *indexdb.Store
-	provider          appembed.Provider
-	modelID           string
-	resolvedModel     string
-	resolvedLibPath   string
-	contextSize       int
+	embedder        appembed.Embedder
+	repo            *indexdb.Store
+	provider        appembed.Provider
+	modelID         string
+	resolvedModel   string
+	resolvedLibPath string
+	contextSize     int
 }
 
 type mcpBackend struct {
@@ -80,13 +80,33 @@ func (b *mcpBackend) Close() error {
 
 func (b *mcpBackend) WorkspaceStatus(_ context.Context) (unchmcp.WorkspaceStatusResult, error) {
 	result := unchmcp.WorkspaceStatusResult{
-		Root:           b.cfg.RootAbs,
-		StateDir:       b.cfg.TargetPaths.LocalDir,
-		IndexDB:        b.cfg.IndexPath,
-		RequestedModel: b.cfg.RequestedModel,
-		RequestedLib:   b.cfg.RequestedLibPath,
+		Root:              b.cfg.RootAbs,
+		StateDir:          b.cfg.TargetPaths.LocalDir,
+		IndexDB:           b.cfg.IndexPath,
+		RequestedModel:    b.cfg.RequestedModel,
+		RequestedLib:      b.cfg.RequestedLibPath,
 		RequestedProvider: b.cfg.RequestedProvider,
-		ContextSize:    b.cfg.ContextSize,
+		ContextSize:       b.cfg.ContextSize,
+	}
+
+	if provider, err := appembed.ParseProvider(b.cfg.RequestedProvider); err == nil {
+		result.Provider = provider.String()
+		switch provider {
+		case appembed.ProviderOpenRouter:
+			result.ModelID = strings.TrimSpace(b.cfg.RequestedModel)
+			if result.ModelID == "" {
+				result.ModelID = strings.TrimSpace(os.Getenv("OPENROUTER_MODEL"))
+			}
+		case appembed.ProviderLlamaCPP:
+			defaultModelPath := runtime.DefaultModelPath(b.cfg.TargetPaths.ModelsDir)
+			requestedModelPath := strings.TrimSpace(b.cfg.RequestedModel)
+			if requestedModelPath == "" {
+				requestedModelPath = defaultModelPath
+			}
+			if modelID, err := runtime.CanonicalModelID(requestedModelPath, defaultModelPath); err == nil {
+				result.ModelID = modelID
+			}
+		}
 	}
 
 	if info, err := os.Stat(b.cfg.IndexPath); err == nil && !info.IsDir() {
@@ -325,13 +345,13 @@ func (b *mcpBackend) ensurePrepared(ctx context.Context) (*preparedMCPResources,
 	}
 
 	prepared := &preparedMCPResources{
-		embedder:          preparedEmbedder.Embedder,
-		repo:              repo,
-		provider:          preparedEmbedder.Provider,
-		modelID:           preparedEmbedder.ModelID,
-		resolvedModel:     preparedEmbedder.ResolvedModel,
-		resolvedLibPath:   preparedEmbedder.ResolvedLib,
-		contextSize:       preparedEmbedder.ContextSize,
+		embedder:        preparedEmbedder.Embedder,
+		repo:            repo,
+		provider:        preparedEmbedder.Provider,
+		modelID:         preparedEmbedder.ModelID,
+		resolvedModel:   preparedEmbedder.ResolvedModel,
+		resolvedLibPath: preparedEmbedder.ResolvedLib,
+		contextSize:     preparedEmbedder.ContextSize,
 	}
 
 	b.mu.Lock()

@@ -6,6 +6,7 @@
 
 [![Release](https://img.shields.io/github/v/release/uchebnick/unch?display_name=tag)](https://github.com/uchebnick/unch/releases/latest)
 [![Homebrew Tap](https://img.shields.io/badge/Homebrew-uchebnick%2Ftap-FBB040?logo=homebrew&logoColor=white)](https://github.com/uchebnick/homebrew-tap)
+[![npm downloads](https://img.shields.io/npm/dt/%40uchebnick%2Funch?logo=npm&label=npm%20downloads)](https://www.npmjs.com/package/@uchebnick/unch)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/uchebnick/unch/gh-pages/coverage/coverage-badge.json)](https://github.com/uchebnick/unch/actions/workflows/ci.yml)
 [![Go 1.25+](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://github.com/uchebnick/unch)
 [![Docs](https://img.shields.io/badge/Docs-unch.mintlify.app-0F172A)](https://unch.mintlify.app/)

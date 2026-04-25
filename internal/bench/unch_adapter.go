@@ -292,11 +292,7 @@ func gitDescribe(ctx context.Context, repoRoot string) string {
 }
 
 func discoverWarmedYzmaLibDir(warmupRoot string) (string, error) {
-	installRoot := filepath.Join(warmupRoot, ".semsearch", "yzma")
-	candidates := []string{
-		installRoot,
-		filepath.Join(installRoot, "lib"),
-	}
+	var candidates []string
 	if loggedPath := discoverLoggedYzmaLibDir(warmupRoot); loggedPath != "" {
 		candidates = append(candidates, loggedPath)
 	}
@@ -308,7 +304,7 @@ func discoverWarmedYzmaLibDir(warmupRoot string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("yzma libs not found under %s", installRoot)
+	return "", fmt.Errorf("yzma libs not found in warmup log")
 }
 
 func discoverLoggedYzmaLibDir(warmupRoot string) string {

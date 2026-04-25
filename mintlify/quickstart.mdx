@@ -100,7 +100,7 @@ description: Index a repository and run your first search in under a minute.
 The first local `llama.cpp` index may:
 
 - download the default embedding model
-- fetch local `yzma` runtime libraries
+- fetch global cached `yzma` runtime libraries
 - create `./.semsearch/`
 
 Each provider and model pair keeps its own active index snapshot. Rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot until the new run finishes successfully.

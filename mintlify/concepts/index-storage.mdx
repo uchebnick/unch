@@ -29,10 +29,6 @@ Stores file-hash state used to skip unchanged files on warm reindex runs.
 
 Local path weighting configuration used during ranking.
 
-### `yzma/`
-
-Local runtime libraries used for embedding inference.
-
 ## State-dir vs db-path
 
 The CLI now treats the state directory as the primary unit:
@@ -41,6 +37,10 @@ The CLI now treats the state directory as the primary unit:
 - `--db` is a deprecated compatibility alias
 
 That matches the real storage model better, because `index.db` is only one piece of the full local state.
+
+## Global runtime cache
+
+`yzma` runtime libraries are cached globally by unch, not inside each repository state directory. Repository `.semsearch` state stays focused on index data and ranking metadata.
 
 ## Remote-published state
 

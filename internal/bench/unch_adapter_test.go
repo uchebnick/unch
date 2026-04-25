@@ -146,34 +146,18 @@ func TestUnchAdapterBuildBinaryFromCmdUnch(t *testing.T) {
 	}
 }
 
-func TestDiscoverWarmedYzmaLibDirPrefersManagedInstall(t *testing.T) {
+func TestDiscoverWarmedYzmaLibDirUsesLoggedPath(t *testing.T) {
 	t.Parallel()
 
 	warmupRoot := t.TempDir()
-	managedDir := filepath.Join(warmupRoot, ".semsearch", "yzma", "lib")
-	writeRequiredYzmaFiles(t, managedDir)
-
-	got, err := discoverWarmedYzmaLibDir(warmupRoot)
-	if err != nil {
-		t.Fatalf("discoverWarmedYzmaLibDir() error = %v", err)
-	}
-	if got != filepath.Clean(managedDir) {
-		t.Fatalf("discoverWarmedYzmaLibDir() = %q, want %q", got, managedDir)
-	}
-}
-
-func TestDiscoverWarmedYzmaLibDirFallsBackToLoggedPath(t *testing.T) {
-	t.Parallel()
-
-	warmupRoot := t.TempDir()
-	fallbackDir := filepath.Join(t.TempDir(), "fallback-lib")
-	writeRequiredYzmaFiles(t, fallbackDir)
+	cachedDir := filepath.Join(t.TempDir(), "cached-yzma")
+	writeRequiredYzmaFiles(t, cachedDir)
 
 	logPath := filepath.Join(warmupRoot, ".semsearch", "logs", "run.log")
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	if err := os.WriteFile(logPath, []byte("2026/04/06 09:44:10 lib="+fallbackDir+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(logPath, []byte("2026/04/06 09:44:10 lib="+cachedDir+"\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -181,8 +165,20 @@ func TestDiscoverWarmedYzmaLibDirFallsBackToLoggedPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discoverWarmedYzmaLibDir() error = %v", err)
 	}
-	if got != filepath.Clean(fallbackDir) {
-		t.Fatalf("discoverWarmedYzmaLibDir() = %q, want %q", got, fallbackDir)
+	if got != filepath.Clean(cachedDir) {
+		t.Fatalf("discoverWarmedYzmaLibDir() = %q, want %q", got, cachedDir)
+	}
+}
+
+func TestDiscoverWarmedYzmaLibDirIgnoresLegacyLocalRuntime(t *testing.T) {
+	t.Parallel()
+
+	warmupRoot := t.TempDir()
+	legacyDir := filepath.Join(warmupRoot, ".semsearch", "yzma", "lib")
+	writeRequiredYzmaFiles(t, legacyDir)
+
+	if _, err := discoverWarmedYzmaLibDir(warmupRoot); err == nil {
+		t.Fatalf("discoverWarmedYzmaLibDir() unexpectedly accepted legacy local runtime")
 	}
 }
 

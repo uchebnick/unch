@@ -151,6 +151,8 @@ func TestResolveOrInstallYzmaLibPathDownloadsManagedRuntime(t *testing.T) {
 	rewriteDefaultTransportToServer(t, server)
 	t.Setenv("SEMSEARCH_YZMA_VERSION", "b1234")
 	t.Setenv("SEMSEARCH_YZMA_PROCESSOR", processorCPU)
+	cacheDir := t.TempDir()
+	withUserCacheDir(t, cacheDir)
 
 	localDir := t.TempDir()
 	got, note, err := (YzmaResolver{}).ResolveOrInstallYzmaLibPath(context.Background(), "", localDir, nil)
@@ -162,6 +164,66 @@ func TestResolveOrInstallYzmaLibPathDownloadsManagedRuntime(t *testing.T) {
 	}
 	if resolved, ok := validateYzmaLibDir(got); !ok || resolved != got {
 		t.Fatalf("ResolveOrInstallYzmaLibPath() returned invalid lib dir %q", got)
+	}
+	wantPrefix := filepath.Join(cacheDir, "unch", "yzma")
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("ResolveOrInstallYzmaLibPath() = %q, want under %q", got, wantPrefix)
+	}
+}
+
+func TestResolveOrInstallYzmaLibPathUsesGlobalCache(t *testing.T) {
+	t.Setenv("SEMSEARCH_YZMA_PROCESSOR", processorCPU)
+	cacheDir := t.TempDir()
+	withUserCacheDir(t, cacheDir)
+
+	installRoot, err := managedYzmaInstallRoot()
+	if err != nil {
+		t.Fatalf("managedYzmaInstallRoot() error: %v", err)
+	}
+	if err := os.MkdirAll(installRoot, 0o755); err != nil {
+		t.Fatalf("mkdir managed root: %v", err)
+	}
+	for _, name := range requiredYzmaLibFiles() {
+		if err := os.WriteFile(filepath.Join(installRoot, name), []byte("stub"), 0o644); err != nil {
+			t.Fatalf("write required lib %s: %v", name, err)
+		}
+	}
+
+	localDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(localDir, "yzma"), 0o755); err != nil {
+		t.Fatalf("mkdir legacy local yzma: %v", err)
+	}
+
+	got, note, err := (YzmaResolver{}).ResolveOrInstallYzmaLibPath(context.Background(), "", localDir, nil)
+	if err != nil {
+		t.Fatalf("ResolveOrInstallYzmaLibPath() error: %v", err)
+	}
+	if got != filepath.Clean(installRoot) {
+		t.Fatalf("ResolveOrInstallYzmaLibPath() = %q, want global cache %q", got, installRoot)
+	}
+	if !strings.Contains(note, "using cached yzma libs from") {
+		t.Fatalf("ResolveOrInstallYzmaLibPath() note = %q", note)
+	}
+}
+
+func TestCacheYzmaLibDirCopiesRuntimeIntoManagedCache(t *testing.T) {
+	src := t.TempDir()
+	for _, name := range requiredYzmaLibFiles() {
+		if err := os.WriteFile(filepath.Join(src, name), []byte("stub"), 0o755); err != nil {
+			t.Fatalf("write required lib %s: %v", name, err)
+		}
+	}
+
+	installRoot := filepath.Join(t.TempDir(), "unch", "yzma", "test-runtime")
+	if err := cacheYzmaLibDir(src, installRoot); err != nil {
+		t.Fatalf("cacheYzmaLibDir() error: %v", err)
+	}
+	got, ok := detectedYzmaLibDir(installRoot)
+	if !ok {
+		t.Fatalf("detectedYzmaLibDir(%s) = false", installRoot)
+	}
+	if got != filepath.Clean(installRoot) {
+		t.Fatalf("detectedYzmaLibDir() = %q, want %q", got, installRoot)
 	}
 }
 
@@ -230,6 +292,17 @@ func TestReplaceManagedDir(t *testing.T) {
 	if _, err := os.Stat(dst + ".bak"); !os.IsNotExist(err) {
 		t.Fatalf("backup dir should be removed, stat err = %v", err)
 	}
+}
+
+func withUserCacheDir(t *testing.T, dir string) {
+	t.Helper()
+	old := userCacheDirFn
+	userCacheDirFn = func() (string, error) {
+		return dir, nil
+	}
+	t.Cleanup(func() {
+		userCacheDirFn = old
+	})
 }
 
 func TestCandidateLlamaVersionsFallsBackWhenNetworkUnavailable(t *testing.T) {

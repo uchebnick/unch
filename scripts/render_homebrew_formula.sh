@@ -36,7 +36,7 @@ class Unch < Formula
     <<~EOS
       On first run unch may download:
         - a default GGUF embedding model into the user cache
-        - yzma runtime libraries into ./.semsearch/yzma
+        - yzma runtime libraries into the user cache
     EOS
   end
 

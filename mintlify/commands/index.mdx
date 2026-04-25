@@ -141,7 +141,7 @@ unch index --state-dir /tmp/project.semsearch
 
 ## Notes
 
-- The first run may download the default embedding model and local `yzma` runtime libraries.
+- The first run may download the default embedding model and global cached `yzma` runtime libraries.
 - OpenRouter token lookup checks `OPENROUTER_API_KEY`, then `~/.config/unch/tokens.json`, then `.semsearch/tokens.json`.
 - If the repository is currently bound to remote CI, a local reindex detaches that binding and returns the manifest to local mode.
 - Use the same provider and model family for `index` and `search`, otherwise ranking quality will be wrong.

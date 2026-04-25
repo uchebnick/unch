@@ -16,7 +16,7 @@ go run ./cmd/unch index --root .
 go run ./cmd/unch search --root . "command dispatch"
 ```
 
-First run may download the default embedding model, fetch local `yzma` runtime libraries, and create `./.semsearch/`.
+First run may download the default embedding model, fetch global cached `yzma` runtime libraries, and create `./.semsearch/`.
 
 ## Before Opening a Change
 

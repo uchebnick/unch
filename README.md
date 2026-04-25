@@ -149,7 +149,7 @@ $ unch search --details "get path variables from a request"
    docs: Vars returns the route variables for the current request, if any.
 ```
 
-The first local `llama.cpp` run may download the default embedding model, fetch local `yzma` runtime libraries, and create `./.semsearch/`.
+The first local `llama.cpp` run may download the default embedding model, fetch global cached `yzma` runtime libraries, and create `./.semsearch/`.
 
 Each provider and model pair keeps its own active index snapshot. Rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot until the new run finishes successfully.
 

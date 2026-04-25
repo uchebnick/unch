@@ -22,6 +22,7 @@ var (
 	llamaLatestVersionFn  = fetchLatestLlamaVersion
 	recentLlamaVersionsFn = recentLlamaVersions
 	fallbackLlamaVersions = []string{"b8581", "b8580", "b8579", "b8578", "b8576"}
+	userCacheDirFn        = os.UserCacheDir
 )
 
 const (
@@ -35,8 +36,8 @@ const (
 type YzmaResolver struct{}
 
 // ResolveOrInstallYzmaLibPath resolves yzma shared libraries from --lib, YZMA_LIB,
-// the local .semsearch runtime directory, or by downloading a managed runtime.
-func (YzmaResolver) ResolveOrInstallYzmaLibPath(ctx context.Context, requestedPath string, localDir string, reporter Reporter) (string, string, error) {
+// the global unch runtime cache, or by downloading a managed runtime.
+func (YzmaResolver) ResolveOrInstallYzmaLibPath(ctx context.Context, requestedPath string, _ string, reporter Reporter) (string, string, error) {
 	requestedPath = strings.TrimSpace(requestedPath)
 	if requestedPath != "" {
 		return ResolveYzmaLibPath(requestedPath)
@@ -48,15 +49,23 @@ func (YzmaResolver) ResolveOrInstallYzmaLibPath(ctx context.Context, requestedPa
 		}
 	}
 
-	installRoot := filepath.Join(localDir, "yzma")
+	installRoot, err := managedYzmaInstallRoot()
+	if err != nil {
+		return "", "", err
+	}
 
 	if resolved, ok := detectedYzmaLibDir(installRoot); ok {
-		return resolved, fmt.Sprintf("using local yzma libs from %s", resolved), nil
+		return resolved, fmt.Sprintf("using cached yzma libs from %s", resolved), nil
 	}
 
 	if err := downloadYzmaLibraries(ctx, installRoot, reporter); err != nil {
 		for _, candidate := range commonYzmaLibDirs() {
 			if resolved, ok := validateYzmaLibDir(candidate); ok {
+				if cacheErr := cacheYzmaLibDir(resolved, installRoot); cacheErr == nil {
+					if cached, ok := detectedYzmaLibDir(installRoot); ok {
+						return cached, fmt.Sprintf("warning: automatic yzma install failed (%v); cached yzma libs from %s", err, resolved), nil
+					}
+				}
 				return resolved, fmt.Sprintf("warning: automatic yzma install failed (%v); using %s", err, resolved), nil
 			}
 		}
@@ -72,6 +81,75 @@ func (YzmaResolver) ResolveOrInstallYzmaLibPath(ctx context.Context, requestedPa
 		installRoot,
 		strings.Join(requiredYzmaLibFiles(), ", "),
 	)
+}
+
+func cacheYzmaLibDir(src string, installRoot string) error {
+	parentDir := filepath.Dir(installRoot)
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		return fmt.Errorf("create yzma cache parent dir: %w", err)
+	}
+	stageRoot, err := os.MkdirTemp(parentDir, filepath.Base(installRoot)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create yzma cache staging dir: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(stageRoot)
+	}()
+	if err := copyYzmaLibDir(src, stageRoot); err != nil {
+		return err
+	}
+	if err := replaceManagedDir(stageRoot, installRoot); err != nil {
+		return fmt.Errorf("activate yzma cache: %w", err)
+	}
+	return nil
+}
+
+func copyYzmaLibDir(src string, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return fmt.Errorf("read yzma source dir: %w", err)
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return fmt.Errorf("create yzma destination dir: %w", err)
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		info, err := os.Lstat(srcPath)
+		if err != nil {
+			return fmt.Errorf("stat yzma source file: %w", err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(srcPath)
+			if err != nil {
+				return fmt.Errorf("read yzma symlink: %w", err)
+			}
+			if err := os.Symlink(target, dstPath); err != nil {
+				return fmt.Errorf("copy yzma symlink: %w", err)
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		data, err := os.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("read yzma source file: %w", err)
+		}
+		if err := os.WriteFile(dstPath, data, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("write yzma destination file: %w", err)
+		}
+	}
+	return nil
+}
+
+func managedYzmaInstallRoot() (string, error) {
+	cacheDir, err := userCacheDirFn()
+	if err != nil {
+		return "", fmt.Errorf("resolve user cache dir: %w", err)
+	}
+	processor := defaultYzmaProcessor()
+	return filepath.Join(cacheDir, "unch", "yzma", runtime.GOOS+"-"+runtime.GOARCH+"-"+processor), nil
 }
 
 func ResolveYzmaLibPath(input string) (string, string, error) {

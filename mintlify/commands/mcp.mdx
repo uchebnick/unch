@@ -1,0 +1,102 @@
+---
+title: MCP
+description: Start the unch stdio MCP server for agents and editor integrations.
+---
+
+## Usage
+
+```bash
+unch start mcp [flags]
+```
+
+From the repository root, the common case is:
+
+```bash
+unch start mcp
+```
+
+MCP uses stdio, so stdout is reserved for protocol messages. Run this command as a child process from an MCP client rather than as an interactive terminal command.
+
+## Client configuration
+
+Use:
+
+- Name: `unch`
+- Command: `unch`
+- Arguments: `start`, `mcp`
+- Working directory: the repository you want to search
+
+The server uses:
+
+- root: current working directory
+- state dir: `<root>/.semsearch`
+- provider/model: the same defaults as the CLI
+
+## Tools
+
+### `workspace_status`
+
+Returns the repository root, state directory, selected provider/model, index path, manifest metadata, and whether an index is already present.
+
+Agents should call this first.
+
+### `search_code`
+
+Searches indexed code symbols with `auto`, `semantic`, or `lexical` mode.
+
+Agents should call this before opening many files or running broad grep-style exploration.
+
+### `index_repository`
+
+Builds or refreshes the index for the configured workspace.
+
+Agents should call this when no index exists, when search reports no active snapshot for the selected provider/model, or when the user explicitly asks to rebuild.
+
+## Flags
+
+### `--root`
+
+Repository root served by the MCP process. Defaults to `.`.
+
+### `--state-dir`
+
+Path to a custom `.semsearch` directory. Defaults to `<root>/.semsearch`.
+
+### `--model`
+
+Embedding model to use. Accepts `embeddinggemma`, `qwen3`, a `.gguf` path, or an OpenRouter model id when `--provider openrouter` is selected.
+
+### `--provider`
+
+Embedding provider. Accepted values:
+
+- `llama.cpp`
+- `openrouter`
+
+### `--lib`
+
+Path to a `yzma` library directory, or one of its shared library files.
+
+### `--ctx-size`
+
+llama context size. `0` uses the selected model default.
+
+### `--verbose`
+
+Enable verbose `yzma` logging.
+
+## Examples
+
+```bash
+unch start mcp
+unch start mcp --root ~/src/repo --state-dir ~/src/repo/.semsearch
+unch start mcp --root . --model qwen3
+unch start mcp --provider openrouter --model openai/text-embedding-3-small
+```
+
+## Notes
+
+- Use one MCP process per repository workspace.
+- The process reuses the same provider/model/runtime configuration across tool calls.
+- OpenRouter token lookup checks `OPENROUTER_API_KEY`, then `~/.config/unch/tokens.json`, then `.semsearch/tokens.json`.
+- The MCP server exposes tools only in this release; streamable HTTP is not supported yet.

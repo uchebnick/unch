@@ -13,7 +13,7 @@
 
 **Semantic code search for code symbols and docs.**
 
-`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal. It is useful when you know what the code does, but not the symbol name or file path. Local indexing is the default; remote publishing is optional.
+`unch` indexes functions, methods, types, classes, interfaces, and attached docs with Tree-sitter, then lets you search them from the terminal. It is useful when you know what the code does, but not the symbol name or file path. Local `llama.cpp` embeddings are the default; OpenRouter and remote publishing are opt-in.
 
 <p align="center">
   <img src="docs/assets/unch-demo.gif" alt="Terminal demo of unch indexing gorilla/mux and returning semantic search matches" width="920">
@@ -21,8 +21,8 @@
 
 ## Why `unch`
 
-- **Indexes symbols, not just lines.** `unch` stores top-level API objects and attached docs for `Go`, `TypeScript`, `JavaScript`, and `Python`.
-- **Keeps the local workflow simple.** Build an index once, search from the CLI, and keep everything on your machine unless you explicitly publish a remote index.
+- **Indexes symbols, not just lines.** `unch` stores top-level API objects and attached docs for `Go`, `Rust`, `TypeScript`, `JavaScript`, and `Python`.
+- **Keeps the local workflow simple.** Build an index once, search from the CLI, and keep everything on your machine unless you explicitly choose OpenRouter embeddings or publish a remote index.
 - **Still works with CI.** If you want a shared index, GitHub Actions publishing is available, but it is not required for the normal local flow.
 
 ## Install
@@ -145,9 +145,25 @@ The first local `llama.cpp` run may download the default embedding model, fetch 
 
 Each provider and model pair keeps its own active index snapshot. Rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot until the new run finishes successfully.
 
+## MCP
+
+`unch` can run as a stdio MCP server for agents and editors:
+
+```bash
+unch start mcp
+```
+
+Configure MCP clients with command `unch`, arguments `start mcp`, and working directory set to the repository you want to search.
+
+The server exposes:
+
+- `workspace_status` to inspect the repository root, state directory, active provider/model, and index status
+- `search_code` to search indexed code symbols before opening many files
+- `index_repository` to build or refresh the index when needed
+
 ## What It Supports Today
 
-- Tree-sitter indexing for `Go`, `TypeScript`, `JavaScript`, and `Python`
+- Tree-sitter indexing for `Go`, `Rust`, `TypeScript`, `JavaScript`, and `Python`
 - Top-level API objects and attached documentation
 - Local indexing and search first, optional remote publishing through GitHub Actions
 - `auto`, `semantic`, and `lexical` search modes

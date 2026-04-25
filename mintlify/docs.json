@@ -36,6 +36,7 @@
         "pages": [
           "commands/index",
           "commands/search",
+          "commands/mcp",
           "commands/remote"
         ]
       },

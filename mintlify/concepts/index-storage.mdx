@@ -17,6 +17,8 @@ You can override that with `--state-dir`.
 
 The local search index. This is a rebuildable cache artifact, not durable user data.
 
+It stores immutable snapshots for each provider/model pair. Embedding vectors are kept in dimension-specific vector tables, so a 768-dimension local model and a 1536-dimension OpenRouter model can coexist without replacing each other.
+
 ### `manifest.json`
 
 Tracks local state metadata, schema versioning, and optional remote binding.
@@ -41,6 +43,18 @@ The CLI now treats the state directory as the primary unit:
 - `--db` is a deprecated compatibility alias
 
 That matches the real storage model better, because `index.db` is only one piece of the full local state.
+
+## Provider and model snapshots
+
+Each provider/model pair has its own active snapshot.
+
+Examples:
+
+- rebuilding `llama.cpp/embeddinggemma` does not replace `llama.cpp/qwen3`
+- rebuilding `openrouter/openai/text-embedding-3-small` does not replace `llama.cpp/embeddinggemma`
+- switching provider or model requires indexing once with that same provider/model before searching
+
+`index.db` schema changes may reset old cache data automatically. If local search fails after an upgrade, rebuild with `unch index --root .`.
 
 ## Remote-published state
 

@@ -6,7 +6,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/hybridgroup/yzma v1.13.0
 	github.com/jupiterrider/ffi v0.6.0
-	github.com/mattn/go-sqlite3 v1.14.38
+	github.com/mattn/go-sqlite3 v1.14.42
 	github.com/ncruces/go-sqlite3 v0.17.1
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/tree-sitter/go-tree-sitter v0.24.1-0.20250202211042-adc13ffd8b2c

@@ -84,8 +84,8 @@ func TestServerInitialize(t *testing.T) {
 	if _, ok := capabilities["tools"]; !ok {
 		t.Fatalf("initialize capabilities missing tools: %#v", capabilities)
 	}
-	if _, ok := capabilities["prompts"]; !ok {
-		t.Fatalf("initialize capabilities missing prompts: %#v", capabilities)
+	if _, ok := capabilities["prompts"]; ok {
+		t.Fatalf("initialize capabilities unexpectedly include prompts: %#v", capabilities)
 	}
 	if _, ok := capabilities["resources"]; ok {
 		t.Fatalf("initialize capabilities unexpectedly include resources: %#v", capabilities)
@@ -147,57 +147,6 @@ func TestServerToolsList(t *testing.T) {
 	}
 	if !strings.Contains(descriptions["index_repository"], "Avoid repeated rebuilds") {
 		t.Fatalf("index_repository description = %q", descriptions["index_repository"])
-	}
-}
-
-func TestServerPromptsList(t *testing.T) {
-	t.Parallel()
-
-	resp := serveOne(t, map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "prompts/list",
-	})
-
-	prompts := resp["result"].(map[string]any)["prompts"].([]any)
-	if len(prompts) != 1 {
-		t.Fatalf("prompts/list returned %d prompts, want 1", len(prompts))
-	}
-	prompt := prompts[0].(map[string]any)
-	if got := prompt["name"]; got != "unch" {
-		t.Fatalf("prompt name = %v, want unch", got)
-	}
-	if !strings.Contains(prompt["description"].(string), "semantic code search") {
-		t.Fatalf("prompt description = %q", prompt["description"])
-	}
-}
-
-func TestServerPromptsGetUnch(t *testing.T) {
-	t.Parallel()
-
-	resp := serveOne(t, map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "prompts/get",
-		"params": map[string]any{
-			"name": "unch",
-			"arguments": map[string]string{
-				"query": "request middleware",
-			},
-		},
-	})
-
-	result := resp["result"].(map[string]any)
-	messages := result["messages"].([]any)
-	if len(messages) != 1 {
-		t.Fatalf("messages = %d, want 1", len(messages))
-	}
-	content := messages[0].(map[string]any)["content"].(map[string]any)
-	text := content["text"].(string)
-	for _, want := range []string{"workspace_status", "index_repository once", "search_code", "request middleware"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("prompt text missing %q: %q", want, text)
-		}
 	}
 }
 

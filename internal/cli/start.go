@@ -103,7 +103,7 @@ func runStartMCP(ctx context.Context, program string, args []string) error {
 		}
 	}
 
-	targetPaths, resolvedIndexPath, _, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
+	targetPaths, resolvedIndexPath, _, err := previewStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
 	}

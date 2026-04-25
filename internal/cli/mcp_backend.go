@@ -322,6 +322,10 @@ func (b *mcpBackend) ensurePrepared(ctx context.Context) (*preparedMCPResources,
 	}
 	b.mu.Unlock()
 
+	if _, err := semsearch.PathsForLocalDir(b.cfg.TargetPaths.LocalDir); err != nil {
+		return nil, err
+	}
+
 	preparedEmbedder, err := prepareEmbedder(
 		ctx,
 		nil,

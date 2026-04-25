@@ -373,6 +373,9 @@ func TestRunStartMCPExitsCleanlyOnEOF(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
+	if _, err := os.Stat(filepath.Join(root, ".semsearch")); !os.IsNotExist(err) {
+		t.Fatalf("start mcp created .semsearch before tool call, stat err=%v", err)
+	}
 }
 
 func TestRunVersionFlag(t *testing.T) {

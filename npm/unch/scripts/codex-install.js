@@ -8,6 +8,8 @@ const { spawnSync } = require("node:child_process");
 
 const packageRoot = path.join(__dirname, "..");
 const mcpLauncher = path.join(packageRoot, "bin", "unch-mcp.js");
+const defaultStartupTimeoutSec = 60;
+const defaultToolTimeoutSec = 300;
 
 async function main(argv = process.argv.slice(2), env = process.env) {
   const options = parseArgs(argv);
@@ -29,6 +31,8 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     process.stdout.write([
       "Would register Codex MCP server:",
       `  codex mcp add unch -- ${shellJoin([mcpCommand, ...mcpArgs])}`,
+      `Would set startup_timeout_sec = ${defaultStartupTimeoutSec}`,
+      `Would set tool_timeout_sec = ${defaultToolTimeoutSec}`,
       "Would install slash prompt:",
       `  ${promptPath}`,
       ""
@@ -42,6 +46,10 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       codexHome,
       command: mcpCommand,
       args: mcpArgs
+    });
+    configureMcpTimeouts(codexHome, {
+      startupTimeoutSec: defaultStartupTimeoutSec,
+      toolTimeoutSec: defaultToolTimeoutSec
     });
   }
 
@@ -142,6 +150,45 @@ function installPrompt(promptPath) {
   fs.writeFileSync(promptPath, promptText(), { mode: 0o644 });
 }
 
+function configureMcpTimeouts(codexHome, { startupTimeoutSec, toolTimeoutSec }) {
+  const configPath = path.join(codexHome, "config.toml");
+  const text = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const lines = text.split(/\r?\n/);
+  const header = "[mcp_servers.unch]";
+  const start = lines.findIndex((line) => line.trim() === header);
+  const timeoutLines = [
+    `startup_timeout_sec = ${startupTimeoutSec}`,
+    `tool_timeout_sec = ${toolTimeoutSec}`
+  ];
+
+  if (start === -1) {
+    const prefix = text.trim() ? `${text.replace(/\s*$/, "")}\n\n` : "";
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(configPath, `${prefix}${header}\n${timeoutLines.join("\n")}\n`);
+    return;
+  }
+
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^\s*\[/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+
+  const block = lines.slice(start, end).filter((line) => {
+    const trimmed = line.trim();
+    return !trimmed.startsWith("startup_timeout_sec") && !trimmed.startsWith("tool_timeout_sec");
+  });
+  const nextLines = [
+    ...lines.slice(0, start),
+    ...block,
+    ...timeoutLines,
+    ...lines.slice(end)
+  ];
+  fs.writeFileSync(configPath, `${nextLines.join("\n").replace(/\s*$/, "")}\n`);
+}
+
 function promptText() {
   return [
     "Use unch semantic code search for this repository before broad file reads.",
@@ -193,6 +240,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  configureMcpTimeouts,
   main,
   parseArgs,
   promptText

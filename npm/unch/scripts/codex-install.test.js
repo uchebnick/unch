@@ -34,6 +34,11 @@ try {
   const promptPath = path.join(codexHome, "prompts", "unch.md");
   assert.equal(fs.readFileSync(promptPath, "utf8"), promptText());
 
+  const configText = fs.readFileSync(path.join(codexHome, "config.toml"), "utf8");
+  assert.match(configText, /\[mcp_servers\.unch\]/);
+  assert.match(configText, /startup_timeout_sec = 60/);
+  assert.match(configText, /tool_timeout_sec = 300/);
+
   const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map(JSON.parse);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].slice(0, 5), ["mcp", "add", "unch", "--", process.execPath]);
@@ -64,7 +69,14 @@ function writeFakeCodex(file, logPath) {
   fs.writeFileSync(file, [
     "#!/usr/bin/env node",
     `"use strict";`,
-    `require("node:fs").appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)) + "\\n");`
+    `const fs = require("node:fs");`,
+    `const path = require("node:path");`,
+    `fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)) + "\\n");`,
+    `const codexHome = process.env.CODEX_HOME;`,
+    `if (codexHome) {`,
+    `  fs.mkdirSync(codexHome, { recursive: true });`,
+    `  fs.writeFileSync(path.join(codexHome, "config.toml"), "[mcp_servers.unch]\\ncommand = \\"node\\"\\nargs = [\\"bin/unch-mcp.js\\"]\\n");`,
+    `}`
   ].join("\n"));
   fs.chmodSync(file, 0o755);
 }

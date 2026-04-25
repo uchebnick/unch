@@ -35,13 +35,20 @@ type listToolsResult struct {
 }
 
 func toolDefinitions() []toolDefinition {
+	directoryProperty := map[string]any{
+		"type":        "string",
+		"description": "Repository/workspace directory to operate on. Pass the current workspace root as an absolute path when available. Defaults to the MCP process root.",
+	}
+
 	return []toolDefinition{
 		{
 			Name:        "workspace_status",
 			Description: "Call this first. Returns the current repository root, .semsearch state directory, selected provider/model, manifest data, and whether a local index is already present.",
 			InputSchema: map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
+				"type": "object",
+				"properties": map[string]any{
+					"directory": directoryProperty,
+				},
 			},
 		},
 		{
@@ -50,6 +57,7 @@ func toolDefinitions() []toolDefinition {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
+					"directory": directoryProperty,
 					"query": map[string]any{
 						"type":        "string",
 						"description": "Short natural-language, identifier, API, behavior, or error-handling query. Examples: \"request router middleware\", \"UserRepository Create\", \"MCP Content-Length framing\".",
@@ -87,6 +95,7 @@ func toolDefinitions() []toolDefinition {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
+					"directory": directoryProperty,
 					"excludes": map[string]any{
 						"type":        "array",
 						"items":       map[string]any{"type": "string"},
@@ -115,10 +124,11 @@ func toolDefinitions() []toolDefinition {
 func (s *Server) callTool(ctx context.Context, params toolCallParams) (toolCallResult, error) {
 	switch params.Name {
 	case "workspace_status":
-		if err := decodeToolArgs(params.Arguments, &struct{}{}); err != nil {
+		var args WorkspaceStatusParams
+		if err := decodeToolArgs(params.Arguments, &args); err != nil {
 			return toolCallResult{}, err
 		}
-		result, err := s.service.WorkspaceStatus(ctx)
+		result, err := s.service.WorkspaceStatus(ctx, args)
 		if err != nil {
 			return toolErrorResult(err), nil
 		}

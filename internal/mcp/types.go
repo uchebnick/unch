@@ -4,12 +4,19 @@ import "context"
 
 type Service interface {
 	Version() string
-	WorkspaceStatus(context.Context) (WorkspaceStatusResult, error)
+	WorkspaceStatus(context.Context, WorkspaceStatusParams) (WorkspaceStatusResult, error)
 	SearchCode(context.Context, SearchCodeParams) (SearchCodeResult, error)
 	IndexRepository(context.Context, IndexRepositoryParams) (IndexRepositoryResult, error)
 }
 
+type WorkspaceStatusParams struct {
+	Directory string `json:"directory,omitempty"`
+	Root      string `json:"root,omitempty"`
+}
+
 type SearchCodeParams struct {
+	Directory   string   `json:"directory,omitempty"`
+	Root        string   `json:"root,omitempty"`
 	Query       string   `json:"query"`
 	Limit       int      `json:"limit,omitempty"`
 	Mode        string   `json:"mode,omitempty"`
@@ -41,6 +48,8 @@ type SearchCodeResult struct {
 }
 
 type IndexRepositoryParams struct {
+	Directory     string   `json:"directory,omitempty"`
+	Root          string   `json:"root,omitempty"`
 	Excludes      []string `json:"excludes,omitempty"`
 	Gitignore     string   `json:"gitignore,omitempty"`
 	CommentPrefix string   `json:"comment_prefix,omitempty"`

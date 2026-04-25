@@ -175,6 +175,7 @@ func (s *Server) writePayload(payload []byte) error {
 func serverInstructions() string {
 	return strings.Join([]string{
 		"unch provides local-first semantic code search for the current repository workspace.",
+		"When the client knows the repository path, pass directory as an absolute path on workspace_status, search_code, and index_repository.",
 		"Recommended workflow for agents:",
 		"1. Call workspace_status first to learn the root, state directory, selected provider/model, and whether an index exists.",
 		"2. Before reading many files or using broad grep-style exploration, call search_code with a concise natural-language or identifier query.",

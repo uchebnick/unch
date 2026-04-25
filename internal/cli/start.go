@@ -110,6 +110,10 @@ func runStartMCP(ctx context.Context, program string, args []string) error {
 
 	backend := newMCPBackend(mcpBackendConfig{
 		RootAbs:           rootAbs,
+		StateDirInput:     *stateDir,
+		StateDirExplicit:  stateDirWasExplicit,
+		DBInput:           *dbPath,
+		DBExplicit:        dbWasExplicit,
 		TargetPaths:       targetPaths,
 		IndexPath:         resolvedIndexPath,
 		RequestedProvider: strings.TrimSpace(*provider),

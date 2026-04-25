@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -23,6 +24,20 @@ type preparedEmbedder struct {
 	ContextSize   int
 }
 
+type silentRuntimeReporter struct{}
+
+func (silentRuntimeReporter) Logf(string, ...any) {}
+
+func (silentRuntimeReporter) ProgressTracker(string) runtime.ProgressTracker {
+	return silentProgressTracker{}
+}
+
+type silentProgressTracker struct{}
+
+func (silentProgressTracker) TrackProgress(_ string, _ int64, _ int64, stream io.ReadCloser) io.ReadCloser {
+	return stream
+}
+
 func prepareEmbedder(
 	ctx context.Context,
 	s *termui.Session,
@@ -38,6 +53,10 @@ func prepareEmbedder(
 	provider, err := appembed.ParseProvider(requestedProvider)
 	if err != nil {
 		return preparedEmbedder{}, err
+	}
+	var reporter runtime.Reporter = silentRuntimeReporter{}
+	if s != nil {
+		reporter = s
 	}
 
 	switch provider {
@@ -87,7 +106,7 @@ func prepareEmbedder(
 			requestedModelPath = defaultModelPath
 		}
 
-		resolvedLibPath, libNote, err := runtimes.ResolveOrInstallYzmaLibPath(ctx, strings.TrimSpace(requestedLib), targetPaths.LocalDir, s)
+		resolvedLibPath, libNote, err := runtimes.ResolveOrInstallYzmaLibPath(ctx, strings.TrimSpace(requestedLib), targetPaths.LocalDir, reporter)
 		if err != nil {
 			return preparedEmbedder{}, err
 		}
@@ -95,7 +114,7 @@ func prepareEmbedder(
 			s.Logf("%s", libNote)
 		}
 
-		resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, requestedModelPath, defaultModelPath, true, s)
+		resolvedModelPath, modelNote, err := models.ResolveOrInstallModelPath(ctx, requestedModelPath, defaultModelPath, true, reporter)
 		if err != nil {
 			return preparedEmbedder{}, err
 		}

@@ -14,11 +14,15 @@ type fakeService struct{}
 
 func (fakeService) Version() string { return "vtest" }
 
-func (fakeService) WorkspaceStatus(context.Context) (WorkspaceStatusResult, error) {
+func (fakeService) WorkspaceStatus(_ context.Context, params WorkspaceStatusParams) (WorkspaceStatusResult, error) {
+	root := "/repo"
+	if strings.TrimSpace(params.Directory) != "" {
+		root = params.Directory
+	}
 	return WorkspaceStatusResult{
-		Root:              "/repo",
-		StateDir:          "/repo/.semsearch",
-		IndexDB:           "/repo/.semsearch/index.db",
+		Root:              root,
+		StateDir:          root + "/.semsearch",
+		IndexDB:           root + "/.semsearch/index.db",
 		RequestedProvider: "llama.cpp",
 		RequestedModel:    "embeddinggemma",
 		IndexPresent:      true,
@@ -200,7 +204,9 @@ func TestServerPromptsGetUnch(t *testing.T) {
 func TestServerWorkspaceStatusToolCall(t *testing.T) {
 	t.Parallel()
 
-	resp := serveOne(t, toolCall("workspace_status", map[string]any{}))
+	resp := serveOne(t, toolCall("workspace_status", map[string]any{
+		"directory": "/repo",
+	}))
 	result := resp["result"].(map[string]any)
 	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
 	if !strings.Contains(text, "root: /repo") {

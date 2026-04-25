@@ -5,6 +5,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
+const args = process.argv.slice(2);
+
+if (args[0] === "codex") {
+  const { main } = require("../scripts/codex-install");
+  main(args.slice(1)).catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+  return;
+}
+
 const binaryName = process.platform === "win32" ? "unch.exe" : "unch";
 const binaryPath = path.join(__dirname, "..", "vendor", binaryName);
 
@@ -14,7 +25,7 @@ if (!fs.existsSync(binaryPath)) {
   process.exit(1);
 }
 
-const result = spawnSync(binaryPath, process.argv.slice(2), {
+const result = spawnSync(binaryPath, args, {
   stdio: "inherit",
   windowsHide: false
 });

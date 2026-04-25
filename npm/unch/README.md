@@ -10,6 +10,18 @@ unch --help
 
 The package downloads the matching native binary from GitHub Releases during `postinstall`.
 
+## Codex setup
+
+To make unch available in Codex as both MCP tools and a `/unch` slash prompt, run:
+
+```bash
+unch codex install
+```
+
+Then restart Codex. The installer uses `codex mcp add` for the MCP server and writes the slash prompt to `~/.codex/prompts/unch.md`.
+
+The npm `postinstall` step does not modify your Codex config automatically. This is intentional: installing a package should not silently mutate `~/.codex/config.toml`.
+
 ## MCP
 
 For MCP clients, use:
@@ -22,6 +34,8 @@ For MCP clients, use:
 `unch-mcp` is a small launcher for `unch start mcp`. The MCP server also exposes a prompt named `unch`, so clients that render MCP prompts as slash commands can show it as `/unch`.
 
 If your client supports MCP prompts, run `/unch` before a codebase question to nudge the assistant to call `workspace_status`, `search_code`, and `index_repository` in the right order.
+
+For Codex CLI specifically, `unch codex install` also creates a local reusable prompt, so `/unch` is available even when the slash menu is reading `~/.codex/prompts`.
 
 Supported targets:
 

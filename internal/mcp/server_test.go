@@ -317,6 +317,44 @@ func TestServerNotificationIgnored(t *testing.T) {
 	}
 }
 
+func TestServerJSONLineFraming(t *testing.T) {
+	t.Parallel()
+
+	input := bytes.NewBuffer(nil)
+	writeTestLine(t, input, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      0,
+		"method":  "initialize",
+		"params": map[string]any{
+			"protocolVersion": latestKnownProtocol,
+			"capabilities": map[string]any{
+				"elicitation": map[string]any{"form": map[string]any{}},
+			},
+			"clientInfo": map[string]any{
+				"name":    "codex-mcp-client",
+				"version": "0.125.0",
+			},
+		},
+	})
+	writeTestLine(t, input, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/list",
+	})
+
+	output := serveRaw(t, input)
+	reader := bufio.NewReader(output)
+	initResp := readTestLine(t, reader)
+	if got := int(initResp["id"].(float64)); got != 0 {
+		t.Fatalf("initialize response id = %d, want 0", got)
+	}
+	toolsResp := readTestLine(t, reader)
+	tools := toolsResp["result"].(map[string]any)["tools"].([]any)
+	if len(tools) != 3 {
+		t.Fatalf("tools/list returned %d tools, want 3", len(tools))
+	}
+}
+
 func serveOne(t *testing.T, request map[string]any) map[string]any {
 	t.Helper()
 
@@ -360,6 +398,17 @@ func writeTestFrame(t *testing.T, w io.Writer, body any) {
 	}
 }
 
+func writeTestLine(t *testing.T, w io.Writer, body any) {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal test line: %v", err)
+	}
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		t.Fatalf("write test line: %v", err)
+	}
+}
+
 func readTestFrame(t *testing.T, r *bufio.Reader) map[string]any {
 	t.Helper()
 	payload, err := readContentLengthMessage(r)
@@ -369,6 +418,19 @@ func readTestFrame(t *testing.T, r *bufio.Reader) map[string]any {
 	var decoded map[string]any
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("unmarshal frame: %v", err)
+	}
+	return decoded
+}
+
+func readTestLine(t *testing.T, r *bufio.Reader) map[string]any {
+	t.Helper()
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		t.Fatalf("read test line: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(line), &decoded); err != nil {
+		t.Fatalf("unmarshal line: %v", err)
 	}
 	return decoded
 }

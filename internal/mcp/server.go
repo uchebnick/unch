@@ -15,6 +15,7 @@ import (
 type Server struct {
 	service Service
 	writer  io.Writer
+	framing messageFraming
 	writeMu sync.Mutex
 }
 
@@ -32,13 +33,14 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		default:
 		}
 
-		payload, err := readContentLengthMessage(reader)
+		payload, framing, err := readMCPMessage(reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err
 		}
+		s.framing = framing
 		if err := s.handlePayload(ctx, payload); err != nil {
 			return err
 		}
@@ -167,7 +169,7 @@ func (s *Server) writeEnvelope(envelope responseEnvelope) error {
 func (s *Server) writePayload(payload []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	return writeContentLengthMessage(s.writer, payload)
+	return writeMCPMessage(s.writer, payload, s.framing)
 }
 
 func serverInstructions() string {

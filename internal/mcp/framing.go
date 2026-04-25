@@ -9,17 +9,40 @@ import (
 	"strings"
 )
 
-func readContentLengthMessage(r *bufio.Reader) ([]byte, error) {
-	contentLength := -1
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			if errors.Is(err, io.EOF) && line == "" {
-				return nil, io.EOF
-			}
-			return nil, err
-		}
+type messageFraming int
 
+const (
+	framingContentLength messageFraming = iota
+	framingJSONLine
+)
+
+func readMCPMessage(r *bufio.Reader) ([]byte, messageFraming, error) {
+	line, err := r.ReadString('\n')
+	if err != nil {
+		if errors.Is(err, io.EOF) && line == "" {
+			return nil, framingContentLength, io.EOF
+		}
+		return nil, framingContentLength, err
+	}
+
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return []byte(trimmed), framingJSONLine, nil
+	}
+
+	payload, err := readContentLengthMessageAfterFirstLine(r, line)
+	return payload, framingContentLength, err
+}
+
+func readContentLengthMessage(r *bufio.Reader) ([]byte, error) {
+	payload, _, err := readMCPMessage(r)
+	return payload, err
+}
+
+func readContentLengthMessageAfterFirstLine(r *bufio.Reader, firstLine string) ([]byte, error) {
+	contentLength := -1
+	line := firstLine
+	for {
 		trimmed := strings.TrimRight(line, "\r\n")
 		if trimmed == "" {
 			break
@@ -32,6 +55,15 @@ func readContentLengthMessage(r *bufio.Reader) ([]byte, error) {
 		if ok {
 			contentLength = n
 		}
+
+		var lineErr error
+		line, lineErr = r.ReadString('\n')
+		if lineErr != nil {
+			if errors.Is(lineErr, io.EOF) && line == "" {
+				return nil, io.EOF
+			}
+			return nil, lineErr
+		}
 	}
 
 	if contentLength < 0 {
@@ -43,6 +75,14 @@ func readContentLengthMessage(r *bufio.Reader) ([]byte, error) {
 		return nil, err
 	}
 	return payload, nil
+}
+
+func writeMCPMessage(w io.Writer, payload []byte, framing messageFraming) error {
+	if framing == framingJSONLine {
+		_, err := w.Write(append(payload, '\n'))
+		return err
+	}
+	return writeContentLengthMessage(w, payload)
 }
 
 func writeContentLengthMessage(w io.Writer, payload []byte) error {

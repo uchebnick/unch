@@ -13,6 +13,7 @@ import (
 const SchemaVersion = 1
 
 var ErrNoActiveSnapshot = errors.New("no active snapshot for model")
+var ErrUnsupportedSchema = errors.New("unsupported index schema")
 
 // Store wraps the SQLite connection and vector dimension used by the index database.
 type Store struct {
@@ -69,7 +70,7 @@ func (s *Store) init(ctx context.Context) error {
 		}
 	case SchemaVersion:
 	default:
-		return fmt.Errorf("unsupported schema version %d", userVersion)
+		return fmt.Errorf("%w: version %d", ErrUnsupportedSchema, userVersion)
 	}
 
 	stmts := []string{

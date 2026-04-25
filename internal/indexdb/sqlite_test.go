@@ -271,6 +271,27 @@ func TestLogicalHashRejectsLegacySchema(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsUnsupportedSchemaVersion(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open() error: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `PRAGMA user_version = 99`); err != nil {
+		t.Fatalf("set user_version: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close() error: %v", err)
+	}
+
+	_, err = Open(ctx, dbPath, 3)
+	if err == nil || !errors.Is(err, ErrUnsupportedSchema) {
+		t.Fatalf("Open() error = %v, want ErrUnsupportedSchema", err)
+	}
+}
+
 func TestCopyPathFromSnapshot(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "index.db")

@@ -195,6 +195,13 @@ func runIndex(ctx context.Context, program string, args []string, cwd string, sc
 	s.Logf("root=%s", rootAbs)
 
 	repo, err := indexdb.Open(ctx, resolvedIndexPath, prepared.Embedder.Dim())
+	if err != nil && errors.Is(err, indexdb.ErrUnsupportedSchema) {
+		s.Logf("resetting incompatible index_db=%s", resolvedIndexPath)
+		if removeErr := os.Remove(resolvedIndexPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return fmt.Errorf("remove incompatible index db: %w", removeErr)
+		}
+		repo, err = indexdb.Open(ctx, resolvedIndexPath, prepared.Embedder.Dim())
+	}
 	if err != nil {
 		return err
 	}

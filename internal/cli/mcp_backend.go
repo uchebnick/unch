@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -148,7 +149,7 @@ func (b *mcpBackend) SearchCode(ctx context.Context, params unchmcp.SearchCodePa
 		params.Limit = 10
 	}
 
-	prepared, err := b.ensurePrepared(ctx)
+	prepared, err := b.ensurePrepared(ctx, false)
 	if err != nil {
 		return unchmcp.SearchCodeResult{}, err
 	}
@@ -218,7 +219,7 @@ func (b *mcpBackend) IndexRepository(ctx context.Context, params unchmcp.IndexRe
 	b.runMu.Lock()
 	defer b.runMu.Unlock()
 
-	prepared, err := b.ensurePrepared(ctx)
+	prepared, err := b.ensurePrepared(ctx, true)
 	if err != nil {
 		return unchmcp.IndexRepositoryResult{}, err
 	}
@@ -313,7 +314,7 @@ func (b *mcpBackend) IndexRepository(ctx context.Context, params unchmcp.IndexRe
 	}, nil
 }
 
-func (b *mcpBackend) ensurePrepared(ctx context.Context) (*preparedMCPResources, error) {
+func (b *mcpBackend) ensurePrepared(ctx context.Context, resetIncompatibleIndex bool) (*preparedMCPResources, error) {
 	b.mu.Lock()
 	if b.prepared != nil {
 		prepared := b.prepared
@@ -343,6 +344,13 @@ func (b *mcpBackend) ensurePrepared(ctx context.Context) (*preparedMCPResources,
 	}
 
 	repo, err := indexdb.Open(ctx, b.cfg.IndexPath, preparedEmbedder.Embedder.Dim())
+	if err != nil && resetIncompatibleIndex && errors.Is(err, indexdb.ErrUnsupportedSchema) {
+		if removeErr := os.Remove(b.cfg.IndexPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			preparedEmbedder.Embedder.Close()
+			return nil, fmt.Errorf("remove incompatible index db: %w", removeErr)
+		}
+		repo, err = indexdb.Open(ctx, b.cfg.IndexPath, preparedEmbedder.Embedder.Dim())
+	}
 	if err != nil {
 		preparedEmbedder.Embedder.Close()
 		return nil, err

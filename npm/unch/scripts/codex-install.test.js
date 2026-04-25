@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { promptText } = require("./codex-install");
+const { skillText } = require("./codex-install");
 
 const root = path.join(__dirname, "..");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "unch-codex-install-test-"));
@@ -31,8 +31,9 @@ try {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Installed unch for Codex/);
 
-  const promptPath = path.join(codexHome, "prompts", "unch.md");
-  assert.equal(fs.readFileSync(promptPath, "utf8"), promptText());
+  const skillPath = path.join(codexHome, "skills", "unch", "SKILL.md");
+  assert.equal(fs.readFileSync(skillPath, "utf8"), skillText());
+  assert.equal(fs.existsSync(path.join(codexHome, "prompts", "unch.md")), false);
 
   const configText = fs.readFileSync(path.join(codexHome, "config.toml"), "utf8");
   assert.match(configText, /\[mcp_servers\.unch\]/);
@@ -53,6 +54,7 @@ try {
   });
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /Would register Codex MCP server/);
+  assert.match(dryRun.stdout, /Would install Codex skill/);
   assert.equal(fs.existsSync(dryRunDir), false);
 
   console.log("codex install ok");

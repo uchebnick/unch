@@ -12,13 +12,13 @@ The package downloads the matching native binary from GitHub Releases during `po
 
 ## Codex setup
 
-To make unch available in Codex as both MCP tools and a `/unch` slash prompt, run:
+To make unch available in Codex as both MCP tools and the `unch` skill, run:
 
 ```bash
 unch codex install
 ```
 
-Then restart Codex. The installer uses `codex mcp add` for the MCP server and writes the slash prompt to `~/.codex/prompts/unch.md`.
+Then restart Codex. The installer uses `codex mcp add` for the MCP server and writes the skill to `~/.codex/skills/unch/SKILL.md`.
 
 The npm `postinstall` step does not modify your Codex config automatically. This is intentional: installing a package should not silently mutate `~/.codex/config.toml`.
 
@@ -31,11 +31,9 @@ For MCP clients, use:
 - Arguments: leave empty
 - Working directory: the repository you want to search
 
-`unch-mcp` is a small launcher for `unch start mcp`. The MCP server also exposes a prompt named `unch`, so clients that render MCP prompts as slash commands can show it as `/unch`.
+`unch-mcp` is a small launcher for `unch start mcp`.
 
-If your client supports MCP prompts, run `/unch` before a codebase question to nudge the assistant to call `workspace_status`, `search_code`, and `index_repository` in the right order.
-
-For Codex CLI specifically, `unch codex install` also creates a local reusable prompt, so `/unch` is available even when the slash menu is reading `~/.codex/prompts`.
+For Codex CLI specifically, `unch codex install` also creates a local reusable skill, so Codex knows when to call `workspace_status`, `search_code`, and `index_repository` in the right order.
 
 Supported targets:
 

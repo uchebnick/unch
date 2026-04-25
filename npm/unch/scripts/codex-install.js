@@ -23,7 +23,8 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   }
 
   const codexHome = path.resolve(options.codexHome || env.CODEX_HOME || path.join(os.homedir(), ".codex"));
-  const promptPath = path.join(codexHome, "prompts", "unch.md");
+  const skillPath = path.join(codexHome, "skills", "unch", "SKILL.md");
+  const legacyPromptPath = path.join(codexHome, "prompts", "unch.md");
   const mcpCommand = options.mcpCommand || process.execPath;
   const mcpArgs = options.mcpArgs.length > 0 ? options.mcpArgs : [mcpLauncher];
 
@@ -33,8 +34,10 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       `  codex mcp add unch -- ${shellJoin([mcpCommand, ...mcpArgs])}`,
       `Would set startup_timeout_sec = ${defaultStartupTimeoutSec}`,
       `Would set tool_timeout_sec = ${defaultToolTimeoutSec}`,
-      "Would install slash prompt:",
-      `  ${promptPath}`,
+      "Would install Codex skill:",
+      `  ${skillPath}`,
+      "Would remove legacy slash prompt if present:",
+      `  ${legacyPromptPath}`,
       ""
     ].join("\n"));
     return;
@@ -53,15 +56,16 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     });
   }
 
-  if (!options.skipPrompt) {
-    installPrompt(promptPath);
+  if (!options.skipSkill) {
+    installSkill(skillPath);
+    removeLegacyPrompt(legacyPromptPath);
   }
 
   process.stdout.write([
     "Installed unch for Codex.",
     options.skipMcp ? "" : "MCP server: unch",
-    options.skipPrompt ? "" : "Slash prompt: /unch",
-    "Restart Codex to load the new MCP server and slash prompt.",
+    options.skipSkill ? "" : "Skill: unch",
+    "Restart Codex to load the new MCP server and skill.",
     ""
   ].filter(Boolean).join("\n"));
 }
@@ -76,7 +80,7 @@ function parseArgs(argv) {
     mcpArgs: [],
     mcpCommand: "",
     skipMcp: false,
-    skipPrompt: false
+    skipSkill: false
   };
 
   const args = [...argv];
@@ -109,8 +113,8 @@ function parseArgs(argv) {
       case "--skip-mcp":
         options.skipMcp = true;
         break;
-      case "--skip-prompt":
-        options.skipPrompt = true;
+      case "--skip-skill":
+        options.skipSkill = true;
         break;
       default:
         throw new Error(`unknown option: ${arg}`);
@@ -145,9 +149,15 @@ function registerMcp({ codexBin, codexHome, command, args }) {
   }
 }
 
-function installPrompt(promptPath) {
-  fs.mkdirSync(path.dirname(promptPath), { recursive: true });
-  fs.writeFileSync(promptPath, promptText(), { mode: 0o644 });
+function installSkill(skillPath) {
+  fs.mkdirSync(path.dirname(skillPath), { recursive: true });
+  fs.writeFileSync(skillPath, skillText(), { mode: 0o644 });
+}
+
+function removeLegacyPrompt(promptPath) {
+  if (fs.existsSync(promptPath)) {
+    fs.rmSync(promptPath, { force: true });
+  }
 }
 
 function configureMcpTimeouts(codexHome, { startupTimeoutSec, toolTimeoutSec }) {
@@ -189,9 +199,16 @@ function configureMcpTimeouts(codexHome, { startupTimeoutSec, toolTimeoutSec }) 
   fs.writeFileSync(configPath, `${nextLines.join("\n").replace(/\s*$/, "")}\n`);
 }
 
-function promptText() {
+function skillText() {
   return [
-    "Use unch semantic code search for this repository before broad file reads.",
+    "---",
+    "name: unch",
+    "description: Use when working in a code repository and the user asks to find, understand, debug, review, or modify code. Prefer unch semantic code search before broad file reads, especially for concepts, APIs, implementations, identifiers, error paths, or architecture questions.",
+    "---",
+    "",
+    "# unch",
+    "",
+    "Use unch semantic code search for the current repository before broad file reads.",
     "",
     "Workflow:",
     "1. Call the unch MCP tool `workspace_status`.",
@@ -208,7 +225,7 @@ function helpText() {
   return [
     "Usage: unch codex install [options]",
     "",
-    "Registers unch with Codex as an MCP server and installs the /unch slash prompt.",
+    "Registers unch with Codex as an MCP server and installs the unch skill.",
     "",
     "Options:",
     "  --codex-bin <path>     Codex executable to call (default: codex)",
@@ -217,7 +234,7 @@ function helpText() {
     "  --mcp-command <path>   MCP command to register (default: current node)",
     "  --mcp-arg <value>      MCP command argument; repeatable",
     "  --skip-mcp             Do not register the MCP server",
-    "  --skip-prompt          Do not install the /unch prompt",
+    "  --skip-skill           Do not install the unch skill",
     "  -h, --help             Show this help",
     ""
   ].join("\n");
@@ -243,5 +260,5 @@ module.exports = {
   configureMcpTimeouts,
   main,
   parseArgs,
-  promptText
+  skillText
 };

@@ -5,23 +5,29 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/uchebnick/unch/internal/indexing"
 	"github.com/uchebnick/unch/internal/search"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 var ErrNoActiveSnapshot = errors.New("no active snapshot for model")
 
 // Store wraps the SQLite connection and vector dimension used by the index database.
 type Store struct {
-	db  *sql.DB
-	dim int
+	db              *sql.DB
+	dim             int
+	embeddingsTable string
 }
 
 // Open initializes the SQLite schema used for snapshot-based symbol metadata and vector search.
 func Open(ctx context.Context, dbPath string, dim int) (*Store, error) {
+	if dim <= 0 {
+		return nil, fmt.Errorf("invalid embedding dimension: %d", dim)
+	}
 	registerSQLiteVec()
 
 	db, err := sql.Open("sqlite3", dbPath)
@@ -34,7 +40,11 @@ func Open(ctx context.Context, dbPath string, dim int) (*Store, error) {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	store := &Store{db: db, dim: dim}
+	store := &Store{
+		db:              db,
+		dim:             dim,
+		embeddingsTable: embeddingsTableName(dim),
+	}
 	if err := store.init(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("init repository: %w", err)
@@ -66,6 +76,13 @@ func (s *Store) init(ctx context.Context) error {
 			if err := s.resetSchema(ctx); err != nil {
 				return fmt.Errorf("reset legacy schema: %w", err)
 			}
+		}
+	case 1:
+		// v1 used one vec0 table for every model. sqlite-vec fixes vector
+		// dimensions per table, so mixed 768/1024-dim models need a clean v2
+		// layout with one embedding table per dimension.
+		if err := s.resetSchema(ctx); err != nil {
+			return fmt.Errorf("reset single-dimension schema: %w", err)
 		}
 	case SchemaVersion:
 	default:
@@ -138,16 +155,16 @@ func (s *Store) init(ctx context.Context) error {
 	}
 
 	vecStmt := fmt.Sprintf(`
-		CREATE VIRTUAL TABLE IF NOT EXISTS snapshot_embeddings USING vec0(
+		CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(
 			embedding_key TEXT PRIMARY KEY,
 			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,
 			embedding_hash TEXT NOT NULL,
 			embedding FLOAT[%d]
 		);
-	`, s.dim)
+	`, s.embeddingsTable, s.dim)
 	if _, err := s.db.ExecContext(ctx, vecStmt); err != nil {
-		return fmt.Errorf("create snapshot_embeddings vec0: %w", err)
+		return fmt.Errorf("create %s vec0: %w", s.embeddingsTable, err)
 	}
 
 	return nil
@@ -168,12 +185,20 @@ func (s *Store) hasSchemaObjects(ctx context.Context) (bool, error) {
 }
 
 func (s *Store) resetSchema(ctx context.Context) error {
+	embeddingTables, err := s.embeddingTables(ctx)
+	if err != nil {
+		return err
+	}
+
 	stmts := []string{
 		`DROP TABLE IF EXISTS current_model_snapshots;`,
 		`DROP TABLE IF EXISTS snapshot_symbols;`,
-		`DROP TABLE IF EXISTS snapshot_embeddings;`,
 		`DROP TABLE IF EXISTS index_snapshots;`,
+		`DROP TABLE IF EXISTS snapshot_embeddings;`,
 		`PRAGMA user_version = 0`,
+	}
+	for _, table := range embeddingTables {
+		stmts = append([]string{fmt.Sprintf(`DROP TABLE IF EXISTS %s;`, table)}, stmts...)
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
@@ -248,7 +273,7 @@ func (s *Store) EmbeddingExists(ctx context.Context, provider string, modelID st
 	var exists int
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT 1 FROM snapshot_embeddings WHERE embedding_key = ? LIMIT 1`,
+		fmt.Sprintf(`SELECT 1 FROM %s WHERE embedding_key = ? LIMIT 1`, s.embeddingsTable),
 		embeddingKey(provider, modelID, embeddingHash),
 	).Scan(&exists)
 	if err != nil {
@@ -273,7 +298,7 @@ func (s *Store) AddEmbedding(ctx context.Context, provider string, modelID strin
 
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO snapshot_embeddings(embedding_key, provider, model_id, embedding_hash, embedding) VALUES (?, ?, ?, ?, ?)`,
+		fmt.Sprintf(`INSERT INTO %s(embedding_key, provider, model_id, embedding_hash, embedding) VALUES (?, ?, ?, ?, ?)`, s.embeddingsTable),
 		embeddingKey(provider, modelID, embeddingHash),
 		provider,
 		modelID,
@@ -407,10 +432,10 @@ func (s *Store) CleanupInactiveSnapshots(ctx context.Context) error {
 func (s *Store) CleanupUnusedEmbeddings(ctx context.Context) error {
 	_, err := s.db.ExecContext(
 		ctx,
-		`DELETE FROM snapshot_embeddings
+		fmt.Sprintf(`DELETE FROM %s
 		WHERE embedding_key NOT IN (
 			SELECT DISTINCT provider || '|' || model_id || '|' || embedding_hash FROM snapshot_symbols
-		)`,
+		)`, s.embeddingsTable),
 	)
 	if err != nil {
 		return fmt.Errorf("delete unused embeddings: %w", err)
@@ -434,7 +459,7 @@ func (s *Store) SearchBySnapshot(ctx context.Context, provider string, modelID s
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT
+		fmt.Sprintf(`SELECT
 			s.path,
 			s.line,
 			s.symbol_id,
@@ -446,7 +471,7 @@ func (s *Store) SearchBySnapshot(ctx context.Context, provider string, modelID s
 			s.documentation,
 			s.body,
 			e.distance
-		FROM snapshot_embeddings e
+		FROM %s e
 		JOIN snapshot_symbols s
 		  ON s.provider = e.provider
 		 AND s.model_id = e.model_id
@@ -456,7 +481,7 @@ func (s *Store) SearchBySnapshot(ctx context.Context, provider string, modelID s
 		  AND s.provider = ?
 		  AND s.model_id = ?
 		  AND s.snapshot_id = ?
-		ORDER BY e.distance ASC`,
+		ORDER BY e.distance ASC`, s.embeddingsTable),
 		queryVec,
 		limit,
 		provider,
@@ -573,4 +598,49 @@ func (s *Store) ListCurrentSymbols(ctx context.Context, provider string, modelID
 
 func embeddingKey(provider string, modelID string, embeddingHash string) string {
 	return provider + "|" + modelID + "|" + embeddingHash
+}
+
+func embeddingsTableName(dim int) string {
+	return fmt.Sprintf("snapshot_embeddings_%d", dim)
+}
+
+func (s *Store) embeddingTables(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT name
+		FROM sqlite_master
+		WHERE type = 'table'
+		  AND name LIKE 'snapshot_embeddings_%'
+		ORDER BY name ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list embedding tables: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan embedding table: %w", err)
+		}
+		if isDimensionEmbeddingTable(name) {
+			tables = append(tables, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate embedding tables: %w", err)
+	}
+	return tables, nil
+}
+
+func isDimensionEmbeddingTable(name string) bool {
+	const prefix = "snapshot_embeddings_"
+	if !strings.HasPrefix(name, prefix) {
+		return false
+	}
+	_, err := strconv.Atoi(strings.TrimPrefix(name, prefix))
+	return err == nil
 }

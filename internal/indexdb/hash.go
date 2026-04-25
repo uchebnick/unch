@@ -31,9 +31,15 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 		return "", err
 	}
 
+	embeddingTables, err := listEmbeddingTables(ctx, db)
+	if err != nil {
+		return "", err
+	}
+	embeddingUnion := buildEmbeddingUnion(embeddingTables)
+
 	rows, err := db.QueryContext(
 		ctx,
-		`SELECT
+		fmt.Sprintf(`SELECT
 			cs.provider,
 			cs.model_id,
 			s.path,
@@ -53,11 +59,11 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 		  ON s.provider = cs.provider
 		 AND s.model_id = cs.model_id
 		 AND s.snapshot_id = cs.snapshot_id
-		JOIN snapshot_embeddings e
+		JOIN (%s) e
 		  ON e.provider = s.provider
 		 AND e.model_id = s.model_id
 		 AND e.embedding_hash = s.embedding_hash
-		ORDER BY cs.provider ASC, cs.model_id ASC, s.path ASC, s.line ASC, s.symbol_id ASC`,
+		ORDER BY cs.provider ASC, cs.model_id ASC, s.path ASC, s.line ASC, s.symbol_id ASC`, embeddingUnion),
 	)
 	if err != nil {
 		if isSchemaQueryError(err) {
@@ -129,12 +135,12 @@ func LogicalHash(ctx context.Context, dbPath string) (string, error) {
 }
 
 func ensureLogicalHashSchema(ctx context.Context, db *sql.DB) error {
-	requiredTables := []string{"snapshot_symbols", "snapshot_embeddings", "current_model_snapshots"}
+	requiredTables := []string{"snapshot_symbols", "current_model_snapshots"}
 	rows, err := db.QueryContext(
 		ctx,
 		`SELECT name
 		FROM sqlite_master
-		WHERE type = 'table' AND name IN ('snapshot_symbols', 'snapshot_embeddings', 'current_model_snapshots')
+		WHERE type = 'table' AND name IN ('snapshot_symbols', 'current_model_snapshots')
 		ORDER BY name ASC`,
 	)
 	if err != nil {
@@ -166,7 +172,58 @@ func ensureLogicalHashSchema(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("%w: missing tables %s", ErrIncompatibleSchema, strings.Join(missing, ", "))
 	}
 
+	embeddingTables, err := listEmbeddingTables(ctx, db)
+	if err != nil {
+		return err
+	}
+	if len(embeddingTables) == 0 {
+		return fmt.Errorf("%w: missing dimensioned embedding tables", ErrIncompatibleSchema)
+	}
+
 	return nil
+}
+
+func listEmbeddingTables(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(
+		ctx,
+		`SELECT name
+		FROM sqlite_master
+		WHERE type = 'table'
+		  AND name LIKE 'snapshot_embeddings_%'
+		ORDER BY name ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("inspect embedding tables: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan embedding table: %w", err)
+		}
+		if isDimensionEmbeddingTable(name) {
+			tables = append(tables, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate embedding tables: %w", err)
+	}
+	return tables, nil
+}
+
+func buildEmbeddingUnion(tables []string) string {
+	selects := make([]string, 0, len(tables))
+	for _, table := range tables {
+		selects = append(selects, fmt.Sprintf(
+			`SELECT provider, model_id, embedding_hash, embedding FROM %s`,
+			table,
+		))
+	}
+	return strings.Join(selects, "\nUNION ALL\n")
 }
 
 func isSchemaQueryError(err error) bool {

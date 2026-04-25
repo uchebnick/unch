@@ -340,6 +340,41 @@ func TestRunStartMCPFlagHelp(t *testing.T) {
 	}
 }
 
+func TestRunStartMCPExitsCleanlyOnEOF(t *testing.T) {
+	root := t.TempDir()
+
+	originalStdin := os.Stdin
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stdin pipe: %v", err)
+	}
+	if err := stdinWriter.Close(); err != nil {
+		t.Fatalf("close stdin writer: %v", err)
+	}
+	os.Stdin = stdinReader
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		_ = stdinReader.Close()
+	})
+
+	var runErr error
+	var stdout string
+	stderr := captureStderr(t, func() {
+		stdout = captureStdout(t, func() {
+			runErr = runStart(context.Background(), "unch", []string{"mcp", "--root", root}, root)
+		})
+	})
+	if runErr != nil {
+		t.Fatalf("runStart(mcp EOF) error: %v", runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+}
+
 func TestRunVersionFlag(t *testing.T) {
 	originalVersion := buildVersion
 	buildVersion = "v9.9.9-test"

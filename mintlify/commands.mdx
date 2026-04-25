@@ -3,14 +3,15 @@ title: Commands
 description: Overview of the main unch CLI commands.
 ---
 
-`unch` is centered around four main command families:
+`unch` is centered around these main command families:
 
 - `unch auth` to save provider credentials such as an OpenRouter API key
 - [`unch index`](/commands/index) to build or refresh a local index
 - [`unch search`](/commands/search) to query the current index
 - [`unch remote`](/commands/remote) to sync or download published remote state
+- [`unch start mcp`](/commands/mcp) to expose the index to MCP clients
 
-<CardGroup cols={4}>
+<CardGroup cols={3}>
   <Card title="Auth" icon="key">
     Save provider credentials without keeping tokens in your shell environment.
   </Card>
@@ -22,6 +23,9 @@ description: Overview of the main unch CLI commands.
   </Card>
   <Card title="Remote" icon="cloud-arrow-down" href="/commands/remote">
     Reuse published CI state or download an index for a specific commit.
+  </Card>
+  <Card title="MCP" icon="plug" href="/commands/mcp">
+    Let agents search the repository through stdio MCP tools.
   </Card>
 </CardGroup>
 
@@ -64,3 +68,11 @@ unch remote sync
 ```
 
 Use the command pages for the full flag reference and behavior notes.
+
+## Typical MCP flow
+
+```bash
+unch start mcp
+```
+
+Configure your MCP client with command `unch`, arguments `start mcp`, and working directory set to the repository root.

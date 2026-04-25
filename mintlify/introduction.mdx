@@ -5,7 +5,7 @@ description: Local-first semantic code search for functions, methods, types, and
 
 `unch` indexes the API surface of your repository and lets you search it from the terminal using natural language.
 
-It extracts top-level symbols and attached documentation, computes embeddings locally from a GGUF model, and returns ranked matches. Your code stays on your machine unless you explicitly publish a remote index.
+It extracts top-level symbols and attached documentation, computes embeddings with the selected provider, and returns ranked matches. Local `llama.cpp` embeddings are the default; OpenRouter is optional when you explicitly select `--provider openrouter`.
 
 ## What unch does
 
@@ -15,7 +15,7 @@ When you know what a piece of code does but cannot remember its name, file, or e
 
 - Local-first by default
 - Symbol-aware indexing instead of raw line search
-- Local GGUF embeddings
+- Local GGUF embeddings by default, optional OpenRouter embeddings
 - `auto`, `semantic`, and `lexical` search modes
 - Optional remote publishing through GitHub Actions
 
@@ -24,6 +24,7 @@ When you know what a piece of code does but cannot remember its name, file, or e
 `unch` uses Tree-sitter-based symbol extraction for:
 
 - Go
+- Rust
 - TypeScript
 - JavaScript
 - Python
@@ -34,7 +35,7 @@ For unsupported files or parser failures, `index` can still use the legacy prefi
 
 - You know the behavior you want, but not the exact symbol name
 - You want docs and API surface searchable together
-- You want semantic search over a local repo without sending code to a hosted service
+- You want semantic search over a local repo without sending code to a hosted service when using the default local provider
 
 ## Next steps
 

@@ -18,6 +18,7 @@ For supported languages, `unch` uses Tree-sitter to extract top-level symbols an
 That currently covers:
 
 - Go
+- Rust
 - TypeScript
 - JavaScript
 - Python
@@ -26,7 +27,12 @@ For unsupported files or parser failures, `index` can still use the legacy prefi
 
 ## 4. Embedding generation
 
-Each extracted symbol is flattened into an indexed document and embedded locally with a GGUF model through `yzma`.
+Each extracted symbol is flattened into an indexed document and embedded with the selected provider.
+
+Provider options today:
+
+- `llama.cpp` for local GGUF models through `yzma`
+- `openrouter` for remote embedding APIs
 
 Known model ids today:
 
@@ -35,9 +41,11 @@ Known model ids today:
 
 ## 5. Snapshot activation
 
-Embeddings and symbols are written into model-scoped snapshots in `.semsearch/index.db`.
+Embeddings and symbols are written into provider-scoped and model-scoped snapshots in `.semsearch/index.db`.
 
-When indexing succeeds, the new snapshot becomes active for that model. Other model snapshots are left untouched.
+When indexing succeeds, the new snapshot becomes active for that provider/model pair. Other provider/model snapshots are left untouched.
+
+Embedding vector tables are also separated by dimension, so models with different embedding sizes can coexist in one `.semsearch` directory.
 
 ## 6. Search
 

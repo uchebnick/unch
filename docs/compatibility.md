@@ -52,6 +52,7 @@ This document describes the current compatibility contract for `unch`.
 | Area | Status | Notes |
 | --- | --- | --- |
 | Go indexing | Supported | Tree-sitter-based symbol extraction |
+| Rust indexing | Supported | Tree-sitter-based symbol extraction |
 | TypeScript indexing | Supported | Tree-sitter-based symbol extraction |
 | JavaScript indexing | Supported | Tree-sitter-based symbol extraction |
 | Python indexing | Supported | Tree-sitter-based symbol extraction |

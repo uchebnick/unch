@@ -28,6 +28,14 @@
 
 ## Install
 
+npm is the recommended install path:
+
+```bash
+npm install -g @uchebnick/unch
+```
+
+It installs the `unch` CLI and downloads the matching native release binary for your platform.
+
 Homebrew on macOS:
 
 ```bash

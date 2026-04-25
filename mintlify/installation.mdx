@@ -1,23 +1,23 @@
 ---
 title: Installation
-description: Install unch with Homebrew, shell installer, PowerShell, go install, or build from source.
+description: Install unch with npm, Homebrew, shell installer, PowerShell, go install, or build from source.
 ---
 
 <CardGroup cols={3}>
   <Card title="Fastest path" icon="bolt">
-    Use Homebrew on macOS or the shell and PowerShell installers on release-supported targets.
+    Use npm for the simplest cross-platform install.
+  </Card>
+  <Card title="Native installers" icon="box-archive">
+    Homebrew, shell installer, and PowerShell installer are available when you prefer platform-native flows.
   </Card>
   <Card title="Most flexible" icon="sliders">
     Use `go install` or build from source when you want a local checkout or custom toolchain flow.
-  </Card>
-  <Card title="Release coverage" icon="box-archive">
-    Published archives cover macOS, Linux, and Windows on both `arm64` and `x86_64`.
   </Card>
 </CardGroup>
 
 ## Requirements
 
-On supported release targets, the installers use published archives by default, so Go is not required.
+The npm package and release installers use published archives by default, so Go is not required on supported targets.
 
 If you install with `go install`, build from source, or install on a target without a matching release archive, you need:
 
@@ -29,6 +29,21 @@ On Windows source builds, that means an MSYS2 or MinGW-style toolchain, or an eq
 ## Choose an install path
 
 <Tabs>
+  <Tab title="npm (recommended)">
+    ```bash
+    npm install -g @uchebnick/unch
+    ```
+
+    This installs the `unch` CLI and downloads the matching native release binary for your platform.
+
+    Verify it:
+
+    ```bash
+    unch --version
+    unch --help
+    ```
+  </Tab>
+
   <Tab title="Homebrew (macOS)">
     ```bash
     brew install uchebnick/tap/unch

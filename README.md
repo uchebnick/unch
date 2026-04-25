@@ -33,6 +33,14 @@ Homebrew on macOS:
 brew install uchebnick/tap/unch
 ```
 
+npm wrapper:
+
+```bash
+npm install -g @uchebnick/unch
+```
+
+The npm package also installs `unch-mcp`, a zero-argument launcher for MCP clients. Add it as an MCP stdio server with command `unch-mcp` and working directory set to the repository you want to search. MCP clients that expose prompts as slash commands can show the built-in `unch` prompt as `/unch`.
+
 Release installer on macOS and Linux:
 
 ```bash

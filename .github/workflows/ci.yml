@@ -284,6 +284,141 @@ jobs:
           export CC="${{ matrix.cc }}"
           go test $PORTABLE_TEST_PACKAGES
 
+  npm-wrapper:
+    name: npm-wrapper (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x86_64
+            asset_name: unch_Linux_x86_64.tar.gz
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+            asset_name: unch_Linux_arm64.tar.gz
+          - os: macos-15-intel
+            label: macos-x86_64
+            asset_name: unch_Darwin_x86_64.tar.gz
+          - os: macos-14
+            label: macos-arm64
+            asset_name: unch_Darwin_arm64.tar.gz
+          - os: windows-latest
+            label: windows-x86_64
+            asset_name: unch_Windows_x86_64.zip
+            msystem: UCRT64
+            msys_pkg: mingw-w64-ucrt-x86_64-gcc
+            cc: gcc
+            msys_release: true
+            msys_update: true
+            msys_cache: true
+          - os: windows-11-arm
+            label: windows-arm64
+            asset_name: unch_Windows_arm64.zip
+            msystem: CLANGARM64
+            msys_pkg: mingw-w64-clang-aarch64-clang
+            cc: clang
+            msys_release: true
+            msys_update: false
+            msys_cache: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Setup MSYS2 toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          path-type: inherit
+          release: ${{ matrix.msys_release }}
+          update: ${{ matrix.msys_update }}
+          cache: ${{ matrix.msys_cache }}
+          install: ${{ matrix.msys_pkg }}
+
+      - name: Test npm wrapper metadata
+        if: matrix.label == 'linux-x86_64'
+        working-directory: npm/unch
+        run: |
+          set -euo pipefail
+          npm test
+          npm pack --dry-run
+
+      - name: Build local Unix asset for npm wrapper
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset_dir="${RUNNER_TEMP}/npm-wrapper-assets"
+          build_dir="${RUNNER_TEMP}/npm-wrapper-build"
+          mkdir -p "${asset_dir}" "${build_dir}"
+          CGO_ENABLED=1 go build -trimpath \
+            -ldflags "-X github.com/uchebnick/unch/internal/cli.buildVersion=vci-test" \
+            -o "${build_dir}/unch" ./cmd/unch
+          tar -C "${build_dir}" -czf "${asset_dir}/${{ matrix.asset_name }}" unch
+
+      - name: Build local Windows asset for npm wrapper
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          build_dir="$(cygpath -u "$RUNNER_TEMP")/npm-wrapper-build"
+          mkdir -p "${build_dir}"
+          export CGO_ENABLED=1
+          export CC="${{ matrix.cc }}"
+          go build -trimpath \
+            -ldflags "-X github.com/uchebnick/unch/internal/cli.buildVersion=vci-test" \
+            -o "${build_dir}/unch.exe" ./cmd/unch
+
+      - name: Archive local Windows asset for npm wrapper
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $assetDir = Join-Path $env:RUNNER_TEMP "npm-wrapper-assets"
+          $buildDir = Join-Path $env:RUNNER_TEMP "npm-wrapper-build"
+          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+          Compress-Archive -Path (Join-Path $buildDir "unch.exe") -DestinationPath (Join-Path $assetDir "${{ matrix.asset_name }}") -Force
+
+      - name: Install npm wrapper from local Unix asset
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          UNCH_BINARY_URL: ${{ runner.temp }}/npm-wrapper-assets/${{ matrix.asset_name }}
+        run: |
+          set -euo pipefail
+          install_dir="$(mktemp -d)"
+          npm install --prefix "${install_dir}" "${GITHUB_WORKSPACE}/npm/unch"
+          "${install_dir}/node_modules/.bin/unch" --version | grep -F "vci-test"
+          "${install_dir}/node_modules/.bin/unch" --help >/dev/null
+          UNCH_MCP_COMMAND="${install_dir}/node_modules/.bin/unch-mcp" node "${GITHUB_WORKSPACE}/npm/unch/scripts/mcp-smoke.js"
+
+      - name: Install npm wrapper from local Windows asset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "npm-wrapper-install"
+          $env:UNCH_BINARY_URL = Join-Path (Join-Path $env:RUNNER_TEMP "npm-wrapper-assets") "${{ matrix.asset_name }}"
+          npm install --prefix $installDir "$env:GITHUB_WORKSPACE\npm\unch"
+          $version = & (Join-Path $installDir "node_modules\.bin\unch.cmd") --version
+          if ($version -notmatch "vci-test") {
+            throw "unexpected version output: $version"
+          }
+          & (Join-Path $installDir "node_modules\.bin\unch.cmd") --help | Out-Null
+          $env:UNCH_MCP_COMMAND = Join-Path $installDir "node_modules\.bin\unch-mcp.cmd"
+          node (Join-Path $env:GITHUB_WORKSPACE "npm\unch\scripts\mcp-smoke.js")
+
   install-smoke:
     name: install-smoke (${{ matrix.label }})
     runs-on: ${{ matrix.os }}

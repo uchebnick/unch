@@ -54,6 +54,37 @@ func TestValidateAndDetectYzmaLibDir(t *testing.T) {
 	}
 }
 
+func TestValidateYzmaLibDirRejectsLibraryMissingRequiredSymbol(t *testing.T) {
+	switch goruntime.GOOS {
+	case "darwin", "linux", "freebsd":
+	default:
+		t.Skipf("binary symbol inspection is not enabled for %s", goruntime.GOOS)
+	}
+
+	root := t.TempDir()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable() error: %v", err)
+	}
+
+	for _, name := range requiredYzmaLibFiles() {
+		target := filepath.Join(root, name)
+		if name == llamaLibraryFilename() {
+			if err := os.Symlink(exe, target); err != nil {
+				t.Fatalf("symlink fake llama lib: %v", err)
+			}
+			continue
+		}
+		if err := os.WriteFile(target, []byte("stub"), 0o644); err != nil {
+			t.Fatalf("write required lib %s: %v", name, err)
+		}
+	}
+
+	if got, ok := validateYzmaLibDir(root); ok {
+		t.Fatalf("validateYzmaLibDir() = (%q, true), want missing llama_params_fit rejected", got)
+	}
+}
+
 func TestResolveYzmaLibPath(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range requiredYzmaLibFiles() {

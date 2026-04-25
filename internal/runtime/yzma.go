@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"debug/elf"
+	"debug/macho"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -211,6 +213,9 @@ func validateYzmaLibDir(path string) (string, bool) {
 			return "", false
 		}
 	}
+	if !yzmaLibDirHasRequiredSymbols(resolved) {
+		return "", false
+	}
 
 	return resolved, true
 }
@@ -238,6 +243,74 @@ func requiredYzmaLibFiles() []string {
 		return []string{"libggml.so", "libggml-base.so", "libllama.so"}
 	default:
 		return []string{"libggml.dylib", "libggml-base.dylib", "libllama.dylib"}
+	}
+}
+
+func yzmaLibDirHasRequiredSymbols(dir string) bool {
+	libPath := filepath.Join(dir, llamaLibraryFilename())
+	hasSymbol, checked := dynamicLibraryExportsSymbol(libPath, "llama_params_fit")
+	if !checked {
+		// Unit tests and unusual platforms may use placeholder files. Keep the
+		// structural validation above as the fallback when the binary format is
+		// not inspectable.
+		return true
+	}
+	return hasSymbol
+}
+
+func llamaLibraryFilename() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "llama.dll"
+	case "linux", "freebsd":
+		return "libllama.so"
+	default:
+		return "libllama.dylib"
+	}
+}
+
+func dynamicLibraryExportsSymbol(path string, symbol string) (bool, bool) {
+	switch runtime.GOOS {
+	case "darwin":
+		file, err := macho.Open(path)
+		if err != nil {
+			return false, false
+		}
+		defer func() {
+			_ = file.Close()
+		}()
+		if file.Symtab == nil {
+			return false, false
+		}
+		for _, sym := range file.Symtab.Syms {
+			if sym.Name == symbol || sym.Name == "_"+symbol {
+				return true, true
+			}
+		}
+		return false, true
+	case "linux", "freebsd":
+		file, err := elf.Open(path)
+		if err != nil {
+			return false, false
+		}
+		defer func() {
+			_ = file.Close()
+		}()
+		symbols, err := file.DynamicSymbols()
+		if err != nil {
+			symbols, err = file.Symbols()
+		}
+		if err != nil {
+			return false, false
+		}
+		for _, sym := range symbols {
+			if sym.Name == symbol {
+				return true, true
+			}
+		}
+		return false, true
+	default:
+		return false, false
 	}
 }
 

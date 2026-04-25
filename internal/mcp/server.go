@@ -80,6 +80,9 @@ func (s *Server) buildResponse(ctx context.Context, req requestEnvelope) respons
 		result := initializeResult{
 			ProtocolVersion: negotiatedProtocol(params.ProtocolVersion),
 			Capabilities: map[string]any{
+				"prompts": map[string]any{
+					"listChanged": false,
+				},
 				"tools": map[string]any{
 					"listChanged": false,
 				},
@@ -101,6 +104,22 @@ func (s *Server) buildResponse(ctx context.Context, req requestEnvelope) respons
 			return s.errorEnvelope(req.ID, errCodeInvalidParams, "invalid tools/call params")
 		}
 		result, err := s.callTool(ctx, params)
+		if err != nil {
+			var rpcErr rpcError
+			if errors.As(err, &rpcErr) {
+				return s.errorEnvelope(req.ID, rpcErr.Code, rpcErr.Message)
+			}
+			return s.errorEnvelope(req.ID, errCodeInternal, err.Error())
+		}
+		return s.resultEnvelope(req.ID, result)
+	case "prompts/list":
+		return s.resultEnvelope(req.ID, listPromptsResult{Prompts: promptDefinitions()})
+	case "prompts/get":
+		var params promptGetParams
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return s.errorEnvelope(req.ID, errCodeInvalidParams, "invalid prompts/get params")
+		}
+		result, err := getPrompt(params)
 		if err != nil {
 			var rpcErr rpcError
 			if errors.As(err, &rpcErr) {

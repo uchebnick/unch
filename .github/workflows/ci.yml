@@ -209,6 +209,29 @@ jobs:
         with:
           version: v2.7.2
 
+  npm-wrapper:
+    name: npm-wrapper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Test npm package
+        working-directory: npm/unch
+        run: |
+          set -euo pipefail
+          npm test
+          npm version 1.2.3 --no-git-tag-version
+          test "$(node -p 'require("./package.json").version')" = "1.2.3"
+          npm pack --dry-run
+          npm publish --dry-run --access public
+
   test-matrix:
     name: test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}

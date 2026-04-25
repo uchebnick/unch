@@ -218,9 +218,52 @@ jobs:
             dist/*.zip
             dist/checksums.txt
 
+  publish-npm:
+    name: publish-npm
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish npm package
+        working-directory: npm/unch
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is not set" >&2
+            exit 1
+          fi
+
+          version="${GITHUB_REF_NAME#v}"
+          package_name="$(node -p 'require("./package.json").name')"
+
+          npm version "${version}" --no-git-tag-version
+          npm test
+          npm pack --dry-run
+
+          if npm view "${package_name}@${version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${version} is already published; skipping"
+            exit 0
+          fi
+
+          npm publish --access public
+
   notify-release:
     name: notify-release
-    needs: release
+    needs:
+      - release
+      - publish-npm
     runs-on: ubuntu-latest
 
     steps:

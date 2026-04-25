@@ -1,0 +1,41 @@
+{
+  "name": "@uchebnick/unch",
+  "version": "0.0.0",
+  "description": "npm installer wrapper for the unch semantic code search CLI",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/uchebnick/unch#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uchebnick/unch.git",
+    "directory": "npm/unch"
+  },
+  "bugs": {
+    "url": "https://github.com/uchebnick/unch/issues"
+  },
+  "bin": {
+    "unch": "bin/unch.js",
+    "unch-mcp": "bin/unch-mcp.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "test": "node scripts/platform.test.js",
+    "test:mcp": "node scripts/mcp-smoke.js"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "README.md"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

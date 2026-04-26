@@ -83,7 +83,15 @@ async function main() {
   assert.ok(messages[0].result.capabilities.tools);
 
   const toolNames = messages[1].result.tools.map((tool) => tool.name).sort();
-  assert.deepEqual(toolNames, ["index_repository", "search_code", "workspace_status"]);
+  assert.deepEqual(toolNames, [
+    "bind_remote_ci",
+    "create_ci_workflow",
+    "index_repository",
+    "remote_download_index",
+    "remote_sync_index",
+    "search_code",
+    "workspace_status"
+  ]);
 
   const status = messages[2].result.structuredContent;
   assert.equal(typeof status.root, "string");

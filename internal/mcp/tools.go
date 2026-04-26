@@ -41,6 +41,13 @@ func directoryProperty() map[string]any {
 	}
 }
 
+func githubTargetProperty() map[string]any {
+	return map[string]any{
+		"type":        "string",
+		"description": "GitHub repository URL such as https://github.com/owner/repo, or a full workflow URL such as https://github.com/owner/repo/actions/workflows/unch-index.yml.",
+	}
+}
+
 func toolDefinitions() []toolDefinition {
 	return []toolDefinition{
 		{
@@ -120,6 +127,59 @@ func toolDefinitions() []toolDefinition {
 				},
 			},
 		},
+		{
+			Name:        "create_ci_workflow",
+			Description: "Create the default GitHub Actions workflow that builds and publishes a remote unch index. Use this when the user asks to set up CI-backed indexing.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"directory": directoryProperty(),
+				},
+			},
+		},
+		{
+			Name:        "bind_remote_ci",
+			Description: "Bind this workspace manifest to a GitHub repository or unch remote-index workflow, enabling later remote_sync_index calls.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"directory": directoryProperty(),
+					"target":    githubTargetProperty(),
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
+			Name:        "remote_sync_index",
+			Description: "Refresh the local index from a previously bound remote GitHub Actions workflow. Call this before local reindexing when workspace_status shows a remote_ci binding.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"directory": directoryProperty(),
+					"allow_missing": map[string]any{
+						"type":        "boolean",
+						"default":     false,
+						"description": "When true, missing or incompatible remote indexes return a non-error result with a note so bootstrap flows can continue.",
+					},
+				},
+			},
+		},
+		{
+			Name:        "remote_download_index",
+			Description: "Download and activate a published unch index artifact for a specific commit without binding the workspace to ongoing remote sync.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"directory": directoryProperty(),
+					"target":    githubTargetProperty(),
+					"commit": map[string]any{
+						"type":        "string",
+						"description": "Commit SHA whose search index artifact should be downloaded.",
+					},
+				},
+				"required": []string{"target", "commit"},
+			},
+		},
 	}
 }
 
@@ -165,6 +225,67 @@ func (s *Server) callTool(ctx context.Context, params toolCallParams) (toolCallR
 		}
 		return toolCallResult{
 			Content:           []toolContent{{Type: "text", Text: renderIndexResult(result)}},
+			StructuredContent: result,
+		}, nil
+	case "create_ci_workflow":
+		var args CreateCIWorkflowParams
+		if err := decodeToolArgs(params.Arguments, &args); err != nil {
+			return toolCallResult{}, err
+		}
+		result, err := s.service.CreateCIWorkflow(ctx, args)
+		if err != nil {
+			return toolErrorResult(err), nil
+		}
+		return toolCallResult{
+			Content:           []toolContent{{Type: "text", Text: renderCreateCIWorkflowResult(result)}},
+			StructuredContent: result,
+		}, nil
+	case "bind_remote_ci":
+		var args BindRemoteCIParams
+		if err := decodeToolArgs(params.Arguments, &args); err != nil {
+			return toolCallResult{}, err
+		}
+		if strings.TrimSpace(args.Target) == "" {
+			return toolCallResult{}, invalidParamsError("bind_remote_ci requires a non-empty target")
+		}
+		result, err := s.service.BindRemoteCI(ctx, args)
+		if err != nil {
+			return toolErrorResult(err), nil
+		}
+		return toolCallResult{
+			Content:           []toolContent{{Type: "text", Text: renderBindRemoteCIResult(result)}},
+			StructuredContent: result,
+		}, nil
+	case "remote_sync_index":
+		var args RemoteSyncIndexParams
+		if err := decodeToolArgs(params.Arguments, &args); err != nil {
+			return toolCallResult{}, err
+		}
+		result, err := s.service.RemoteSyncIndex(ctx, args)
+		if err != nil {
+			return toolErrorResult(err), nil
+		}
+		return toolCallResult{
+			Content:           []toolContent{{Type: "text", Text: renderRemoteSyncIndexResult(result)}},
+			StructuredContent: result,
+		}, nil
+	case "remote_download_index":
+		var args RemoteDownloadIndexParams
+		if err := decodeToolArgs(params.Arguments, &args); err != nil {
+			return toolCallResult{}, err
+		}
+		if strings.TrimSpace(args.Target) == "" {
+			return toolCallResult{}, invalidParamsError("remote_download_index requires a non-empty target")
+		}
+		if strings.TrimSpace(args.Commit) == "" {
+			return toolCallResult{}, invalidParamsError("remote_download_index requires a non-empty commit")
+		}
+		result, err := s.service.RemoteDownloadIndex(ctx, args)
+		if err != nil {
+			return toolErrorResult(err), nil
+		}
+		return toolCallResult{
+			Content:           []toolContent{{Type: "text", Text: renderRemoteDownloadIndexResult(result)}},
 			StructuredContent: result,
 		}, nil
 	default:

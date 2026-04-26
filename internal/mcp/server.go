@@ -157,11 +157,13 @@ func serverInstructions() string {
 		"Recommended workflow for agents:",
 		"1. Call workspace_status first to learn the root, state directory, selected provider/model, and whether an index exists.",
 		"2. Before reading many files or using broad grep-style exploration, call search_code with a concise natural-language or identifier query.",
-		"3. If search_code says there is no active snapshot for the configured provider/model, call index_repository once, then retry search_code.",
-		"4. Do not call index_repository repeatedly unless files changed, the index is missing, or the user explicitly asks to rebuild.",
-		"5. Use mode=\"auto\" by default, mode=\"lexical\" for exact identifiers or strings, and mode=\"semantic\" for meaning-based discovery.",
-		"6. Set details=true when you need signatures, symbol kind/name, docs, or compact body snippets for deciding which files to open.",
-		"7. Treat results as ranked candidates, not a complete proof. Open the returned paths when you need exact implementation details.",
+		"3. If workspace_status shows a remote_ci binding, prefer remote_sync_index before rebuilding locally.",
+		"4. If search_code says there is no active snapshot for the configured provider/model, call index_repository once, then retry search_code.",
+		"5. Use create_ci_workflow and bind_remote_ci only when the user asks to set up CI-backed remote indexing.",
+		"6. Do not call index_repository repeatedly unless files changed, the index is missing, or the user explicitly asks to rebuild.",
+		"7. Use mode=\"auto\" by default, mode=\"lexical\" for exact identifiers or strings, and mode=\"semantic\" for meaning-based discovery.",
+		"8. Set details=true when you need signatures, symbol kind/name, docs, or compact body snippets for deciding which files to open.",
+		"9. Treat results as ranked candidates, not a complete proof. Open the returned paths when you need exact implementation details.",
 		"Provider/model snapshots are isolated. The MCP process searches only the provider/model selected when it was launched.",
 	}, "\n")
 }

@@ -60,11 +60,58 @@ func (fakeService) IndexRepository(context.Context, IndexRepositoryParams) (Inde
 	}, nil
 }
 
+func (fakeService) CreateCIWorkflow(context.Context, CreateCIWorkflowParams) (CreateCIWorkflowResult, error) {
+	return CreateCIWorkflowResult{
+		Root:         "/repo",
+		WorkflowPath: "/repo/.github/workflows/unch-index.yml",
+		Created:      true,
+	}, nil
+}
+
+func (fakeService) BindRemoteCI(context.Context, BindRemoteCIParams) (BindRemoteCIResult, error) {
+	return BindRemoteCIResult{
+		Root:         "/repo",
+		StateDir:     "/repo/.semsearch",
+		ManifestPath: "/repo/.semsearch/manifest.json",
+		CIURL:        "https://github.com/acme/widgets/actions/workflows/unch-index.yml",
+		Version:      1,
+	}, nil
+}
+
+func (fakeService) RemoteSyncIndex(context.Context, RemoteSyncIndexParams) (RemoteSyncIndexResult, error) {
+	return RemoteSyncIndexResult{
+		Root:       "/repo",
+		StateDir:   "/repo/.semsearch",
+		Checked:    true,
+		Downloaded: true,
+		Version:    2,
+		Source:     "remote",
+		CIURL:      "https://github.com/acme/widgets/actions/workflows/unch-index.yml",
+		Note:       "Downloaded remote index version 2",
+	}, nil
+}
+
+func (fakeService) RemoteDownloadIndex(context.Context, RemoteDownloadIndexParams) (RemoteDownloadIndexResult, error) {
+	return RemoteDownloadIndexResult{
+		Root:       "/repo",
+		StateDir:   "/repo/.semsearch",
+		Downloaded: true,
+		CommitSHA:  "abc123",
+		Version:    3,
+		Source:     "local",
+		Note:       "Downloaded search index artifact for abc123 from workflow run 42",
+	}, nil
+}
+
 type capturingService struct {
 	fakeService
-	workspaceParams WorkspaceStatusParams
-	searchParams    SearchCodeParams
-	indexParams     IndexRepositoryParams
+	workspaceParams      WorkspaceStatusParams
+	searchParams         SearchCodeParams
+	indexParams          IndexRepositoryParams
+	createCIParams       CreateCIWorkflowParams
+	bindCIParams         BindRemoteCIParams
+	remoteSyncParams     RemoteSyncIndexParams
+	remoteDownloadParams RemoteDownloadIndexParams
 }
 
 func (s *capturingService) WorkspaceStatus(ctx context.Context, params WorkspaceStatusParams) (WorkspaceStatusResult, error) {
@@ -80,6 +127,26 @@ func (s *capturingService) SearchCode(ctx context.Context, params SearchCodePara
 func (s *capturingService) IndexRepository(ctx context.Context, params IndexRepositoryParams) (IndexRepositoryResult, error) {
 	s.indexParams = params
 	return s.fakeService.IndexRepository(ctx, params)
+}
+
+func (s *capturingService) CreateCIWorkflow(ctx context.Context, params CreateCIWorkflowParams) (CreateCIWorkflowResult, error) {
+	s.createCIParams = params
+	return s.fakeService.CreateCIWorkflow(ctx, params)
+}
+
+func (s *capturingService) BindRemoteCI(ctx context.Context, params BindRemoteCIParams) (BindRemoteCIResult, error) {
+	s.bindCIParams = params
+	return s.fakeService.BindRemoteCI(ctx, params)
+}
+
+func (s *capturingService) RemoteSyncIndex(ctx context.Context, params RemoteSyncIndexParams) (RemoteSyncIndexResult, error) {
+	s.remoteSyncParams = params
+	return s.fakeService.RemoteSyncIndex(ctx, params)
+}
+
+func (s *capturingService) RemoteDownloadIndex(ctx context.Context, params RemoteDownloadIndexParams) (RemoteDownloadIndexResult, error) {
+	s.remoteDownloadParams = params
+	return s.fakeService.RemoteDownloadIndex(ctx, params)
 }
 
 func TestServerInitialize(t *testing.T) {
@@ -137,14 +204,14 @@ func TestServerToolsList(t *testing.T) {
 	})
 
 	tools := resp["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 3 {
-		t.Fatalf("tools/list returned %d tools, want 3", len(tools))
+	if len(tools) != 7 {
+		t.Fatalf("tools/list returned %d tools, want 7", len(tools))
 	}
 	names := map[string]bool{}
 	for _, tool := range tools {
 		names[tool.(map[string]any)["name"].(string)] = true
 	}
-	for _, name := range []string{"workspace_status", "search_code", "index_repository"} {
+	for _, name := range []string{"workspace_status", "search_code", "index_repository", "create_ci_workflow", "bind_remote_ci", "remote_sync_index", "remote_download_index"} {
 		if !names[name] {
 			t.Fatalf("tools/list missing %q in %#v", name, names)
 		}
@@ -166,6 +233,9 @@ func TestServerToolsList(t *testing.T) {
 	}
 	if !strings.Contains(descriptions["index_repository"], "Avoid repeated rebuilds") {
 		t.Fatalf("index_repository description = %q", descriptions["index_repository"])
+	}
+	if !strings.Contains(descriptions["remote_sync_index"], "bound remote") {
+		t.Fatalf("remote_sync_index description = %q", descriptions["remote_sync_index"])
 	}
 }
 
@@ -232,6 +302,78 @@ func TestServerIndexRepositoryToolCall(t *testing.T) {
 	}
 	if got := service.indexParams.Directory; got != "/repo" {
 		t.Fatalf("index_repository directory = %q, want /repo", got)
+	}
+}
+
+func TestServerCreateCIWorkflowToolCall(t *testing.T) {
+	t.Parallel()
+
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("create_ci_workflow", map[string]any{
+		"directory": "/repo",
+	}))
+	result := resp["result"].(map[string]any)
+	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "Created /repo/.github/workflows/unch-index.yml") {
+		t.Fatalf("create_ci_workflow text = %q", text)
+	}
+	if got := service.createCIParams.Directory; got != "/repo" {
+		t.Fatalf("create_ci_workflow directory = %q, want /repo", got)
+	}
+}
+
+func TestServerBindRemoteCIToolCall(t *testing.T) {
+	t.Parallel()
+
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("bind_remote_ci", map[string]any{
+		"directory": "/repo",
+		"target":    "https://github.com/acme/widgets",
+	}))
+	result := resp["result"].(map[string]any)
+	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "Bound /repo/.semsearch/manifest.json") {
+		t.Fatalf("bind_remote_ci text = %q", text)
+	}
+	if got := service.bindCIParams.Target; got != "https://github.com/acme/widgets" {
+		t.Fatalf("bind_remote_ci target = %q, want repo URL", got)
+	}
+}
+
+func TestServerRemoteSyncIndexToolCall(t *testing.T) {
+	t.Parallel()
+
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("remote_sync_index", map[string]any{
+		"directory":     "/repo",
+		"allow_missing": true,
+	}))
+	result := resp["result"].(map[string]any)
+	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "downloaded: true") {
+		t.Fatalf("remote_sync_index text = %q", text)
+	}
+	if !service.remoteSyncParams.AllowMissing {
+		t.Fatalf("remote_sync_index allow_missing = false, want true")
+	}
+}
+
+func TestServerRemoteDownloadIndexToolCall(t *testing.T) {
+	t.Parallel()
+
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("remote_download_index", map[string]any{
+		"directory": "/repo",
+		"target":    "https://github.com/acme/widgets",
+		"commit":    "abc123",
+	}))
+	result := resp["result"].(map[string]any)
+	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "commit: abc123") {
+		t.Fatalf("remote_download_index text = %q", text)
+	}
+	if got := service.remoteDownloadParams.Commit; got != "abc123" {
+		t.Fatalf("remote_download_index commit = %q, want abc123", got)
 	}
 }
 

@@ -56,15 +56,15 @@ async function main() {
   child.stdin.write(frame({
     jsonrpc: "2.0",
     id: 2,
-    method: "prompts/list"
+    method: "tools/list"
   }));
   child.stdin.write(frame({
     jsonrpc: "2.0",
     id: 3,
-    method: "prompts/get",
+    method: "tools/call",
     params: {
-      name: "unch",
-      arguments: { query: "router middleware" }
+      name: "workspace_status",
+      arguments: {}
     }
   }));
   child.stdin.end();
@@ -80,13 +80,18 @@ async function main() {
 
   const messages = readFrames(Buffer.concat(stdout));
   assert.equal(messages.length, 3);
-  assert.ok(messages[0].result.capabilities.prompts);
-  assert.equal(messages[1].result.prompts[0].name, "unch");
+  assert.ok(messages[0].result.capabilities.tools);
 
-  const promptText = messages[2].result.messages[0].content.text;
-  assert.match(promptText, /workspace_status/);
-  assert.match(promptText, /search_code/);
-  assert.match(promptText, /router middleware/);
+  const toolNames = messages[1].result.tools.map((tool) => tool.name).sort();
+  assert.deepEqual(toolNames, ["index_repository", "search_code", "workspace_status"]);
+
+  const status = messages[2].result.structuredContent;
+  assert.equal(typeof status.root, "string");
+  assert.equal(typeof status.state_dir, "string");
+  assert.equal(typeof status.index_present, "boolean");
+
+  const statusText = messages[2].result.content[0].text;
+  assert.match(statusText, /unch MCP workspace/);
 
   console.log("mcp smoke ok");
 }

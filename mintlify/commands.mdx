@@ -69,10 +69,11 @@ unch remote sync
 
 Use the command pages for the full flag reference and behavior notes.
 
-## Typical MCP flow
+## Typical MCP flow for Codex
 
 ```bash
-unch start mcp
+npm install -g @uchebnick/unch
+unch codex install
 ```
 
-Configure your MCP client with command `unch`, arguments `start mcp`, and working directory set to the repository root.
+Restart Codex after installation. Codex will start `unch start mcp` automatically through the registered MCP server and use the installed `unch` skill when code search helps.

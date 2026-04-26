@@ -22,18 +22,17 @@ Then restart Codex. The installer uses `codex mcp add` for the MCP server and wr
 
 The npm `postinstall` step does not modify your Codex config automatically. This is intentional: installing a package should not silently mutate `~/.codex/config.toml`.
 
-## MCP
+## MCP for Codex
 
-For MCP clients, use:
+Codex setup is explicit:
 
-- Name: `unch`
-- Command: `unch-mcp`
-- Arguments: leave empty
-- Working directory: the repository you want to search
+```bash
+unch codex install
+```
 
-`unch-mcp` is a small launcher for `unch start mcp`.
+Then restart Codex. Codex will start the MCP server through the registered `unch-mcp` command and use the installed `unch` skill when semantic code search helps.
 
-For Codex CLI specifically, `unch codex install` also creates a local reusable skill, so Codex knows when to call `workspace_status`, `search_code`, and `index_repository` in the right order.
+`unch-mcp` is a small launcher for `unch start mcp`; you normally do not need to run it by hand.
 
 Supported targets:
 

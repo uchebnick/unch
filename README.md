@@ -155,21 +155,24 @@ The first local `llama.cpp` run may download the default embedding model, fetch 
 
 Each provider and model pair keeps its own active index snapshot. Rebuilding `openrouter/openai/text-embedding-3-small` does not replace the active `llama.cpp/embeddinggemma` snapshot until the new run finishes successfully.
 
-## MCP
+## MCP for Codex
 
-`unch` can run as a stdio MCP server for agents and editors:
+The recommended MCP setup is through the npm wrapper:
 
 ```bash
-unch start mcp
+npm install -g @uchebnick/unch
+unch codex install
 ```
 
-Configure MCP clients with command `unch`, arguments `start mcp`, and working directory set to the repository you want to search.
+Then restart Codex. The setup command registers the `unch` MCP server and installs the `unch` skill in `~/.codex/skills/unch/SKILL.md`.
 
-The server exposes:
+After restart, ask Codex a codebase question as usual. The skill tells Codex to use these MCP tools before broad file reads:
 
 - `workspace_status` to inspect the repository root, state directory, active provider/model, and index status
 - `search_code` to search indexed code symbols before opening many files
 - `index_repository` to build or refresh the index when needed
+
+Codex starts the stdio server for you with `unch start mcp`; you normally do not need to run that command by hand.
 
 ## What It Supports Today
 

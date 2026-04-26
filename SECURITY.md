@@ -7,7 +7,7 @@ latest stable release line and the current `main` branch.
 
 | Version | Supported |
 | --- | --- |
-| `v0.3.x` | Yes |
+| `v0.4.x` | Yes |
 | older releases | No |
 | `main` | Best effort |
 
@@ -51,4 +51,3 @@ This policy covers:
 
 Third-party services, GitHub-hosted infrastructure, and vulnerabilities in
 upstream dependencies may need to be reported upstream as well.
-

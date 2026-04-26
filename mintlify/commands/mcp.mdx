@@ -1,36 +1,31 @@
 ---
 title: MCP
-description: Start the unch stdio MCP server for agents and editor integrations.
+description: Install and use unch MCP from Codex.
 ---
 
-## Usage
+## Codex setup
+
+Install the npm wrapper and register unch with Codex:
 
 ```bash
-unch start mcp [flags]
+npm install -g @uchebnick/unch
+unch codex install
 ```
 
-From the repository root, the common case is:
+Then restart Codex.
 
-```bash
-unch start mcp
-```
+`unch codex install` does two things:
 
-MCP uses stdio, so stdout is reserved for protocol messages. Run this command as a child process from an MCP client rather than as an interactive terminal command.
+- registers the `unch` MCP server with Codex
+- writes the `unch` skill to `~/.codex/skills/unch/SKILL.md`
 
-## Client configuration
+The npm `postinstall` step does not modify Codex automatically. Run `unch codex install` explicitly when you want the integration.
 
-Use:
+## How to use it
 
-- Name: `unch`
-- Command: `unch`
-- Arguments: `start`, `mcp`
-- Working directory: the repository you want to search
+After restarting Codex, work in a repository and ask codebase questions normally. The installed skill tells Codex to call unch before broad file reads when semantic code search can help.
 
-The server uses:
-
-- root: current working directory
-- state dir: `<root>/.semsearch`
-- provider/model: the same defaults as the CLI
+Codex starts the stdio MCP server for you. You normally do not need to run `unch start mcp` by hand.
 
 ## Tools
 
@@ -52,51 +47,19 @@ Builds or refreshes the index for the configured workspace.
 
 Agents should call this when no index exists, when search reports no active snapshot for the selected provider/model, or when the user explicitly asks to rebuild.
 
-## Flags
+## What Codex runs
 
-### `--root`
+The registered MCP server uses:
 
-Repository root served by the MCP process. Defaults to `.`.
+- Name: `unch`
+- Command: `unch-mcp`
+- Arguments: none
 
-### `--state-dir`
-
-Path to a custom `.semsearch` directory. Defaults to `<root>/.semsearch`.
-
-### `--model`
-
-Embedding model to use. Accepts `embeddinggemma`, `qwen3`, a `.gguf` path, or an OpenRouter model id when `--provider openrouter` is selected.
-
-### `--provider`
-
-Embedding provider. Accepted values:
-
-- `llama.cpp`
-- `openrouter`
-
-### `--lib`
-
-Path to a `yzma` library directory, or one of its shared library files.
-
-### `--ctx-size`
-
-llama context size. `0` uses the selected model default.
-
-### `--verbose`
-
-Enable verbose `yzma` logging.
-
-## Examples
-
-```bash
-unch start mcp
-unch start mcp --root ~/src/repo --state-dir ~/src/repo/.semsearch
-unch start mcp --root . --model qwen3
-unch start mcp --provider openrouter --model openai/text-embedding-3-small
-```
+`unch-mcp` is a small launcher for `unch start mcp`.
 
 ## Notes
 
-- Use one MCP process per repository workspace.
+- The installed skill passes the active repository directory into unch MCP tool calls.
 - The process reuses the same provider/model/runtime configuration across tool calls.
 - OpenRouter token lookup checks `OPENROUTER_API_KEY`, then `~/.config/unch/tokens.json`, then `.semsearch/tokens.json`.
 - The MCP server exposes tools only in this release; streamable HTTP is not supported yet.

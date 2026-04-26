@@ -22,6 +22,10 @@ type mcpBackendConfig struct {
 	RootAbs           string
 	TargetPaths       semsearch.Paths
 	IndexPath         string
+	StateDirInput     string
+	StateDirExplicit  bool
+	DBInput           string
+	DBExplicit        bool
 	RequestedProvider string
 	RequestedModel    string
 	RequestedLibPath  string
@@ -48,6 +52,9 @@ type mcpBackend struct {
 	runMu sync.Mutex
 	mu    sync.Mutex
 
+	childrenMu sync.Mutex
+	children   map[string]*mcpBackend
+
 	prepared *preparedMCPResources
 }
 
@@ -60,10 +67,24 @@ func (b *mcpBackend) Version() string {
 }
 
 func (b *mcpBackend) Close() error {
+	b.childrenMu.Lock()
+	children := make([]*mcpBackend, 0, len(b.children))
+	for _, child := range b.children {
+		children = append(children, child)
+	}
+	b.children = nil
+	b.childrenMu.Unlock()
+
+	var firstErr error
+	for _, child := range children {
+		if err := child.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	var firstErr error
 	if b.prepared != nil {
 		if b.prepared.repo != nil {
 			if err := b.prepared.repo.Close(); err != nil && firstErr == nil {
@@ -78,7 +99,15 @@ func (b *mcpBackend) Close() error {
 	return firstErr
 }
 
-func (b *mcpBackend) WorkspaceStatus(_ context.Context) (unchmcp.WorkspaceStatusResult, error) {
+func (b *mcpBackend) WorkspaceStatus(ctx context.Context, params unchmcp.WorkspaceStatusParams) (unchmcp.WorkspaceStatusResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.WorkspaceStatusResult{}, err
+	}
+	return backend.workspaceStatus(ctx)
+}
+
+func (b *mcpBackend) workspaceStatus(_ context.Context) (unchmcp.WorkspaceStatusResult, error) {
 	result := unchmcp.WorkspaceStatusResult{
 		Root:              b.cfg.RootAbs,
 		StateDir:          b.cfg.TargetPaths.LocalDir,
@@ -137,6 +166,15 @@ func (b *mcpBackend) WorkspaceStatus(_ context.Context) (unchmcp.WorkspaceStatus
 }
 
 func (b *mcpBackend) SearchCode(ctx context.Context, params unchmcp.SearchCodeParams) (unchmcp.SearchCodeResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.SearchCodeResult{}, err
+	}
+	params.Directory = ""
+	return backend.searchCode(ctx, params)
+}
+
+func (b *mcpBackend) searchCode(ctx context.Context, params unchmcp.SearchCodeParams) (unchmcp.SearchCodeResult, error) {
 	b.runMu.Lock()
 	defer b.runMu.Unlock()
 
@@ -215,6 +253,15 @@ func (b *mcpBackend) SearchCode(ctx context.Context, params unchmcp.SearchCodePa
 }
 
 func (b *mcpBackend) IndexRepository(ctx context.Context, params unchmcp.IndexRepositoryParams) (unchmcp.IndexRepositoryResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.IndexRepositoryResult{}, err
+	}
+	params.Directory = ""
+	return backend.indexRepository(ctx, params)
+}
+
+func (b *mcpBackend) indexRepository(ctx context.Context, params unchmcp.IndexRepositoryParams) (unchmcp.IndexRepositoryResult, error) {
 	b.runMu.Lock()
 	defer b.runMu.Unlock()
 
@@ -313,6 +360,77 @@ func (b *mcpBackend) IndexRepository(ctx context.Context, params unchmcp.IndexRe
 	}, nil
 }
 
+func (b *mcpBackend) backendForDirectory(directory string) (*mcpBackend, error) {
+	rootAbs, ok, err := normalizeMCPDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || rootAbs == b.cfg.RootAbs {
+		return b, nil
+	}
+
+	b.childrenMu.Lock()
+	defer b.childrenMu.Unlock()
+
+	if b.children == nil {
+		b.children = map[string]*mcpBackend{}
+	}
+	if child, ok := b.children[rootAbs]; ok {
+		return child, nil
+	}
+
+	targetPaths, indexPath, _, err := previewStateTarget(
+		rootAbs,
+		b.cfg.StateDirInput,
+		b.cfg.StateDirExplicit,
+		b.cfg.DBInput,
+		b.cfg.DBExplicit,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	child := newMCPBackend(mcpBackendConfig{
+		RootAbs:           rootAbs,
+		TargetPaths:       targetPaths,
+		IndexPath:         indexPath,
+		StateDirInput:     b.cfg.StateDirInput,
+		StateDirExplicit:  b.cfg.StateDirExplicit,
+		DBInput:           b.cfg.DBInput,
+		DBExplicit:        b.cfg.DBExplicit,
+		RequestedProvider: b.cfg.RequestedProvider,
+		RequestedModel:    b.cfg.RequestedModel,
+		RequestedLibPath:  b.cfg.RequestedLibPath,
+		ContextSize:       b.cfg.ContextSize,
+		Verbose:           b.cfg.Verbose,
+	})
+	child.scanner = b.scanner
+	child.models = b.models
+	child.runtimes = b.runtimes
+	b.children[rootAbs] = child
+	return child, nil
+}
+
+func normalizeMCPDirectory(directory string) (string, bool, error) {
+	clean := strings.TrimSpace(directory)
+	if clean == "" {
+		return "", false, nil
+	}
+
+	rootAbs, err := filepath.Abs(clean)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve directory: %w", err)
+	}
+	rootAbs = filepath.Clean(rootAbs)
+
+	if info, err := os.Stat(rootAbs); err != nil {
+		return "", false, fmt.Errorf("stat directory: %w", err)
+	} else if !info.IsDir() {
+		return "", false, fmt.Errorf("directory is not a directory: %s", rootAbs)
+	}
+	return rootAbs, true, nil
+}
+
 func (b *mcpBackend) ensurePrepared(ctx context.Context) (*preparedMCPResources, error) {
 	b.mu.Lock()
 	if b.prepared != nil {
@@ -321,6 +439,10 @@ func (b *mcpBackend) ensurePrepared(ctx context.Context) (*preparedMCPResources,
 		return prepared, nil
 	}
 	b.mu.Unlock()
+
+	if _, err := semsearch.PathsForLocalDir(b.cfg.TargetPaths.LocalDir); err != nil {
+		return nil, fmt.Errorf("prepare state directory: %w", err)
+	}
 
 	preparedEmbedder, err := prepareEmbedder(
 		ctx,

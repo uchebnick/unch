@@ -14,7 +14,7 @@ type fakeService struct{}
 
 func (fakeService) Version() string { return "vtest" }
 
-func (fakeService) WorkspaceStatus(context.Context) (WorkspaceStatusResult, error) {
+func (fakeService) WorkspaceStatus(context.Context, WorkspaceStatusParams) (WorkspaceStatusResult, error) {
 	return WorkspaceStatusResult{
 		Root:              "/repo",
 		StateDir:          "/repo/.semsearch",
@@ -58,6 +58,28 @@ func (fakeService) IndexRepository(context.Context, IndexRepositoryParams) (Inde
 		IndexedFiles:   7,
 		IndexedSymbols: 42,
 	}, nil
+}
+
+type capturingService struct {
+	fakeService
+	workspaceParams WorkspaceStatusParams
+	searchParams    SearchCodeParams
+	indexParams     IndexRepositoryParams
+}
+
+func (s *capturingService) WorkspaceStatus(ctx context.Context, params WorkspaceStatusParams) (WorkspaceStatusResult, error) {
+	s.workspaceParams = params
+	return s.fakeService.WorkspaceStatus(ctx, params)
+}
+
+func (s *capturingService) SearchCode(ctx context.Context, params SearchCodeParams) (SearchCodeResult, error) {
+	s.searchParams = params
+	return s.fakeService.SearchCode(ctx, params)
+}
+
+func (s *capturingService) IndexRepository(ctx context.Context, params IndexRepositoryParams) (IndexRepositoryResult, error) {
+	s.indexParams = params
+	return s.fakeService.IndexRepository(ctx, params)
 }
 
 func TestServerInitialize(t *testing.T) {
@@ -131,6 +153,10 @@ func TestServerToolsList(t *testing.T) {
 	for _, tool := range tools {
 		item := tool.(map[string]any)
 		descriptions[item["name"].(string)] = item["description"].(string)
+		properties := item["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		if _, ok := properties["directory"]; !ok {
+			t.Fatalf("%s schema missing directory property", item["name"])
+		}
 	}
 	if !strings.Contains(descriptions["workspace_status"], "Call this first") {
 		t.Fatalf("workspace_status description = %q", descriptions["workspace_status"])
@@ -146,7 +172,10 @@ func TestServerToolsList(t *testing.T) {
 func TestServerWorkspaceStatusToolCall(t *testing.T) {
 	t.Parallel()
 
-	resp := serveOne(t, toolCall("workspace_status", map[string]any{}))
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("workspace_status", map[string]any{
+		"directory": "/repo",
+	}))
 	result := resp["result"].(map[string]any)
 	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
 	if !strings.Contains(text, "root: /repo") {
@@ -156,14 +185,19 @@ func TestServerWorkspaceStatusToolCall(t *testing.T) {
 	if got := structured["provider"]; got != "llama.cpp" {
 		t.Fatalf("provider = %v, want llama.cpp", got)
 	}
+	if got := service.workspaceParams.Directory; got != "/repo" {
+		t.Fatalf("workspace_status directory = %q, want /repo", got)
+	}
 }
 
 func TestServerSearchCodeToolCall(t *testing.T) {
 	t.Parallel()
 
-	resp := serveOne(t, toolCall("search_code", map[string]any{
-		"query":   "run cli",
-		"details": true,
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("search_code", map[string]any{
+		"directory": "/repo",
+		"query":     "run cli",
+		"details":   true,
 	}))
 	result := resp["result"].(map[string]any)
 	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
@@ -174,13 +208,18 @@ func TestServerSearchCodeToolCall(t *testing.T) {
 	if got := structured["query"]; got != "run cli" {
 		t.Fatalf("structuredContent.query = %v", got)
 	}
+	if got := service.searchParams.Directory; got != "/repo" {
+		t.Fatalf("search_code directory = %q, want /repo", got)
+	}
 }
 
 func TestServerIndexRepositoryToolCall(t *testing.T) {
 	t.Parallel()
 
-	resp := serveOne(t, toolCall("index_repository", map[string]any{
-		"excludes": []string{"node_modules", "dist"},
+	service := &capturingService{}
+	resp := serveOneWithService(t, service, toolCall("index_repository", map[string]any{
+		"directory": "/repo",
+		"excludes":  []string{"node_modules", "dist"},
 	}))
 	result := resp["result"].(map[string]any)
 	text := result["content"].([]any)[0].(map[string]any)["text"].(string)
@@ -190,6 +229,9 @@ func TestServerIndexRepositoryToolCall(t *testing.T) {
 	structured := result["structuredContent"].(map[string]any)
 	if got := int(structured["indexed_symbols"].(float64)); got != 42 {
 		t.Fatalf("indexed_symbols = %d, want 42", got)
+	}
+	if got := service.indexParams.Directory; got != "/repo" {
+		t.Fatalf("index_repository directory = %q, want /repo", got)
 	}
 }
 
@@ -266,17 +308,29 @@ func TestServerNotificationIgnored(t *testing.T) {
 func serveOne(t *testing.T, request map[string]any) map[string]any {
 	t.Helper()
 
+	return serveOneWithService(t, fakeService{}, request)
+}
+
+func serveOneWithService(t *testing.T, service Service, request map[string]any) map[string]any {
+	t.Helper()
+
 	input := bytes.NewBuffer(nil)
 	writeTestFrame(t, input, request)
-	output := serveRaw(t, input)
+	output := serveRawWithService(t, service, input)
 	return readTestFrame(t, bufio.NewReader(output))
 }
 
 func serveRaw(t *testing.T, input *bytes.Buffer) *bytes.Buffer {
 	t.Helper()
 
+	return serveRawWithService(t, fakeService{}, input)
+}
+
+func serveRawWithService(t *testing.T, service Service, input *bytes.Buffer) *bytes.Buffer {
+	t.Helper()
+
 	output := bytes.NewBuffer(nil)
-	server := NewServer(fakeService{})
+	server := NewServer(service)
 	if err := server.Serve(context.Background(), input, output); err != nil {
 		t.Fatalf("Serve() error: %v", err)
 	}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -358,6 +359,158 @@ func (b *mcpBackend) indexRepository(ctx context.Context, params unchmcp.IndexRe
 		IndexedSymbols:        result.IndexedSymbols,
 		DetachedRemoteBinding: detachedRemoteBinding,
 	}, nil
+}
+
+func (b *mcpBackend) CreateCIWorkflow(ctx context.Context, params unchmcp.CreateCIWorkflowParams) (unchmcp.CreateCIWorkflowResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.CreateCIWorkflowResult{}, err
+	}
+	return backend.createCIWorkflow(ctx)
+}
+
+func (b *mcpBackend) createCIWorkflow(_ context.Context) (unchmcp.CreateCIWorkflowResult, error) {
+	b.runMu.Lock()
+	defer b.runMu.Unlock()
+
+	workflowPath, created, err := semsearch.EnsureCIWorkflow(b.cfg.RootAbs)
+	if err != nil {
+		return unchmcp.CreateCIWorkflowResult{}, err
+	}
+	return unchmcp.CreateCIWorkflowResult{
+		Root:         b.cfg.RootAbs,
+		WorkflowPath: workflowPath,
+		Created:      created,
+	}, nil
+}
+
+func (b *mcpBackend) BindRemoteCI(ctx context.Context, params unchmcp.BindRemoteCIParams) (unchmcp.BindRemoteCIResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.BindRemoteCIResult{}, err
+	}
+	params.Directory = ""
+	return backend.bindRemoteCI(ctx, params)
+}
+
+func (b *mcpBackend) bindRemoteCI(_ context.Context, params unchmcp.BindRemoteCIParams) (unchmcp.BindRemoteCIResult, error) {
+	b.runMu.Lock()
+	defer b.runMu.Unlock()
+
+	if err := b.ensureStateBaseline(); err != nil {
+		return unchmcp.BindRemoteCIResult{}, err
+	}
+	manifest, err := semsearch.BindRemoteManifest(b.cfg.TargetPaths.LocalDir, params.Target)
+	if err != nil {
+		return unchmcp.BindRemoteCIResult{}, err
+	}
+
+	ciURL := ""
+	if manifest.Remote != nil {
+		ciURL = manifest.Remote.CIURL
+	}
+	return unchmcp.BindRemoteCIResult{
+		Root:         b.cfg.RootAbs,
+		StateDir:     b.cfg.TargetPaths.LocalDir,
+		ManifestPath: b.cfg.TargetPaths.ManifestPath,
+		CIURL:        ciURL,
+		Version:      manifest.Version,
+	}, nil
+}
+
+func (b *mcpBackend) RemoteSyncIndex(ctx context.Context, params unchmcp.RemoteSyncIndexParams) (unchmcp.RemoteSyncIndexResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.RemoteSyncIndexResult{}, err
+	}
+	params.Directory = ""
+	return backend.remoteSyncIndex(ctx, params)
+}
+
+func (b *mcpBackend) remoteSyncIndex(ctx context.Context, params unchmcp.RemoteSyncIndexParams) (unchmcp.RemoteSyncIndexResult, error) {
+	b.runMu.Lock()
+	defer b.runMu.Unlock()
+
+	if _, err := semsearch.PathsForLocalDir(b.cfg.TargetPaths.LocalDir); err != nil {
+		return unchmcp.RemoteSyncIndexResult{}, fmt.Errorf("prepare state directory: %w", err)
+	}
+	result, err := semsearch.SyncRemoteIndex(ctx, b.cfg.TargetPaths.LocalDir)
+	if err != nil {
+		if params.AllowMissing && (errors.Is(err, semsearch.ErrRemoteIndexNotPublished) || errors.Is(err, semsearch.ErrRemoteIndexIncompatible)) {
+			return unchmcp.RemoteSyncIndexResult{
+				Root:     b.cfg.RootAbs,
+				StateDir: b.cfg.TargetPaths.LocalDir,
+				Note:     err.Error(),
+			}, nil
+		}
+		return unchmcp.RemoteSyncIndexResult{}, err
+	}
+
+	return unchmcp.RemoteSyncIndexResult{
+		Root:       b.cfg.RootAbs,
+		StateDir:   b.cfg.TargetPaths.LocalDir,
+		Checked:    result.Checked,
+		Downloaded: result.Downloaded,
+		Version:    result.Manifest.Version,
+		Source:     result.Manifest.Source,
+		CIURL:      remoteCIURL(result.Manifest),
+		Note:       result.Note,
+	}, nil
+}
+
+func (b *mcpBackend) RemoteDownloadIndex(ctx context.Context, params unchmcp.RemoteDownloadIndexParams) (unchmcp.RemoteDownloadIndexResult, error) {
+	backend, err := b.backendForDirectory(params.Directory)
+	if err != nil {
+		return unchmcp.RemoteDownloadIndexResult{}, err
+	}
+	params.Directory = ""
+	return backend.remoteDownloadIndex(ctx, params)
+}
+
+func (b *mcpBackend) remoteDownloadIndex(ctx context.Context, params unchmcp.RemoteDownloadIndexParams) (unchmcp.RemoteDownloadIndexResult, error) {
+	b.runMu.Lock()
+	defer b.runMu.Unlock()
+
+	if err := b.ensureStateBaseline(); err != nil {
+		return unchmcp.RemoteDownloadIndexResult{}, err
+	}
+	result, err := semsearch.DownloadIndexArtifactForCommit(ctx, b.cfg.TargetPaths.LocalDir, params.Target, params.Commit)
+	if err != nil {
+		return unchmcp.RemoteDownloadIndexResult{}, err
+	}
+
+	return unchmcp.RemoteDownloadIndexResult{
+		Root:       b.cfg.RootAbs,
+		StateDir:   b.cfg.TargetPaths.LocalDir,
+		Downloaded: result.Downloaded,
+		CommitSHA:  result.CommitSHA,
+		Version:    result.Manifest.Version,
+		Source:     result.Manifest.Source,
+		Note:       result.Note,
+	}, nil
+}
+
+func (b *mcpBackend) ensureStateBaseline() error {
+	if _, err := semsearch.PathsForLocalDir(b.cfg.TargetPaths.LocalDir); err != nil {
+		return fmt.Errorf("prepare state directory: %w", err)
+	}
+	if _, err := semsearch.EnsureGitignore(b.cfg.TargetPaths.LocalDir); err != nil {
+		return err
+	}
+	if _, err := semsearch.EnsureFileWeights(b.cfg.TargetPaths.LocalDir); err != nil {
+		return err
+	}
+	if _, _, err := semsearch.EnsureManifest(b.cfg.TargetPaths.LocalDir); err != nil {
+		return err
+	}
+	return nil
+}
+
+func remoteCIURL(manifest semsearch.Manifest) string {
+	if manifest.Remote == nil {
+		return ""
+	}
+	return manifest.Remote.CIURL
 }
 
 func (b *mcpBackend) backendForDirectory(directory string) (*mcpBackend, error) {

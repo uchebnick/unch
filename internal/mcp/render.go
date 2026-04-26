@@ -95,6 +95,64 @@ func renderIndexResult(result IndexRepositoryResult) string {
 	return strings.Join(lines, "\n")
 }
 
+func renderCreateCIWorkflowResult(result CreateCIWorkflowResult) string {
+	status := "Already exists"
+	if result.Created {
+		status = "Created"
+	}
+	return strings.Join([]string{
+		fmt.Sprintf("%s %s", status, result.WorkflowPath),
+		fmt.Sprintf("root: %s", result.Root),
+	}, "\n")
+}
+
+func renderBindRemoteCIResult(result BindRemoteCIResult) string {
+	return strings.Join([]string{
+		fmt.Sprintf("Bound %s to %s.", result.ManifestPath, result.CIURL),
+		fmt.Sprintf("manifest version: %d", result.Version),
+		fmt.Sprintf("state_dir: %s", result.StateDir),
+	}, "\n")
+}
+
+func renderRemoteSyncIndexResult(result RemoteSyncIndexResult) string {
+	lines := []string{
+		fmt.Sprintf("remote sync checked: %t", result.Checked),
+		fmt.Sprintf("downloaded: %t", result.Downloaded),
+		fmt.Sprintf("state_dir: %s", result.StateDir),
+	}
+	if result.Version > 0 {
+		lines = append(lines, fmt.Sprintf("manifest version: %d", result.Version))
+	}
+	if result.Source != "" {
+		lines = append(lines, fmt.Sprintf("source: %s", result.Source))
+	}
+	if result.CIURL != "" {
+		lines = append(lines, fmt.Sprintf("remote_ci: %s", result.CIURL))
+	}
+	if result.Note != "" {
+		lines = append(lines, "note: "+result.Note)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderRemoteDownloadIndexResult(result RemoteDownloadIndexResult) string {
+	lines := []string{
+		fmt.Sprintf("downloaded: %t", result.Downloaded),
+		fmt.Sprintf("commit: %s", result.CommitSHA),
+		fmt.Sprintf("state_dir: %s", result.StateDir),
+	}
+	if result.Version > 0 {
+		lines = append(lines, fmt.Sprintf("manifest version: %d", result.Version))
+	}
+	if result.Source != "" {
+		lines = append(lines, fmt.Sprintf("source: %s", result.Source))
+	}
+	if result.Note != "" {
+		lines = append(lines, "note: "+result.Note)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func compactField(text string, maxRunes int) string {
 	text = strings.TrimSpace(text)
 	if text == "" {

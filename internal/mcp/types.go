@@ -7,6 +7,10 @@ type Service interface {
 	WorkspaceStatus(context.Context, WorkspaceStatusParams) (WorkspaceStatusResult, error)
 	SearchCode(context.Context, SearchCodeParams) (SearchCodeResult, error)
 	IndexRepository(context.Context, IndexRepositoryParams) (IndexRepositoryResult, error)
+	CreateCIWorkflow(context.Context, CreateCIWorkflowParams) (CreateCIWorkflowResult, error)
+	BindRemoteCI(context.Context, BindRemoteCIParams) (BindRemoteCIResult, error)
+	RemoteSyncIndex(context.Context, RemoteSyncIndexParams) (RemoteSyncIndexResult, error)
+	RemoteDownloadIndex(context.Context, RemoteDownloadIndexParams) (RemoteDownloadIndexResult, error)
 }
 
 type WorkspaceStatusParams struct {
@@ -61,6 +65,61 @@ type IndexRepositoryResult struct {
 	IndexedFiles          int    `json:"indexed_files"`
 	IndexedSymbols        int    `json:"indexed_symbols"`
 	DetachedRemoteBinding bool   `json:"detached_remote_binding,omitempty"`
+}
+
+type CreateCIWorkflowParams struct {
+	Directory string `json:"directory,omitempty"`
+}
+
+type CreateCIWorkflowResult struct {
+	Root         string `json:"root"`
+	WorkflowPath string `json:"workflow_path"`
+	Created      bool   `json:"created"`
+}
+
+type BindRemoteCIParams struct {
+	Directory string `json:"directory,omitempty"`
+	Target    string `json:"target"`
+}
+
+type BindRemoteCIResult struct {
+	Root         string `json:"root"`
+	StateDir     string `json:"state_dir"`
+	ManifestPath string `json:"manifest_path"`
+	CIURL        string `json:"ci_url"`
+	Version      int64  `json:"version"`
+}
+
+type RemoteSyncIndexParams struct {
+	Directory    string `json:"directory,omitempty"`
+	AllowMissing bool   `json:"allow_missing,omitempty"`
+}
+
+type RemoteSyncIndexResult struct {
+	Root       string `json:"root"`
+	StateDir   string `json:"state_dir"`
+	Checked    bool   `json:"checked"`
+	Downloaded bool   `json:"downloaded"`
+	Version    int64  `json:"version,omitempty"`
+	Source     string `json:"source,omitempty"`
+	CIURL      string `json:"ci_url,omitempty"`
+	Note       string `json:"note,omitempty"`
+}
+
+type RemoteDownloadIndexParams struct {
+	Directory string `json:"directory,omitempty"`
+	Target    string `json:"target"`
+	Commit    string `json:"commit"`
+}
+
+type RemoteDownloadIndexResult struct {
+	Root       string `json:"root"`
+	StateDir   string `json:"state_dir"`
+	Downloaded bool   `json:"downloaded"`
+	CommitSHA  string `json:"commit_sha"`
+	Version    int64  `json:"version,omitempty"`
+	Source     string `json:"source,omitempty"`
+	Note       string `json:"note,omitempty"`
 }
 
 type WorkspaceStatusResult struct {

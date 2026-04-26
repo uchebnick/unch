@@ -49,6 +49,28 @@ Builds or refreshes the index for the configured workspace.
 
 Agents should call this when no index exists, when search reports no active snapshot for the selected provider/model, or when the user explicitly asks to rebuild.
 
+### `create_ci_workflow`
+
+Creates `.github/workflows/unch-index.yml` in the target repository.
+
+Agents should call this only when the user asks to set up GitHub Actions-backed remote indexing.
+
+### `bind_remote_ci`
+
+Binds the local `.semsearch/manifest.json` to a GitHub repository or workflow URL.
+
+Agents should call this after the workflow exists, or when the user provides a GitHub repository/workflow URL to bind for remote sync.
+
+### `remote_sync_index`
+
+Refreshes the local index from the bound remote workflow.
+
+Agents should call this before local reindexing when `workspace_status` reports a `remote_ci` binding.
+
+### `remote_download_index`
+
+Downloads and activates a published index artifact for a specific commit without binding the workspace to ongoing remote sync.
+
 ## What Codex runs
 
 The registered MCP server uses:

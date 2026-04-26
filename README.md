@@ -172,6 +172,8 @@ After restart, ask Codex a codebase question as usual. The skill tells Codex to 
 - `search_code` to search indexed code symbols before opening many files
 - `index_repository` to build or refresh the index when needed
 
+All MCP tools accept an optional `directory` argument. The installed skill passes the active repository path so `unch` searches the workspace Codex is currently editing, even if the MCP server was launched from somewhere else.
+
 Codex starts the stdio server for you with `unch start mcp`; you normally do not need to run that command by hand.
 
 ## What It Supports Today

@@ -29,6 +29,8 @@ Codex starts the stdio MCP server for you. You normally do not need to run `unch
 
 ## Tools
 
+All tools accept an optional `directory` argument. Codex should pass the absolute path of the active repository so the MCP server operates on the workspace being edited, not on the directory where the server process was launched.
+
 ### `workspace_status`
 
 Returns the repository root, state directory, selected provider/model, index path, manifest metadata, and whether an index is already present.

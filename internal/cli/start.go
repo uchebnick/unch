@@ -91,27 +91,27 @@ func runStartMCP(ctx context.Context, program string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve root: %w", err)
 	}
+	rootAbs = filepath.Clean(rootAbs)
 
-	previewPaths, _, _, err := previewStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
+	targetPaths, resolvedIndexPath, _, err := previewStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
 	if err != nil {
 		return err
 	}
 	if parsedProvider, err := appembed.ParseProvider(*provider); err == nil && parsedProvider == appembed.ProviderOpenRouter {
-		if err := preflightProviderConfig(parsedProvider, previewPaths.LocalDir); err != nil {
+		if err := preflightProviderConfig(parsedProvider, targetPaths.LocalDir); err != nil {
 			printMissingProviderCredentialsWarning(parsedProvider)
 			return err
 		}
-	}
-
-	targetPaths, resolvedIndexPath, _, err := resolveStateTarget(rootAbs, *stateDir, stateDirWasExplicit, *dbPath, dbWasExplicit)
-	if err != nil {
-		return err
 	}
 
 	backend := newMCPBackend(mcpBackendConfig{
 		RootAbs:           rootAbs,
 		TargetPaths:       targetPaths,
 		IndexPath:         resolvedIndexPath,
+		StateDirInput:     strings.TrimSpace(*stateDir),
+		StateDirExplicit:  stateDirWasExplicit,
+		DBInput:           strings.TrimSpace(*dbPath),
+		DBExplicit:        dbWasExplicit,
 		RequestedProvider: strings.TrimSpace(*provider),
 		RequestedModel:    strings.TrimSpace(*modelPath),
 		RequestedLibPath:  strings.TrimSpace(*libPath),

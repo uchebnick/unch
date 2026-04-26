@@ -34,6 +34,8 @@ Then restart Codex. Codex will start the MCP server through the registered `unch
 
 `unch-mcp` is a small launcher for `unch start mcp`; you normally do not need to run it by hand.
 
+The MCP server exposes local search tools plus remote-index helpers for GitHub Actions-backed indexes: `create_ci_workflow`, `bind_remote_ci`, `remote_sync_index`, and `remote_download_index`.
+
 Supported targets:
 
 - macOS `arm64`, `x64`

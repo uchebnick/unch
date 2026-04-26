@@ -18,7 +18,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/install.js",
-    "test": "node scripts/platform.test.js",
+    "test": "node scripts/platform.test.js && node scripts/codex-install.test.js",
     "test:mcp": "node scripts/mcp-smoke.js"
   },
   "files": [

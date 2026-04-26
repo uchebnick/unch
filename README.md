@@ -31,9 +31,11 @@ npm is the recommended install path:
 
 ```bash
 npm install -g @uchebnick/unch
+unch codex install
 ```
 
 It installs the `unch` CLI and downloads the matching native release binary for your platform.
+Run `unch codex install` once to register unch in Codex through `codex mcp add` and install the `unch` skill in `~/.codex/skills/unch/SKILL.md`, then restart Codex.
 
 Homebrew on macOS:
 

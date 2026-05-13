@@ -7,8 +7,8 @@ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/hybridgroup/yzma v1.13.0 h1:itnOCpjZMZ9iSRLgV1iK1dZPtzr2uC+wIyOiQp9S4GI=
 github.com/hybridgroup/yzma v1.13.0/go.mod h1:zrzMgv/KVQz23+s6l16b+vJ+9uJVBdWtGcGkwRTMeiQ=
-github.com/jupiterrider/ffi v0.6.0 h1:UX378KcZvH5c8qgLi9KL/bL82SZTHdRspZ+jj7bvBng=
-github.com/jupiterrider/ffi v0.6.0/go.mod h1:PqZ5Go6X9by8CIXgfprxfMPYmn8oT5m2O7AA56s64bY=
+github.com/jupiterrider/ffi v0.7.0 h1:RKsl6Ascal+3kyAqR5Qcbp83LceQMLc1VZbPfHWoNzs=
+github.com/jupiterrider/ffi v0.7.0/go.mod h1:9dauhpOfNqrqk28fxuu0kkdeFtT9Qr4vbfigiuIXN7c=
 github.com/mattn/go-pointer v0.0.1 h1:n+XhsuGeVO6MEAp7xyEukFINEa+Quek5psIR/ylA6o0=
 github.com/mattn/go-pointer v0.0.1/go.mod h1:2zXcozF6qYGgmsG+SeTZz3oAbFLdD3OWqnUbNvJZAlc=
 github.com/mattn/go-sqlite3 v1.14.38 h1:tDUzL85kMvOrvpCt8P64SbGgVFtJB11GPi2AdmITgb4=

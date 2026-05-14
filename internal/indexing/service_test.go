@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 )
 
 type testScanner struct {
@@ -97,6 +99,68 @@ func (e *testEmbedder) IndexedSymbolHash(path string, symbol IndexedSymbol) stri
 func (e *testEmbedder) EmbedIndexedSymbol(path string, symbol IndexedSymbol) ([]float32, error) {
 	e.embedCalls++
 	return []float32{1, 2, 3}, nil
+}
+
+type testBatchEmbedder struct {
+	mu         sync.Mutex
+	calls      int
+	batchSizes []int
+	errForCall map[int]error
+	splitLarge bool
+}
+
+func (e *testBatchEmbedder) IndexedSymbolHash(path string, symbol IndexedSymbol) string {
+	return path + ":" + symbol.QualifiedName
+}
+
+func (e *testBatchEmbedder) EmbedIndexedSymbol(path string, symbol IndexedSymbol) ([]float32, error) {
+	return []float32{1, 2, 3}, nil
+}
+
+func (e *testBatchEmbedder) EmbedIndexedSymbolBatch(items []EmbedItem) ([][]float32, error) {
+	e.mu.Lock()
+	e.calls++
+	call := e.calls
+	e.batchSizes = append(e.batchSizes, len(items))
+	err := e.errForCall[call]
+	splitLarge := e.splitLarge && len(items) > 1
+	e.mu.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+	if splitLarge {
+		return nil, testEmbeddingError{split: true}
+	}
+
+	vectors := make([][]float32, len(items))
+	for i := range items {
+		vectors[i] = []float32{float32(i), 2, 3}
+	}
+	return vectors, nil
+}
+
+type testEmbeddingError struct {
+	temporary  bool
+	split      bool
+	retryAfter time.Duration
+}
+
+func (e testEmbeddingError) Error() string { return "test embedding error" }
+func (e testEmbeddingError) Temporary() bool {
+	return e.temporary
+}
+func (e testEmbeddingError) RetryAfter() time.Duration {
+	if e.retryAfter > 0 {
+		return e.retryAfter
+	}
+	if e.temporary {
+		return time.Nanosecond
+	}
+	return 0
+}
+func (e testEmbeddingError) SplitBatch() bool {
+	return e.split
 }
 
 type testReporter struct {
@@ -273,6 +337,107 @@ func TestServiceRunCopiesUnchangedFilesFromCurrentSnapshot(t *testing.T) {
 	}
 	if hashes.inserted["a.go"] == "" || hashes.inserted["b.go"] == "" {
 		t.Fatalf("expected per-file hashes to be inserted, got %#v", hashes.inserted)
+	}
+}
+
+func TestFlushEmbeddingBatchesRetriesTemporaryErrors(t *testing.T) {
+	t.Parallel()
+
+	repo := &testRepo{existing: map[string]bool{}}
+	batcher := &testBatchEmbedder{
+		errForCall: map[int]error{
+			1: testEmbeddingError{temporary: true},
+		},
+	}
+	state := runState{
+		service: Service{
+			Repo:     repo,
+			Embedder: batcher,
+		},
+		ctx:      context.Background(),
+		provider: "openrouter",
+		modelID:  "qwen",
+	}
+
+	err := state.flushEmbeddingBatches(batcher, []pendingEmbedding{
+		{path: "a.go", symbol: IndexedSymbol{Line: 1, QualifiedName: "A"}, hash: "a"},
+		{path: "b.go", symbol: IndexedSymbol{Line: 2, QualifiedName: "B"}, hash: "b"},
+	})
+	if err != nil {
+		t.Fatalf("flushEmbeddingBatches() error: %v", err)
+	}
+	if batcher.calls != 2 {
+		t.Fatalf("batch calls = %d, want 2", batcher.calls)
+	}
+	if len(repo.added) != 2 {
+		t.Fatalf("stored embeddings = %v, want 2", repo.added)
+	}
+}
+
+func TestFlushEmbeddingBatchesSplitsFailedBatches(t *testing.T) {
+	t.Parallel()
+
+	repo := &testRepo{existing: map[string]bool{}}
+	batcher := &testBatchEmbedder{splitLarge: true}
+	state := runState{
+		service: Service{
+			Repo:     repo,
+			Embedder: batcher,
+		},
+		ctx:      context.Background(),
+		provider: "openrouter",
+		modelID:  "qwen",
+	}
+
+	err := state.flushEmbeddingBatches(batcher, []pendingEmbedding{
+		{path: "a.go", symbol: IndexedSymbol{Line: 1, QualifiedName: "A"}, hash: "a"},
+		{path: "b.go", symbol: IndexedSymbol{Line: 2, QualifiedName: "B"}, hash: "b"},
+	})
+	if err != nil {
+		t.Fatalf("flushEmbeddingBatches() error: %v", err)
+	}
+	if len(repo.added) != 2 {
+		t.Fatalf("stored embeddings = %v, want 2", repo.added)
+	}
+	if len(batcher.batchSizes) < 3 {
+		t.Fatalf("batch sizes = %v, want initial batch plus split retries", batcher.batchSizes)
+	}
+	if batcher.batchSizes[0] != 2 {
+		t.Fatalf("first batch size = %d, want 2", batcher.batchSizes[0])
+	}
+}
+
+func TestRetryEmbeddingBatchUpdatesAttemptAndQueuedAt(t *testing.T) {
+	t.Parallel()
+
+	retries, err := retryEmbeddingBatch(context.Background(), embeddingBatchRequest{items: []embeddingRequest{
+		{item: pendingEmbedding{path: "a.go", symbol: IndexedSymbol{Line: 1, QualifiedName: "A"}, hash: "a"}, attempt: 1},
+		{item: pendingEmbedding{path: "b.go", symbol: IndexedSymbol{Line: 2, QualifiedName: "B"}, hash: "b"}, attempt: 1},
+	}}, testEmbeddingError{split: true})
+	if err != nil {
+		t.Fatalf("retryEmbeddingBatch() error: %v", err)
+	}
+	if len(retries) != 2 {
+		t.Fatalf("retry batch count = %d, want 2", len(retries))
+	}
+	for _, retry := range retries {
+		for _, item := range retry.items {
+			if item.attempt != 2 {
+				t.Fatalf("retry attempt = %d, want 2", item.attempt)
+			}
+			if item.queuedAt.IsZero() {
+				t.Fatalf("retry queuedAt was not set")
+			}
+		}
+	}
+}
+
+func TestEmbeddingRetryDelayCapsRetryAfter(t *testing.T) {
+	t.Parallel()
+
+	delay := embeddingRetryDelay(testEmbeddingError{retryAfter: time.Hour}, 2)
+	if delay != 10*time.Second {
+		t.Fatalf("retry delay = %s, want 10s", delay)
 	}
 }
 

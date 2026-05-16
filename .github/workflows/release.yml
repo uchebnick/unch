@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 env:
   HOMEBREW_TAP_REPO: uchebnick/homebrew-tap
@@ -230,20 +231,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish npm package
         working-directory: npm/unch
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "NPM_TOKEN is not set" >&2
-            exit 1
-          fi
 
           version="${GITHUB_REF_NAME#v}"
           package_name="$(node -p 'require("./package.json").name')"

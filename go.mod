@@ -1,10 +1,10 @@
 module github.com/uchebnick/unch
 
-go 1.25.3
+go 1.26.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/hybridgroup/yzma v1.13.0
+	github.com/hybridgroup/yzma v1.16.1
 	github.com/jupiterrider/ffi v0.6.0
 	github.com/mattn/go-sqlite3 v1.14.38
 	github.com/ncruces/go-sqlite3 v0.17.1

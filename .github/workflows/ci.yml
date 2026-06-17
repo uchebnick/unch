@@ -75,7 +75,13 @@ jobs:
           release: ${{ matrix.msys_release }}
           update: ${{ matrix.msys_update }}
           cache: ${{ matrix.msys_cache }}
-          install: ${{ matrix.msys_pkg }}
+
+      - name: Install MSYS2 toolchain package
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          bash ./scripts/install_msys2_package.sh "${{ matrix.msys_pkg }}"
 
       - name: Restore benchmark cache
         uses: actions/cache@v5
@@ -279,7 +285,13 @@ jobs:
           release: ${{ matrix.msys_release }}
           update: ${{ matrix.msys_update }}
           cache: ${{ matrix.msys_cache }}
-          install: ${{ matrix.msys_pkg }}
+
+      - name: Install MSYS2 toolchain package
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          bash ./scripts/install_msys2_package.sh "${{ matrix.msys_pkg }}"
 
       - name: Build all packages
         if: runner.os != 'Windows'
@@ -361,7 +373,13 @@ jobs:
           release: ${{ matrix.msys_release }}
           update: ${{ matrix.msys_update }}
           cache: ${{ matrix.msys_cache }}
-          install: ${{ matrix.msys_pkg }}
+
+      - name: Install MSYS2 toolchain package
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          bash ./scripts/install_msys2_package.sh "${{ matrix.msys_pkg }}"
 
       - name: Build local Unix release asset
         if: runner.os != 'Windows'

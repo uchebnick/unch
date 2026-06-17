@@ -5,8 +5,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/ISU=
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
-github.com/hybridgroup/yzma v1.13.0 h1:itnOCpjZMZ9iSRLgV1iK1dZPtzr2uC+wIyOiQp9S4GI=
-github.com/hybridgroup/yzma v1.13.0/go.mod h1:zrzMgv/KVQz23+s6l16b+vJ+9uJVBdWtGcGkwRTMeiQ=
+github.com/hybridgroup/yzma v1.17.1 h1:T841QThcR+LrdEGp5ISGMKIJFUGQHgWXvjXfIIUEDFI=
+github.com/hybridgroup/yzma v1.17.1/go.mod h1:DAsHYcX7ze7iFZH6PT57oCuqaVd/AXdALhjnOSgWbaE=
 github.com/jupiterrider/ffi v0.6.0 h1:UX378KcZvH5c8qgLi9KL/bL82SZTHdRspZ+jj7bvBng=
 github.com/jupiterrider/ffi v0.6.0/go.mod h1:PqZ5Go6X9by8CIXgfprxfMPYmn8oT5m2O7AA56s64bY=
 github.com/mattn/go-pointer v0.0.1 h1:n+XhsuGeVO6MEAp7xyEukFINEa+Quek5psIR/ylA6o0=

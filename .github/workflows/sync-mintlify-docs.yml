@@ -24,12 +24,12 @@ jobs:
 
     steps:
       - name: Check out unch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Check out unch-docs
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: uchebnick/unch-docs
           token: ${{ secrets.UNCH_DOCS_SYNC_TOKEN }}
